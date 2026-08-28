@@ -55,6 +55,32 @@ export class PlantillasItinerarioService {
     });
   }
 
+  async update(agenciaId: string, id: string, dto: CreatePlantillaDto) {
+    await this.findOne(agenciaId, id);
+    return this.prisma.plantillaItinerario.update({
+      where: { id },
+      data: {
+        nombre: dto.nombre,
+        descripcion: dto.descripcion,
+        diasTotales: dto.diasTotales,
+        dias: {
+          deleteMany: {},
+          create: dto.dias.map((dia) => ({
+            numeroDia: dia.numeroDia,
+            servicios: {
+              create: dia.servicios.map((s) => ({
+                servicioId: s.servicioId,
+                horaInicio: s.horaInicio,
+                orden: s.orden,
+              })),
+            },
+          })),
+        },
+      },
+      include: this.includeDiasServicios,
+    });
+  }
+
   async remove(agenciaId: string, id: string) {
     await this.findOne(agenciaId, id);
     return this.prisma.plantillaItinerario.update({ where: { id }, data: { estado: 'INACTIVO' } });
