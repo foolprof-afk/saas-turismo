@@ -11,6 +11,11 @@ const NAV = [
   { href: "/operacion", label: "Operación" },
 ];
 
+const NAV_ADMIN = [
+  { href: "/usuarios", label: "Usuarios" },
+  { href: "/tipos-servicio", label: "Tipos de servicio" },
+];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { usuario, loading, logout } = useAuth();
   const router = useRouter();
@@ -24,12 +29,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">Cargando...</div>;
   }
 
+  const items = usuario.rol === "admin" ? [...NAV, ...NAV_ADMIN] : NAV;
+
   return (
     <div className="flex min-h-screen">
       <aside className="w-56 shrink-0 border-r bg-white p-4">
         <p className="mb-6 text-sm font-semibold">SaaS Turismo</p>
         <nav className="space-y-1">
-          {NAV.map((item) => (
+          {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}

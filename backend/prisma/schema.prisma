@@ -4,7 +4,8 @@
 // ============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -236,6 +237,7 @@ model TipoServicio {
   id          String  @id @default(cuid())
   nombre      String  @unique // tour | traslado | hospedaje | actividad_nautica | otro
   descripcion String?
+  precio      Decimal @default(0) @db.Decimal(12, 2)
 
   servicios Servicio[]
 
