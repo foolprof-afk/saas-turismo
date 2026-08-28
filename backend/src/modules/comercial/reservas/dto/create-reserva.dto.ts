@@ -37,9 +37,6 @@ class PasajeroDto {
 }
 
 export class CreateReservaDto {
-  @IsString()
-  clienteId: string;
-
   @IsDateString()
   fechaServicioInicio: string;
 
@@ -66,11 +63,15 @@ export class CreateReservaDto {
   @IsString()
   formaPagoId: string;
 
-  // Si viene, se clona la plantilla hacia un itinerario real (ver reservas.service.ts).
-  // Si no viene, se espera que el itinerario se arme servicio por servicio luego (fuera de alcance MVP).
+  // Se debe indicar exactamente uno de los dos: un servicio individual (tour/traslado puntual)
+  // o una plantilla de itinerario (paquete de varios días). Ambos generan un Itinerario real.
   @IsOptional()
   @IsString()
   plantillaItinerarioId?: string;
+
+  @IsOptional()
+  @IsString()
+  servicioId?: string;
 
   @IsArray()
   @ArrayMinSize(1)

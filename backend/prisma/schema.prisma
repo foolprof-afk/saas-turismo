@@ -125,6 +125,7 @@ model Usuario {
   rol              Rol                @relation(fields: [rolId], references: [id])
   reservasVendidas Reserva[]          @relation("VendedorReserva")
   checkins         CheckIn[]
+  clienteVinculado Cliente?
 
   @@unique([agenciaId, email])
   @@map("usuarios")
@@ -137,6 +138,7 @@ model Usuario {
 model Cliente {
   id        String   @id @default(cuid())
   agenciaId String
+  usuarioId String?  @unique // vincula este cliente al usuario/agente que vende bajo este nombre comercial
   nombre    String
   documento String?
   email     String?
@@ -146,6 +148,7 @@ model Cliente {
   createdAt DateTime @default(now())
 
   agencia  Agencia   @relation(fields: [agenciaId], references: [id])
+  usuario  Usuario?  @relation(fields: [usuarioId], references: [id])
   reservas Reserva[]
 
   @@map("clientes")
@@ -165,6 +168,7 @@ model Reserva {
   monedaId              String
   formaPagoId           String
   plantillaItinerarioId String?
+  servicioId            String?
   qrCode                String?       @unique
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
@@ -175,6 +179,7 @@ model Reserva {
   moneda               Moneda                @relation(fields: [monedaId], references: [id])
   formaPago            FormaPago             @relation(fields: [formaPagoId], references: [id])
   plantillaItinerario  PlantillaItinerario?  @relation(fields: [plantillaItinerarioId], references: [id])
+  servicio             Servicio?             @relation(fields: [servicioId], references: [id])
 
   pasajeros  Pasajero[]
   voucher    Voucher?
@@ -271,6 +276,7 @@ model Servicio {
   impuestos                ServicioImpuesto[]
   plantillaItems           PlantillaItinerarioServicio[]
   itinerarioItems          ItinerarioServicio[]
+  reservas                 Reserva[]
 
   @@map("servicios")
 }

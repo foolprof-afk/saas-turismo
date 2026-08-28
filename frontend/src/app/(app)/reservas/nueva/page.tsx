@@ -3,6 +3,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface Opcion {
   id: string;
@@ -12,17 +13,26 @@ interface Moneda {
   id: string;
   codigo: string;
 }
+interface ServicioOpcion {
+  id: string;
+  nombre: string;
+  precioBase: string;
+  monedaId: string;
+}
 
 type Pasajero = { nombre: string; telefono: string; tipo: "ADULTO" | "NINO" | "INFANTE" };
+type TipoReserva = "servicio" | "plantilla";
 
 export default function NuevaReservaPage() {
   const router = useRouter();
-  const [clientes, setClientes] = useState<Opcion[]>([]);
+  const { usuario } = useAuth();
+  const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [plantillas, setPlantillas] = useState<Opcion[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
   const [formasPago, setFormasPago] = useState<Opcion[]>([]);
 
-  const [clienteId, setClienteId] = useState("");
+  const [tipoReserva, setTipoReserva] = useState<TipoReserva>("servicio");
+  const [servicioId, setServicioId] = useState("");
   const [plantillaItinerarioId, setPlantillaItinerarioId] = useState("");
   const [fechaServicioInicio, setFechaServicioInicio] = useState("");
   const [horaServicio, setHoraServicio] = useState("");
@@ -35,24 +45,50 @@ export default function NuevaReservaPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get<Opcion[]>("/clientes").then(setClientes).catch(() => null);
+    api.get<ServicioOpcion[]>("/servicios").then(setServicios).catch(() => null);
     api.get<Opcion[]>("/plantillas-itinerario").then(setPlantillas).catch(() => null);
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
     api.get<Opcion[]>("/formas-pago").then(setFormasPago).catch(() => null);
   }, []);
 
-  const agregarPasajero = () => setPasajeros((p) => [...p, { nombre: "", telefono: "", tipo: "ADULTO" }]);
+  const servicioSeleccionado = servicios.find((s) => s.id === servicioId);
+  const precioMinimo = servicioSeleccionado ? Number(servicioSeleccionado.precioBase) * pasajeros.length : 0;
+
+  const seleccionarServicio = (id: string) => {
+    setServicioId(id);
+    const s = servicios.find((x) => x.id === id);
+    if (s) {
+      setMonedaId(s.monedaId);
+      setPrecioLiquidado(String(Number(s.precioBase) * pasajeros.length));
+    }
+  };
+
+  const agregarPasajero = () =>
+    setPasajeros((p) => {
+      const nuevos = [...p, { nombre: "", telefono: "", tipo: "ADULTO" as const }];
+      if (servicioSeleccionado) {
+        const nuevoMinimo = Number(servicioSeleccionado.precioBase) * nuevos.length;
+        setPrecioLiquidado((prev) => String(Math.max(Number(prev) || 0, nuevoMinimo)));
+      }
+      return nuevos;
+    });
   const actualizarPasajero = (i: number, data: Partial<Pasajero>) =>
     setPasajeros((p) => p.map((x, idx) => (idx === i ? { ...x, ...data } : x)));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (tipoReserva === "servicio" && precioLiquidado && Number(precioLiquidado) < precioMinimo) {
+      setError(`El precio no puede ser menor al precio establecido (${precioMinimo})`);
+      return;
+    }
+
     setLoading(true);
     try {
       const reserva = await api.post<{ id: string }>("/reservas", {
-        clienteId,
-        plantillaItinerarioId: plantillaItinerarioId || undefined,
+        servicioId: tipoReserva === "servicio" ? servicioId : undefined,
+        plantillaItinerarioId: tipoReserva === "plantilla" ? plantillaItinerarioId : undefined,
         fechaServicioInicio,
         horaServicio: horaServicio || undefined,
         monedaId,
@@ -74,40 +110,72 @@ export default function NuevaReservaPage() {
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
         <div>
           <label className="block text-sm font-medium">Cliente</label>
-          <select
-            required
-            value={clienteId}
-            onChange={(e) => setClienteId(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-          >
-            <option value="">Seleccionar cliente...</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
+          <p className="mt-1 rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">{usuario?.nombre}</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Plantilla de itinerario (opcional)</label>
-          <select
-            value={plantillaItinerarioId}
-            onChange={(e) => setPlantillaItinerarioId(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-          >
-            <option value="">Sin plantilla</option>
-            {plantillas.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-gray-400">
-            Si un tour o traslado tiene varios horarios, crea un servicio distinto por cada hora dentro de la
-            plantilla para que quede claro qué incluye cada uno.
-          </p>
+          <label className="block text-sm font-medium">Tipo de reserva</label>
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTipoReserva("servicio")}
+              className={`flex-1 rounded border px-3 py-2 text-sm ${
+                tipoReserva === "servicio" ? "border-gray-900 bg-gray-900 text-white" : "text-gray-700"
+              }`}
+            >
+              Servicio individual
+            </button>
+            <button
+              type="button"
+              onClick={() => setTipoReserva("plantilla")}
+              className={`flex-1 rounded border px-3 py-2 text-sm ${
+                tipoReserva === "plantilla" ? "border-gray-900 bg-gray-900 text-white" : "text-gray-700"
+              }`}
+            >
+              Plantilla (paquete)
+            </button>
+          </div>
         </div>
+
+        {tipoReserva === "servicio" ? (
+          <div>
+            <label className="block text-sm font-medium">Servicio</label>
+            <select
+              required
+              value={servicioId}
+              onChange={(e) => seleccionarServicio(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            >
+              <option value="">Seleccionar servicio...</option>
+              {servicios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nombre} — {s.precioBase}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium">Plantilla de itinerario</label>
+            <select
+              required
+              value={plantillaItinerarioId}
+              onChange={(e) => setPlantillaItinerarioId(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            >
+              <option value="">Seleccionar plantilla...</option>
+              {plantillas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Si un tour o traslado tiene varios horarios, crea un servicio distinto por cada hora dentro de la
+              plantilla para que quede claro qué incluye cada uno.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -167,16 +235,21 @@ export default function NuevaReservaPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Precio a liquidar (opcional)</label>
+          <label className="block text-sm font-medium">
+            Precio a liquidar{tipoReserva === "servicio" && servicioSeleccionado ? ` (mínimo: ${precioMinimo})` : ""}
+          </label>
           <input
             type="number"
             step="0.01"
-            min="0"
+            min={tipoReserva === "servicio" ? precioMinimo : 0}
             value={precioLiquidado}
             onChange={(e) => setPrecioLiquidado(e.target.value)}
-            placeholder="Se calcula automáticamente si dejas este campo vacío y hay plantilla"
+            placeholder="Se calcula automáticamente según el servicio o la plantilla"
             className="mt-1 w-full rounded border px-3 py-2 text-sm"
           />
+          <p className="mt-1 text-xs text-gray-400">
+            Puedes subir el precio para ganar más, pero nunca bajarlo del precio establecido por la agencia.
+          </p>
         </div>
 
         <div>
