@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saas_turismo
+      POSTGRES_PASSWORD: saas_turismo
+      POSTGRES_DB: saas_turismo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_turismo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://saas_turismo:saas_turismo@postgres:5432/saas_turismo?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cambia-esto-en-produccion}
+      JWT_EXPIRES_IN: 8h
+      PORT: 3000
+    volumes:
+      - backend_keys:/app/keys
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3001:3000"
+
+volumes:
+  postgres_data:
+  backend_keys:

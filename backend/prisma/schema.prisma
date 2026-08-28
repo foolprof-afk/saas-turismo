@@ -1,0 +1,543 @@
+// ============================================================================
+// Sistema SaaS para Agencias de Turismo — Prisma Schema (Fase 1: una agencia)
+// PostgreSQL
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum EstadoGeneral {
+  ACTIVO
+  INACTIVO
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  OPERADA
+  CANCELADA
+}
+
+enum EstadoItinerarioServicio {
+  PENDIENTE
+  EN_CURSO
+  COMPLETADO
+  NO_SHOW
+  CANCELADO
+}
+
+enum TipoPasajero {
+  ADULTO
+  NINO
+  INFANTE
+}
+
+enum MetodoCheckIn {
+  QR
+  MANUAL
+}
+
+enum EstadoPago {
+  PENDIENTE
+  PAGADO
+  RECHAZADO
+  REEMBOLSADO
+}
+
+enum EstadoLiquidacion {
+  PENDIENTE
+  PAGADA
+}
+
+enum AplicaImpuesto {
+  SERVICIO
+  RESERVA
+}
+
+// ----------------------------------------------------------------------------
+// NÚCLEO / MULTI-TENANT
+// ----------------------------------------------------------------------------
+
+model Agencia {
+  id            String        @id @default(cuid())
+  nombre        String
+  razonSocial   String?
+  rutONit       String?
+  logoUrl       String?
+  subdominio    String        @unique
+  plan          String        @default("fase1") // fase1 | fase2 | fase3
+  estado        EstadoGeneral @default(ACTIVO)
+  timezone      String        @default("America/Lima")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  usuarios              Usuario[]
+  clientes              Cliente[]
+  proveedores           Proveedor[]
+  servicios             Servicio[]
+  plantillasItinerario  PlantillaItinerario[]
+  reservas              Reserva[]
+  vehiculos             Vehiculo[]
+  guias                 Guia[]
+  rutas                 Ruta[]
+  puntosRecogida        PuntoRecogida[]
+  monedas               Moneda[]
+  impuestos             Impuesto[]
+  formasPago            FormaPago[]
+
+  @@map("agencias")
+}
+
+model Rol {
+  id        String    @id @default(cuid())
+  nombre    String    @unique // admin | vendedor | operacion | finanzas
+  permisos  Json      @default("{}")
+  usuarios  Usuario[]
+
+  @@map("roles")
+}
+
+model Usuario {
+  id           String        @id @default(cuid())
+  agenciaId    String
+  rolId        String
+  nombre       String
+  email        String
+  passwordHash String
+  telefono     String?
+  comisionPct  Decimal?      @db.Decimal(5, 2) // solo aplica si rol = vendedor
+  estado       EstadoGeneral @default(ACTIVO)
+  ultimoLogin  DateTime?
+  createdAt    DateTime      @default(now())
+
+  agencia          Agencia            @relation(fields: [agenciaId], references: [id])
+  rol              Rol                @relation(fields: [rolId], references: [id])
+  reservasVendidas Reserva[]          @relation("VendedorReserva")
+  checkins         CheckIn[]
+
+  @@unique([agenciaId, email])
+  @@map("usuarios")
+}
+
+// ----------------------------------------------------------------------------
+// COMERCIAL
+// ----------------------------------------------------------------------------
+
+model Cliente {
+  id        String   @id @default(cuid())
+  agenciaId String
+  nombre    String
+  documento String?
+  email     String?
+  telefono  String?
+  pais      String?
+  notas     String?
+  createdAt DateTime @default(now())
+
+  agencia  Agencia   @relation(fields: [agenciaId], references: [id])
+  reservas Reserva[]
+
+  @@map("clientes")
+}
+
+model Reserva {
+  id                    String        @id @default(cuid())
+  agenciaId             String
+  clienteId             String
+  vendedorId            String
+  codigoReserva         String        @unique
+  estado                EstadoReserva @default(PENDIENTE)
+  fechaServicioInicio   DateTime
+  fechaServicioFin      DateTime
+  total                 Decimal       @db.Decimal(12, 2)
+  monedaId              String
+  formaPagoId           String
+  plantillaItinerarioId String?
+  qrCode                String?       @unique
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  agencia              Agencia               @relation(fields: [agenciaId], references: [id])
+  cliente              Cliente               @relation(fields: [clienteId], references: [id])
+  vendedor             Usuario               @relation("VendedorReserva", fields: [vendedorId], references: [id])
+  moneda               Moneda                @relation(fields: [monedaId], references: [id])
+  formaPago            FormaPago             @relation(fields: [formaPagoId], references: [id])
+  plantillaItinerario  PlantillaItinerario?  @relation(fields: [plantillaItinerarioId], references: [id])
+
+  pasajeros  Pasajero[]
+  voucher    Voucher?
+  itinerario Itinerario?
+  pagos      Pago[]
+
+  @@map("reservas")
+}
+
+model Pasajero {
+  id         String       @id @default(cuid())
+  reservaId  String
+  nombre     String
+  documento  String?
+  tipo       TipoPasajero @default(ADULTO)
+  nacionalidad String?
+
+  reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+
+  @@map("pasajeros")
+}
+
+model Voucher {
+  id          String   @id @default(cuid())
+  reservaId   String   @unique
+  codigo      String   @unique
+  qrUrl       String
+  pdfUrl      String?
+  emitidoAt   DateTime @default(now())
+  validoHasta DateTime?
+
+  reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+
+  @@map("vouchers")
+}
+
+// ----------------------------------------------------------------------------
+// OPERACIÓN — Servicios, plantillas e itinerarios
+// ----------------------------------------------------------------------------
+
+model Proveedor {
+  id                String        @id @default(cuid())
+  agenciaId         String
+  nombre            String
+  tipo              String        // hotel | transportista | guia_freelance | otro
+  contacto          String?
+  condicionesPago   String?
+  cuentaBancaria    String?
+  estado            EstadoGeneral @default(ACTIVO)
+
+  agencia      Agencia       @relation(fields: [agenciaId], references: [id])
+  servicios    Servicio[]
+  vehiculos    Vehiculo[]
+  guias        Guia[]
+  liquidaciones Liquidacion[]
+
+  @@map("proveedores")
+}
+
+model TipoServicio {
+  id          String  @id @default(cuid())
+  nombre      String  @unique // tour | traslado | hospedaje | actividad_nautica | otro
+  descripcion String?
+
+  servicios Servicio[]
+
+  @@map("tipos_servicio")
+}
+
+model Servicio {
+  id               String        @id @default(cuid())
+  agenciaId        String
+  proveedorId      String
+  tipoServicioId   String
+  nombre           String
+  descripcion      String?
+  capacidadMax     Int?
+  duracionMin      Int?
+  precioBase       Decimal       @db.Decimal(12, 2)
+  monedaId         String
+  rutaId           String?
+  puntoRecogidaId  String?
+  estado           EstadoGeneral @default(ACTIVO)
+
+  agencia       Agencia        @relation(fields: [agenciaId], references: [id])
+  proveedor     Proveedor      @relation(fields: [proveedorId], references: [id])
+  tipoServicio  TipoServicio   @relation(fields: [tipoServicioId], references: [id])
+  moneda        Moneda         @relation(fields: [monedaId], references: [id])
+  ruta          Ruta?          @relation(fields: [rutaId], references: [id])
+  puntoRecogida PuntoRecogida? @relation(fields: [puntoRecogidaId], references: [id])
+
+  impuestos                ServicioImpuesto[]
+  plantillaItems           PlantillaItinerarioServicio[]
+  itinerarioItems          ItinerarioServicio[]
+
+  @@map("servicios")
+}
+
+// Tabla puente N:N Servicio <-> Impuesto
+model ServicioImpuesto {
+  servicioId String
+  impuestoId String
+
+  servicio Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  impuesto Impuesto @relation(fields: [impuestoId], references: [id], onDelete: Cascade)
+
+  @@id([servicioId, impuestoId])
+  @@map("servicio_impuestos")
+}
+
+model PlantillaItinerario {
+  id          String        @id @default(cuid())
+  agenciaId   String
+  nombre      String
+  descripcion String?
+  diasTotales Int
+  estado      EstadoGeneral @default(ACTIVO)
+
+  agencia  Agencia                      @relation(fields: [agenciaId], references: [id])
+  dias     PlantillaItinerarioDia[]
+  reservas Reserva[]
+
+  @@map("plantillas_itinerario")
+}
+
+model PlantillaItinerarioDia {
+  id                    String @id @default(cuid())
+  plantillaItinerarioId String
+  numeroDia             Int
+
+  plantilla PlantillaItinerario           @relation(fields: [plantillaItinerarioId], references: [id], onDelete: Cascade)
+  servicios PlantillaItinerarioServicio[]
+
+  @@unique([plantillaItinerarioId, numeroDia])
+  @@map("plantilla_itinerario_dias")
+}
+
+model PlantillaItinerarioServicio {
+  id                        String   @id @default(cuid())
+  plantillaItinerarioDiaId  String
+  servicioId                String
+  horaInicio                String   // "HH:mm"
+  orden                     Int
+
+  dia      PlantillaItinerarioDia @relation(fields: [plantillaItinerarioDiaId], references: [id], onDelete: Cascade)
+  servicio Servicio               @relation(fields: [servicioId], references: [id])
+
+  @@map("plantilla_itinerario_servicios")
+}
+
+// Itinerario real, generado (congelado) al confirmar una reserva
+model Itinerario {
+  id        String @id @default(cuid())
+  reservaId String @unique
+
+  reserva Reserva          @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+  dias    ItinerarioDia[]
+
+  @@map("itinerarios")
+}
+
+model ItinerarioDia {
+  id           String   @id @default(cuid())
+  itinerarioId String
+  fecha        DateTime @db.Date
+  numeroDia    Int
+
+  itinerario Itinerario           @relation(fields: [itinerarioId], references: [id], onDelete: Cascade)
+  servicios  ItinerarioServicio[]
+
+  @@unique([itinerarioId, numeroDia])
+  @@map("itinerario_dias")
+}
+
+model ItinerarioServicio {
+  id               String                   @id @default(cuid())
+  itinerarioDiaId  String
+  servicioId       String
+  horaInicio       String
+  horaFin          String?
+  vehiculoId       String?
+  guiaId           String?
+  puntoRecogidaId  String?
+  estado           EstadoItinerarioServicio @default(PENDIENTE)
+
+  dia            ItinerarioDia   @relation(fields: [itinerarioDiaId], references: [id], onDelete: Cascade)
+  servicio       Servicio        @relation(fields: [servicioId], references: [id])
+  vehiculo       Vehiculo?       @relation(fields: [vehiculoId], references: [id])
+  guia           Guia?           @relation(fields: [guiaId], references: [id])
+  puntoRecogida  PuntoRecogida?  @relation(fields: [puntoRecogidaId], references: [id])
+
+  checkin             CheckIn?
+  liquidacionDetalles LiquidacionDetalle[]
+
+  @@map("itinerario_servicios")
+}
+
+model CheckIn {
+  id                    String        @id @default(cuid())
+  itinerarioServicioId  String        @unique
+  usuarioOperacionId    String
+  fechaHora             DateTime      @default(now())
+  metodo                MetodoCheckIn @default(QR)
+  observaciones         String?
+
+  itinerarioServicio ItinerarioServicio @relation(fields: [itinerarioServicioId], references: [id], onDelete: Cascade)
+  usuarioOperacion   Usuario            @relation(fields: [usuarioOperacionId], references: [id])
+
+  @@map("checkins")
+}
+
+// ----------------------------------------------------------------------------
+// MANTENEDORES OPERATIVOS
+// ----------------------------------------------------------------------------
+
+model Vehiculo {
+  id           String        @id @default(cuid())
+  agenciaId    String
+  proveedorId  String?
+  patente      String
+  tipo         String
+  capacidad    Int
+  estado       EstadoGeneral @default(ACTIVO)
+
+  agencia   Agencia              @relation(fields: [agenciaId], references: [id])
+  proveedor Proveedor?           @relation(fields: [proveedorId], references: [id])
+  usos      ItinerarioServicio[]
+
+  @@map("vehiculos")
+}
+
+model Guia {
+  id           String        @id @default(cuid())
+  agenciaId    String
+  proveedorId  String?
+  nombre       String
+  idiomas      String[]
+  licencia     String?
+  telefono     String?
+  estado       EstadoGeneral @default(ACTIVO)
+
+  agencia   Agencia              @relation(fields: [agenciaId], references: [id])
+  proveedor Proveedor?           @relation(fields: [proveedorId], references: [id])
+  usos      ItinerarioServicio[]
+
+  @@map("guias")
+}
+
+model Ruta {
+  id                 String  @id @default(cuid())
+  agenciaId          String
+  nombre             String
+  origen             String
+  destino            String
+  duracionEstimadaMin Int?
+  distanciaKm        Decimal? @db.Decimal(8, 2)
+
+  agencia   Agencia    @relation(fields: [agenciaId], references: [id])
+  servicios Servicio[]
+
+  @@map("rutas")
+}
+
+model PuntoRecogida {
+  id         String  @id @default(cuid())
+  agenciaId  String
+  nombre     String
+  direccion  String?
+  lat        Decimal? @db.Decimal(10, 7)
+  lng        Decimal? @db.Decimal(10, 7)
+  referencia String?
+
+  agencia          Agencia              @relation(fields: [agenciaId], references: [id])
+  servicios        Servicio[]
+  itinerarioItems  ItinerarioServicio[]
+
+  @@map("puntos_recogida")
+}
+
+// ----------------------------------------------------------------------------
+// FINANZAS
+// ----------------------------------------------------------------------------
+
+model Moneda {
+  id           String   @id @default(cuid())
+  agenciaId    String
+  codigo       String   // USD | PEN | CLP ...
+  simbolo      String
+  tasaCambio   Decimal  @db.Decimal(10, 4) @default(1)
+  esPrincipal  Boolean  @default(false)
+
+  agencia   Agencia    @relation(fields: [agenciaId], references: [id])
+  servicios Servicio[]
+  reservas  Reserva[]
+
+  @@unique([agenciaId, codigo])
+  @@map("monedas")
+}
+
+model Impuesto {
+  id          String          @id @default(cuid())
+  agenciaId   String
+  nombre      String
+  porcentaje  Decimal         @db.Decimal(5, 2)
+  aplicaA     AplicaImpuesto  @default(SERVICIO)
+
+  agencia   Agencia            @relation(fields: [agenciaId], references: [id])
+  servicios ServicioImpuesto[]
+
+  @@map("impuestos")
+}
+
+model FormaPago {
+  id        String   @id @default(cuid())
+  agenciaId String
+  nombre    String   // efectivo | tarjeta | transferencia | pasarela
+  config    Json     @default("{}")
+
+  agencia  Agencia   @relation(fields: [agenciaId], references: [id])
+  reservas Reserva[]
+  pagos    Pago[]
+
+  @@map("formas_pago")
+}
+
+model Pago {
+  id                 String     @id @default(cuid())
+  reservaId          String
+  formaPagoId        String
+  monto              Decimal    @db.Decimal(12, 2)
+  monedaId           String
+  fecha              DateTime   @default(now())
+  referenciaExterna  String?
+  estado             EstadoPago @default(PENDIENTE)
+
+  reserva   Reserva   @relation(fields: [reservaId], references: [id])
+  formaPago FormaPago @relation(fields: [formaPagoId], references: [id])
+
+  @@map("pagos")
+}
+
+model Liquidacion {
+  id             String            @id @default(cuid())
+  proveedorId    String
+  periodoInicio  DateTime          @db.Date
+  periodoFin     DateTime          @db.Date
+  total          Decimal           @db.Decimal(12, 2)
+  estado         EstadoLiquidacion @default(PENDIENTE)
+  fechaPago      DateTime?
+
+  proveedor Proveedor             @relation(fields: [proveedorId], references: [id])
+  detalles  LiquidacionDetalle[]
+
+  @@map("liquidaciones")
+}
+
+model LiquidacionDetalle {
+  id                    String  @id @default(cuid())
+  liquidacionId         String
+  itinerarioServicioId  String
+  monto                 Decimal @db.Decimal(12, 2)
+  comisionAgencia       Decimal @db.Decimal(12, 2) @default(0)
+
+  liquidacion        Liquidacion        @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
+  itinerarioServicio ItinerarioServicio @relation(fields: [itinerarioServicioId], references: [id])
+
+  @@map("liquidacion_detalles")
+}
