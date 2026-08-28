@@ -13,7 +13,7 @@ interface Moneda {
   codigo: string;
 }
 
-type Pasajero = { nombre: string; tipo: "ADULTO" | "NINO" | "INFANTE" };
+type Pasajero = { nombre: string; telefono: string; tipo: "ADULTO" | "NINO" | "INFANTE" };
 
 export default function NuevaReservaPage() {
   const router = useRouter();
@@ -25,10 +25,11 @@ export default function NuevaReservaPage() {
   const [clienteId, setClienteId] = useState("");
   const [plantillaItinerarioId, setPlantillaItinerarioId] = useState("");
   const [fechaServicioInicio, setFechaServicioInicio] = useState("");
-  const [fechaServicioFin, setFechaServicioFin] = useState("");
+  const [horaServicio, setHoraServicio] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [formaPagoId, setFormaPagoId] = useState("");
-  const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", tipo: "ADULTO" }]);
+  const [precioLiquidado, setPrecioLiquidado] = useState("");
+  const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", telefono: "", tipo: "ADULTO" }]);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +41,7 @@ export default function NuevaReservaPage() {
     api.get<Opcion[]>("/formas-pago").then(setFormasPago).catch(() => null);
   }, []);
 
-  const agregarPasajero = () => setPasajeros((p) => [...p, { nombre: "", tipo: "ADULTO" }]);
+  const agregarPasajero = () => setPasajeros((p) => [...p, { nombre: "", telefono: "", tipo: "ADULTO" }]);
   const actualizarPasajero = (i: number, data: Partial<Pasajero>) =>
     setPasajeros((p) => p.map((x, idx) => (idx === i ? { ...x, ...data } : x)));
 
@@ -53,10 +54,11 @@ export default function NuevaReservaPage() {
         clienteId,
         plantillaItinerarioId: plantillaItinerarioId || undefined,
         fechaServicioInicio,
-        fechaServicioFin,
+        horaServicio: horaServicio || undefined,
         monedaId,
         formaPagoId,
-        pasajeros,
+        precioLiquidado: precioLiquidado ? Number(precioLiquidado) : undefined,
+        pasajeros: pasajeros.map((p) => ({ ...p, telefono: p.telefono || undefined })),
       });
       router.push(`/reservas/${reserva.id}`);
     } catch (err) {
@@ -101,11 +103,15 @@ export default function NuevaReservaPage() {
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs text-gray-400">
+            Si un tour o traslado tiene varios horarios, crea un servicio distinto por cada hora dentro de la
+            plantilla para que quede claro qué incluye cada uno.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium">Fecha inicio</label>
+            <label className="block text-sm font-medium">Fecha</label>
             <input
               type="date"
               required
@@ -115,12 +121,11 @@ export default function NuevaReservaPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Fecha fin</label>
+            <label className="block text-sm font-medium">Hora del servicio (opcional)</label>
             <input
-              type="date"
-              required
-              value={fechaServicioFin}
-              onChange={(e) => setFechaServicioFin(e.target.value)}
+              type="time"
+              value={horaServicio}
+              onChange={(e) => setHoraServicio(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
           </div>
@@ -162,6 +167,19 @@ export default function NuevaReservaPage() {
         </div>
 
         <div>
+          <label className="block text-sm font-medium">Precio a liquidar (opcional)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={precioLiquidado}
+            onChange={(e) => setPrecioLiquidado(e.target.value)}
+            placeholder="Se calcula automáticamente si dejas este campo vacío y hay plantilla"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-sm font-medium">Pasajeros</label>
             <button type="button" onClick={agregarPasajero} className="text-sm text-blue-600 hover:underline">
@@ -177,6 +195,12 @@ export default function NuevaReservaPage() {
                   value={p.nombre}
                   onChange={(e) => actualizarPasajero(i, { nombre: e.target.value })}
                   className="flex-1 rounded border px-3 py-2 text-sm"
+                />
+                <input
+                  placeholder="Teléfono"
+                  value={p.telefono}
+                  onChange={(e) => actualizarPasajero(i, { telefono: e.target.value })}
+                  className="w-36 rounded border px-3 py-2 text-sm"
                 />
                 <select
                   value={p.tipo}

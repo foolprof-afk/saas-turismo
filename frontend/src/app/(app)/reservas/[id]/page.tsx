@@ -8,8 +8,10 @@ interface ReservaDetalle {
   codigoReserva: string;
   estado: string;
   total: string;
+  fechaServicioInicio: string;
+  horaServicio?: string | null;
   cliente: { nombre: string; email?: string };
-  pasajeros: { nombre: string; tipo: string }[];
+  pasajeros: { nombre: string; telefono?: string | null; tipo: string }[];
   voucher?: { qrUrl: string; codigo: string; validoHasta?: string };
   itinerario?: {
     dias: {
@@ -36,8 +38,15 @@ export default function ReservaDetallePage() {
         <div>
           <h1 className="text-2xl font-semibold">Reserva {reserva.codigoReserva}</h1>
           <p className="text-sm text-gray-500">{reserva.cliente?.nombre}</p>
+          <p className="text-sm text-gray-500">
+            {new Date(reserva.fechaServicioInicio).toLocaleDateString()}
+            {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
+          </p>
         </div>
-        <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
+        <div className="text-right">
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
+          <p className="mt-2 text-lg font-semibold">{reserva.total}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -59,6 +68,7 @@ export default function ReservaDetallePage() {
             {reserva.pasajeros.map((p, i) => (
               <li key={i}>
                 {p.nombre} <span className="text-gray-400">({p.tipo})</span>
+                {p.telefono && <span className="text-gray-400"> — {p.telefono}</span>}
               </li>
             ))}
           </ul>

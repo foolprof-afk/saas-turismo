@@ -49,7 +49,7 @@ export class ReservasService {
    */
   async create(agenciaId: string, vendedorId: string, dto: CreateReservaDto) {
     const fechaInicio = new Date(dto.fechaServicioInicio);
-    const fechaFin = new Date(dto.fechaServicioFin);
+    const fechaFin = dto.fechaServicioFin ? new Date(dto.fechaServicioFin) : fechaInicio;
 
     if (fechaFin < fechaInicio) {
       throw new BadRequestException('fechaServicioFin no puede ser anterior a fechaServicioInicio');
@@ -64,12 +64,14 @@ export class ReservasService {
       if (!plantilla) throw new NotFoundException('Plantilla de itinerario no encontrada');
     }
 
-    const total = plantilla
-      ? plantilla.dias.reduce(
-          (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
-          0,
-        ) * dto.pasajeros.length
-      : 0;
+    const total =
+      dto.precioLiquidado ??
+      (plantilla
+        ? plantilla.dias.reduce(
+            (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
+            0,
+          ) * dto.pasajeros.length
+        : 0);
 
     const reserva = await this.prisma.$transaction(async (tx) => {
       const nuevaReserva = await tx.reserva.create({
@@ -80,6 +82,7 @@ export class ReservasService {
           codigoReserva: this.generarCodigoReserva(),
           fechaServicioInicio: fechaInicio,
           fechaServicioFin: fechaFin,
+          horaServicio: dto.horaServicio,
           total,
           monedaId: dto.monedaId,
           formaPagoId: dto.formaPagoId,

@@ -160,6 +160,7 @@ model Reserva {
   estado                EstadoReserva @default(PENDIENTE)
   fechaServicioInicio   DateTime
   fechaServicioFin      DateTime
+  horaServicio          String?
   total                 Decimal       @db.Decimal(12, 2)
   monedaId              String
   formaPagoId           String
@@ -188,6 +189,7 @@ model Pasajero {
   reservaId  String
   nombre     String
   documento  String?
+  telefono   String?
   tipo       TipoPasajero @default(ADULTO)
   nacionalidad String?
 
