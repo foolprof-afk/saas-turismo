@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgenciasModule } from './agencias/agencias.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
+import { RolesModule } from './roles/roles.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { ServiciosModule } from './servicios/servicios.module';
 import { TiposServicioModule } from './tipos-servicio/tipos-servicio.module';
@@ -17,6 +18,7 @@ import { FormasPagoModule } from './formas-pago/formas-pago.module';
   imports: [
     AgenciasModule,
     UsuariosModule,
+    RolesModule,
     ProveedoresModule,
     ServiciosModule,
     TiposServicioModule,
