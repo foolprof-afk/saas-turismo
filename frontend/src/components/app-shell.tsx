@@ -8,12 +8,14 @@ import { useAuth } from "@/lib/auth-context";
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/reservas", label: "Reservas" },
+  { href: "/clientes", label: "Clientes" },
   { href: "/operacion", label: "Operación" },
 ];
 
 const NAV_ADMIN = [
   { href: "/usuarios", label: "Usuarios" },
   { href: "/tipos-servicio", label: "Tipos de servicio" },
+  { href: "/plantillas-itinerario", label: "Plantillas" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
