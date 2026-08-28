@@ -37,7 +37,7 @@ export default function GuiasPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Guia[]>("/guias")
+      .get<Guia[]>("/guias?limit=500")
       .then(setGuias)
       .finally(() => setLoading(false));
   };

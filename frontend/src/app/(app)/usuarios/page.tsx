@@ -36,7 +36,7 @@ export default function UsuariosPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Usuario[]>("/usuarios")
+      .get<Usuario[]>("/usuarios?limit=500")
       .then(setUsuarios)
       .finally(() => setLoading(false));
   };

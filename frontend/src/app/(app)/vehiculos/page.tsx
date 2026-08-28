@@ -36,7 +36,7 @@ export default function VehiculosPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Vehiculo[]>("/vehiculos")
+      .get<Vehiculo[]>("/vehiculos?limit=500")
       .then(setVehiculos)
       .finally(() => setLoading(false));
   };

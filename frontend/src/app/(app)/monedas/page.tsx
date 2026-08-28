@@ -27,7 +27,7 @@ export default function MonedasPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Moneda[]>("/monedas")
+      .get<Moneda[]>("/monedas?limit=500")
       .then(setMonedas)
       .finally(() => setLoading(false));
   };

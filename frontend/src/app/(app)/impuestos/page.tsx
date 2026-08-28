@@ -25,7 +25,7 @@ export default function ImpuestosPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Impuesto[]>("/impuestos")
+      .get<Impuesto[]>("/impuestos?limit=500")
       .then(setImpuestos)
       .finally(() => setLoading(false));
   };
