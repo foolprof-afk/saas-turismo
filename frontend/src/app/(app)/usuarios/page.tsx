@@ -15,6 +15,7 @@ interface Usuario {
   telefono?: string | null;
   estado: string;
   rol: Rol;
+  rolId: string;
 }
 
 export default function UsuariosPage() {
@@ -22,6 +23,7 @@ export default function UsuariosPage() {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,26 +46,61 @@ export default function UsuariosPage() {
     api.get<Rol[]>("/roles").then(setRoles).catch(() => null);
   }, []);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setNombre("");
+    setEmail("");
+    setPassword("");
+    setRolId("");
+    setTelefono("");
+  };
+
+  const editar = (u: Usuario) => {
+    setEditingId(u.id);
+    setNombre(u.nombre);
+    setEmail(u.email);
+    setPassword("");
+    setRolId(u.rolId ?? u.rol?.id ?? "");
+    setTelefono(u.telefono ?? "");
+  };
+
+  const eliminar = async (id: string) => {
+    if (!confirm("¿Eliminar este usuario?")) return;
+    try {
+      await api.delete(`/usuarios/${id}`);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el usuario");
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await api.post("/usuarios", {
-        nombre,
-        email,
-        password,
-        rolId,
-        telefono: telefono || undefined,
-      });
-      setNombre("");
-      setEmail("");
-      setPassword("");
-      setRolId("");
-      setTelefono("");
+      if (editingId) {
+        const data: Record<string, unknown> = {
+          nombre,
+          email,
+          rolId,
+          telefono: telefono || undefined,
+        };
+        if (password) data.password = password;
+        await api.put(`/usuarios/${editingId}`, data);
+      } else {
+        await api.post("/usuarios", {
+          nombre,
+          email,
+          password,
+          rolId,
+          telefono: telefono || undefined,
+        });
+      }
+      resetForm();
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el usuario");
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar el usuario");
     } finally {
       setSaving(false);
     }
@@ -74,7 +111,9 @@ export default function UsuariosPage() {
       <h1 className="text-2xl font-semibold">Usuarios</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-700">Nuevo usuario</h2>
+        <h2 className="text-sm font-semibold text-gray-700">
+          {editingId ? "Editar usuario" : "Nuevo usuario"}
+        </h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium">Nombre</label>
@@ -99,10 +138,12 @@ export default function UsuariosPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium">Contraseña</label>
+            <label className="block text-sm font-medium">
+              Contraseña {editingId && <span className="text-gray-400">(dejar vacío para no cambiar)</span>}
+            </label>
             <input
               type="password"
-              required
+              required={!editingId}
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -138,13 +179,24 @@ export default function UsuariosPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {saving ? "Creando..." : "Crear usuario"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear usuario"}
+          </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded border px-4 py-2 text-sm font-medium text-gray-700"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="overflow-hidden rounded-lg border bg-white">
@@ -155,19 +207,20 @@ export default function UsuariosPage() {
               <th className="px-4 py-2">Correo</th>
               <th className="px-4 py-2">Rol</th>
               <th className="px-4 py-2">Estado</th>
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && usuarios.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   No hay usuarios todavía
                 </td>
               </tr>
@@ -179,6 +232,14 @@ export default function UsuariosPage() {
                 <td className="px-4 py-2">{u.rol?.nombre}</td>
                 <td className="px-4 py-2">
                   <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{u.estado}</span>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <button onClick={() => editar(u)} className="mr-3 text-blue-600 hover:underline">
+                    Editar
+                  </button>
+                  <button onClick={() => eliminar(u.id)} className="text-red-600 hover:underline">
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}

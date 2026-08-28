@@ -14,6 +14,7 @@ export default function TiposServicioPage() {
   const [tipos, setTipos] = useState<TipoServicio[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -33,22 +34,49 @@ export default function TiposServicioPage() {
     cargar();
   }, []);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setNombre("");
+    setPrecio("");
+    setDescripcion("");
+  };
+
+  const editar = (t: TipoServicio) => {
+    setEditingId(t.id);
+    setNombre(t.nombre);
+    setPrecio(String(t.precio));
+    setDescripcion(t.descripcion ?? "");
+  };
+
+  const eliminar = async (id: string) => {
+    if (!confirm("¿Eliminar este tipo de servicio?")) return;
+    try {
+      await api.delete(`/tipos-servicio/${id}`);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el tipo de servicio");
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await api.post("/tipos-servicio", {
+      const data = {
         nombre,
         precio: Number(precio),
         descripcion: descripcion || undefined,
-      });
-      setNombre("");
-      setPrecio("");
-      setDescripcion("");
+      };
+      if (editingId) {
+        await api.put(`/tipos-servicio/${editingId}`, data);
+      } else {
+        await api.post("/tipos-servicio", data);
+      }
+      resetForm();
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear el tipo de servicio");
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar el tipo de servicio");
     } finally {
       setSaving(false);
     }
@@ -59,7 +87,9 @@ export default function TiposServicioPage() {
       <h1 className="text-2xl font-semibold">Tipos de servicio</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-700">Nuevo tipo de servicio</h2>
+        <h2 className="text-sm font-semibold text-gray-700">
+          {editingId ? "Editar tipo de servicio" : "Nuevo tipo de servicio"}
+        </h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium">Nombre</label>
@@ -95,13 +125,24 @@ export default function TiposServicioPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {saving ? "Creando..." : "Crear tipo de servicio"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Crear tipo de servicio"}
+          </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded border px-4 py-2 text-sm font-medium text-gray-700"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="overflow-hidden rounded-lg border bg-white">
@@ -111,19 +152,20 @@ export default function TiposServicioPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Descripción</th>
               <th className="px-4 py-2">Precio</th>
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && tipos.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                   No hay tipos de servicio todavía
                 </td>
               </tr>
@@ -133,6 +175,14 @@ export default function TiposServicioPage() {
                 <td className="px-4 py-2">{t.nombre}</td>
                 <td className="px-4 py-2">{t.descripcion ?? "-"}</td>
                 <td className="px-4 py-2">{t.precio}</td>
+                <td className="px-4 py-2 text-right">
+                  <button onClick={() => editar(t)} className="mr-3 text-blue-600 hover:underline">
+                    Editar
+                  </button>
+                  <button onClick={() => eliminar(t.id)} className="text-red-600 hover:underline">
+                    Eliminar
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
