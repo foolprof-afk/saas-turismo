@@ -16,6 +16,13 @@ const NAV_ADMIN = [
   { href: "/usuarios", label: "Usuarios" },
   { href: "/tipos-servicio", label: "Tipos de servicio" },
   { href: "/plantillas-itinerario", label: "Plantillas" },
+  { href: "/servicios", label: "Servicios" },
+  { href: "/proveedores", label: "Proveedores" },
+  { href: "/vehiculos", label: "Vehículos" },
+  { href: "/guias", label: "Guías" },
+  { href: "/rutas", label: "Rutas" },
+  { href: "/puntos-recogida", label: "Puntos de recogida" },
+  { href: "/impuestos", label: "Impuestos" },
   { href: "/monedas", label: "Monedas" },
   { href: "/formas-pago", label: "Formas de pago" },
 ];
