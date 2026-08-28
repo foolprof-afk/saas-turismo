@@ -47,7 +47,29 @@ export class ReservasService {
    * (días + servicios) hacia un Itinerario real "congelado" con fechas concretas.
    * Todo ocurre en una transacción para garantizar atomicidad (ver arquitectura-backend.md).
    */
+  /**
+   * Cliente = identidad comercial bajo la cual vende el usuario logueado (no se elige a mano,
+   * ver arquitectura-backend.md). Si el usuario aún no tiene un Cliente vinculado, se crea uno
+   * automáticamente usando su nombre.
+   */
+  private async resolverClientePropio(agenciaId: string, vendedorId: string) {
+    const existente = await this.prisma.cliente.findUnique({ where: { usuarioId: vendedorId } });
+    if (existente) return existente;
+
+    const usuario = await this.prisma.usuario.findUniqueOrThrow({ where: { id: vendedorId } });
+    return this.prisma.cliente.create({
+      data: { agenciaId, usuarioId: vendedorId, nombre: usuario.nombre },
+    });
+  }
+
   async create(agenciaId: string, vendedorId: string, dto: CreateReservaDto) {
+    if (!dto.servicioId && !dto.plantillaItinerarioId) {
+      throw new BadRequestException('Debes seleccionar un servicio o una plantilla de itinerario');
+    }
+    if (dto.servicioId && dto.plantillaItinerarioId) {
+      throw new BadRequestException('Selecciona solo un servicio o una plantilla, no ambos');
+    }
+
     const fechaInicio = new Date(dto.fechaServicioInicio);
     const fechaFin = dto.fechaServicioFin ? new Date(dto.fechaServicioFin) : fechaInicio;
 
@@ -56,28 +78,42 @@ export class ReservasService {
     }
 
     let plantilla = null;
+    let servicio = null;
+    let precioEstablecido = 0;
+
     if (dto.plantillaItinerarioId) {
       plantilla = await this.prisma.plantillaItinerario.findFirst({
         where: { id: dto.plantillaItinerarioId, agenciaId },
         include: { dias: { include: { servicios: { include: { servicio: true } } }, orderBy: { numeroDia: 'asc' } } },
       });
       if (!plantilla) throw new NotFoundException('Plantilla de itinerario no encontrada');
+      precioEstablecido =
+        plantilla.dias.reduce(
+          (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
+          0,
+        ) * dto.pasajeros.length;
+    } else {
+      servicio = await this.prisma.servicio.findFirst({ where: { id: dto.servicioId, agenciaId } });
+      if (!servicio) throw new NotFoundException('Servicio no encontrado');
+      precioEstablecido = Number(servicio.precioBase) * dto.pasajeros.length;
     }
 
-    const total =
-      dto.precioLiquidado ??
-      (plantilla
-        ? plantilla.dias.reduce(
-            (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
-            0,
-          ) * dto.pasajeros.length
-        : 0);
+    // El precio se puede subir (el agente gana más), pero nunca bajar del precio establecido
+    // por el dueño de la agencia madre en el servicio/plantilla.
+    if (dto.precioLiquidado !== undefined && dto.precioLiquidado < precioEstablecido) {
+      throw new BadRequestException(
+        `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+      );
+    }
+    const total = dto.precioLiquidado ?? precioEstablecido;
+
+    const cliente = await this.resolverClientePropio(agenciaId, vendedorId);
 
     const reserva = await this.prisma.$transaction(async (tx) => {
       const nuevaReserva = await tx.reserva.create({
         data: {
           agenciaId,
-          clienteId: dto.clienteId,
+          clienteId: cliente.id,
           vendedorId,
           codigoReserva: this.generarCodigoReserva(),
           fechaServicioInicio: fechaInicio,
@@ -87,6 +123,7 @@ export class ReservasService {
           monedaId: dto.monedaId,
           formaPagoId: dto.formaPagoId,
           plantillaItinerarioId: dto.plantillaItinerarioId,
+          servicioId: dto.servicioId,
           pasajeros: { create: dto.pasajeros },
         },
       });
@@ -106,6 +143,23 @@ export class ReservasService {
                   })),
                 },
               })),
+            },
+          },
+        });
+      } else if (servicio) {
+        await tx.itinerario.create({
+          data: {
+            reservaId: nuevaReserva.id,
+            dias: {
+              create: [
+                {
+                  numeroDia: 1,
+                  fecha: fechaInicio,
+                  servicios: {
+                    create: [{ servicioId: servicio.id, horaInicio: dto.horaServicio ?? '00:00' }],
+                  },
+                },
+              ],
             },
           },
         });
