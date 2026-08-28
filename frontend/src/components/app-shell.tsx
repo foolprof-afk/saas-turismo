@@ -16,6 +16,8 @@ const NAV_ADMIN = [
   { href: "/usuarios", label: "Usuarios" },
   { href: "/tipos-servicio", label: "Tipos de servicio" },
   { href: "/plantillas-itinerario", label: "Plantillas" },
+  { href: "/monedas", label: "Monedas" },
+  { href: "/formas-pago", label: "Formas de pago" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
