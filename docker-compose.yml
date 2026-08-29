@@ -29,7 +29,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambia-esto-en-produccion}
       JWT_EXPIRES_IN: 8h
       PORT: 3000
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      FRONTEND_URL: ${FRONTEND_URL:-http://2.24.118.206:3001}
     volumes:
       - backend_keys:/app/keys
     ports:
@@ -39,7 +39,7 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://2.24.118.206:3000}
     restart: unless-stopped
     depends_on:
       - backend
