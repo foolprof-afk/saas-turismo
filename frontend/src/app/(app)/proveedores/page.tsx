@@ -31,7 +31,7 @@ export default function ProveedoresPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Proveedor[]>("/proveedores")
+      .get<Proveedor[]>("/proveedores?limit=500")
       .then(setProveedores)
       .finally(() => setLoading(false));
   };

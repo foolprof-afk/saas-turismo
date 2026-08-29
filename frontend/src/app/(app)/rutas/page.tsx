@@ -29,7 +29,7 @@ export default function RutasPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Ruta[]>("/rutas")
+      .get<Ruta[]>("/rutas?limit=500")
       .then(setRutas)
       .finally(() => setLoading(false));
   };

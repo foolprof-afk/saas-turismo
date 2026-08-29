@@ -9,8 +9,13 @@ export class ItinerariosController {
   constructor(private readonly itinerariosService: ItinerariosService) {}
 
   @Get()
-  findPorFecha(@CurrentUser() user: AuthenticatedUser, @Query('fecha') fecha: string) {
-    return this.itinerariosService.findPorFecha(user.agenciaId, fecha ?? new Date().toISOString());
+  findPorFecha(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('fecha') fecha: string,
+    @Query('usuarioIds') usuarioIds?: string,
+  ) {
+    const vendedorIds = usuarioIds ? usuarioIds.split(',').filter(Boolean) : undefined;
+    return this.itinerariosService.findPorFecha(user.agenciaId, fecha ?? new Date().toISOString(), vendedorIds);
   }
 
   @Get('reserva/:reservaId')

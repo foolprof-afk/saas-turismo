@@ -29,7 +29,7 @@ export default function PuntosRecogidaPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<PuntoRecogida[]>("/puntos-recogida")
+      .get<PuntoRecogida[]>("/puntos-recogida?limit=500")
       .then(setPuntos)
       .finally(() => setLoading(false));
   };
