@@ -29,6 +29,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cambia-esto-en-produccion}
       JWT_EXPIRES_IN: 8h
       PORT: 3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
     volumes:
       - backend_keys:/app/keys
     ports:

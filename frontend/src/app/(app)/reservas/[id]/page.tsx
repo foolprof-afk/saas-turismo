@@ -26,6 +26,7 @@ interface ReservaDetalle {
 interface FormaPago {
   id: string;
   nombre: string;
+  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean };
 }
 
 interface Pago {
@@ -71,7 +72,9 @@ export default function ReservaDetallePage() {
   const [cancelando, setCancelando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const esEfectivo = formasPago.find((f) => f.id === formaPagoId)?.nombre.toLowerCase() === "efectivo";
+  const formaPagoSeleccionada = formasPago.find((f) => f.id === formaPagoId);
+  const requiereReferencia = formaPagoSeleccionada?.config?.requiereReferencia ?? true;
+  const requiereComprobante = formaPagoSeleccionada?.config?.requiereComprobante ?? false;
 
   const cargar = () => {
     api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
@@ -243,10 +246,10 @@ export default function ReservaDetallePage() {
             </div>
             <div>
               <label className="block text-sm font-medium">
-                Número/referencia de pago {esEfectivo ? "(opcional en efectivo)" : ""}
+                Número/referencia de pago {requiereReferencia ? "" : "(opcional)"}
               </label>
               <input
-                required={!esEfectivo}
+                required={requiereReferencia}
                 value={referenciaExterna}
                 onChange={(e) => setReferenciaExterna(e.target.value)}
                 placeholder="N° de operación, últimos dígitos, etc."
@@ -254,10 +257,13 @@ export default function ReservaDetallePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Foto del comprobante (opcional)</label>
+              <label className="block text-sm font-medium">
+                Foto del comprobante {requiereComprobante ? "" : "(opcional)"}
+              </label>
               <input
                 type="file"
                 accept="image/*"
+                required={requiereComprobante && !comprobanteUrl}
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   setComprobanteUrl(file ? await fileToDataUrl(file) : undefined);

@@ -12,6 +12,7 @@ interface Reserva {
   total: string;
   cliente: { nombre: string };
   vendedor: { nombre: string };
+  pasajeros: { nombre: string; telefono?: string | null }[];
 }
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
@@ -80,7 +81,8 @@ export default function ReservasPage() {
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Código</th>
-              <th className="px-4 py-2">Cliente</th>
+              <th className="px-4 py-2">Titular</th>
+              <th className="px-4 py-2">Teléfono</th>
               <th className="px-4 py-2">Vendedor</th>
               <th className="px-4 py-2">Fecha</th>
               <th className="px-4 py-2">Estado</th>
@@ -90,14 +92,14 @@ export default function ReservasPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && reservas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                   No hay reservas todavía
                 </td>
               </tr>
@@ -109,7 +111,8 @@ export default function ReservasPage() {
                     {r.codigoReserva}
                   </Link>
                 </td>
-                <td className="px-4 py-2">{r.cliente?.nombre}</td>
+                <td className="px-4 py-2">{r.pasajeros?.[0]?.nombre ?? r.cliente?.nombre}</td>
+                <td className="px-4 py-2">{r.pasajeros?.[0]?.telefono ?? "-"}</td>
                 <td className="px-4 py-2">{r.vendedor?.nombre}</td>
                 <td className="px-4 py-2">{new Date(r.fechaServicioInicio).toLocaleDateString()}</td>
                 <td className="px-4 py-2">

@@ -36,12 +36,22 @@ async function main() {
       update: {},
       create: { agenciaId: agencia.id, codigo: 'USD', simbolo: '$', esPrincipal: true },
     }),
-    prisma.formaPago.create({ data: { agenciaId: agencia.id, nombre: 'efectivo' } }).catch(() => null),
-    prisma.tipoServicio.upsert({
-      where: { nombre: 'tour' },
-      update: {},
-      create: { nombre: 'tour' },
-    }),
+    prisma.formaPago
+      .create({
+        data: {
+          agenciaId: agencia.id,
+          nombre: 'efectivo',
+          config: { requiereReferencia: false, requiereComprobante: false },
+        },
+      })
+      .catch(() => null),
+    ...['traslado', 'tour', 'hospedaje'].map((nombre) =>
+      prisma.tipoServicio.upsert({
+        where: { nombre },
+        update: {},
+        create: { nombre },
+      }),
+    ),
   ]);
 
   console.log('Seed completado: agencia "demo", usuario admin@demo.com / admin123');

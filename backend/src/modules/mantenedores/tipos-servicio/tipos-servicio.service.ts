@@ -19,7 +19,7 @@ export class TiposServicioService {
     return tipo;
   }
 
-  create(data: { nombre: string; descripcion?: string; precio: number }) {
+  create(data: { nombre: string; descripcion?: string }) {
     return this.prisma.tipoServicio.create({ data });
   }
 

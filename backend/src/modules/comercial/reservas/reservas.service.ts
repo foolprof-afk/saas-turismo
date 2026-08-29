@@ -47,7 +47,7 @@ export class ReservasService {
   findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}) {
     return this.prisma.reserva.findMany({
       where: this.construirWhere(agenciaId, filtros),
-      include: { cliente: true, vendedor: true, voucher: true },
+      include: { cliente: true, vendedor: true, voucher: true, pasajeros: { take: 1 } },
       skip,
       take,
       orderBy: { createdAt: 'desc' },
@@ -249,8 +249,10 @@ export class ReservasService {
   }
 
   /**
-   * Confirma una reserva registrando el pago: requiere forma de pago y, salvo que sea
-   * efectivo, un número/referencia de pago (comprobante en foto es opcional siempre).
+   * Confirma una reserva registrando el pago. Los requisitos (número/referencia de pago y
+   * foto de comprobante) dependen de cómo esté configurada la forma de pago elegida
+   * (FormaPago.config: { requiereReferencia, requiereComprobante }), ya que algunos clientes
+   * tienen crédito o pagan en efectivo y no siempre hay un comprobante digital que adjuntar.
    */
   async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
@@ -264,10 +266,18 @@ export class ReservasService {
     });
     if (!formaPago) throw new NotFoundException('Forma de pago no encontrada');
 
-    const esEfectivo = formaPago.nombre.toLowerCase() === 'efectivo';
-    if (!esEfectivo && !dto.referenciaExterna) {
+    const config = (formaPago.config as { requiereReferencia?: boolean; requiereComprobante?: boolean }) ?? {};
+    const requiereReferencia = config.requiereReferencia ?? true;
+    const requiereComprobante = config.requiereComprobante ?? false;
+
+    if (requiereReferencia && !dto.referenciaExterna) {
       throw new BadRequestException(
-        'El número de pago es obligatorio salvo que la forma de pago sea efectivo',
+        `El número de pago es obligatorio para la forma de pago "${formaPago.nombre}"`,
+      );
+    }
+    if (requiereComprobante && !dto.comprobanteUrl) {
+      throw new BadRequestException(
+        `La foto del comprobante es obligatoria para la forma de pago "${formaPago.nombre}"`,
       );
     }
 

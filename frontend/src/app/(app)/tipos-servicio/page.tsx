@@ -7,7 +7,6 @@ interface TipoServicio {
   id: string;
   nombre: string;
   descripcion?: string | null;
-  precio: string;
 }
 
 export default function TiposServicioPage() {
@@ -16,7 +15,6 @@ export default function TiposServicioPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
-  const [precio, setPrecio] = useState("");
   const [descripcion, setDescripcion] = useState("");
 
   const [error, setError] = useState<string | null>(null);
@@ -37,14 +35,12 @@ export default function TiposServicioPage() {
   const resetForm = () => {
     setEditingId(null);
     setNombre("");
-    setPrecio("");
     setDescripcion("");
   };
 
   const editar = (t: TipoServicio) => {
     setEditingId(t.id);
     setNombre(t.nombre);
-    setPrecio(String(t.precio));
     setDescripcion(t.descripcion ?? "");
   };
 
@@ -65,7 +61,6 @@ export default function TiposServicioPage() {
     try {
       const data = {
         nombre,
-        precio: Number(precio),
         descripcion: descripcion || undefined,
       };
       if (editingId) {
@@ -90,28 +85,14 @@ export default function TiposServicioPage() {
         <h2 className="text-sm font-semibold text-gray-700">
           {editingId ? "Editar tipo de servicio" : "Nuevo tipo de servicio"}
         </h2>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium">Nombre</label>
-            <input
-              required
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Precio</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium">Nombre</label>
+          <input
+            required
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
         </div>
 
         <div>
@@ -151,21 +132,20 @@ export default function TiposServicioPage() {
             <tr>
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Descripción</th>
-              <th className="px-4 py-2">Precio</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && tipos.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
                   No hay tipos de servicio todavía
                 </td>
               </tr>
@@ -174,7 +154,6 @@ export default function TiposServicioPage() {
               <tr key={t.id} className="border-t">
                 <td className="px-4 py-2">{t.nombre}</td>
                 <td className="px-4 py-2">{t.descripcion ?? "-"}</td>
-                <td className="px-4 py-2">{t.precio}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(t)} className="mr-3 text-blue-600 hover:underline">
                     Editar
