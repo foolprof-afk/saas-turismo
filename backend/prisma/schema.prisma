@@ -516,6 +516,7 @@ model Pago {
   monedaId           String
   fecha              DateTime   @default(now())
   referenciaExterna  String?
+  comprobanteUrl     String?
   estado             EstadoPago @default(PENDIENTE)
 
   reserva   Reserva   @relation(fields: [reservaId], references: [id])

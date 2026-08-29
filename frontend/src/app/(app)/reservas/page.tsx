@@ -14,16 +14,30 @@ interface Reserva {
   vendedor: { nombre: string };
 }
 
+const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
+
 export default function ReservasPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
+  const [estado, setEstado] = useState("");
+  const [codigoReserva, setCodigoReserva] = useState("");
 
-  useEffect(() => {
+  const cargar = () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (estado) params.set("estado", estado);
+    if (codigoReserva) params.set("codigoReserva", codigoReserva);
+    const qs = params.toString();
     api
-      .get<Reserva[]>("/reservas")
+      .get<Reserva[]>(`/reservas${qs ? `?${qs}` : ""}`)
       .then(setReservas)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    const timeout = setTimeout(cargar, 300);
+    return () => clearTimeout(timeout);
+  }, [estado, codigoReserva]);
 
   return (
     <div className="space-y-4">
@@ -32,6 +46,33 @@ export default function ReservasPage() {
         <Link href="/reservas/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
           Nueva reserva
         </Link>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+        <div>
+          <label className="block text-sm font-medium">Código de reserva</label>
+          <input
+            value={codigoReserva}
+            onChange={(e) => setCodigoReserva(e.target.value)}
+            placeholder="RES-XXXXXXXX"
+            className="mt-1 rounded border px-3 py-2 text-sm font-mono"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Estado</label>
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm"
+          >
+            <option value="">Todos</option>
+            {ESTADOS.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-white">
@@ -63,7 +104,11 @@ export default function ReservasPage() {
             )}
             {reservas.map((r) => (
               <tr key={r.id} className="border-t">
-                <td className="px-4 py-2 font-mono">{r.codigoReserva}</td>
+                <td className="px-4 py-2 font-mono">
+                  <Link href={`/reservas/${r.id}`} className="text-blue-600 hover:underline">
+                    {r.codigoReserva}
+                  </Link>
+                </td>
                 <td className="px-4 py-2">{r.cliente?.nombre}</td>
                 <td className="px-4 py-2">{r.vendedor?.nombre}</td>
                 <td className="px-4 py-2">{new Date(r.fechaServicioInicio).toLocaleDateString()}</td>

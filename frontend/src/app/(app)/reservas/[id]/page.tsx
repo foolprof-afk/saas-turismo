@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { useParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface ReservaDetalle {
+  id: string;
   codigoReserva: string;
   estado: string;
   total: string;
@@ -22,13 +23,88 @@ interface ReservaDetalle {
   };
 }
 
+interface FormaPago {
+  id: string;
+  nombre: string;
+}
+
+interface Pago {
+  id: string;
+  monto: string;
+  formaPago: { nombre: string };
+  referenciaExterna?: string | null;
+  comprobanteUrl?: string | null;
+  fecha: string;
+  estado: string;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ReservaDetallePage() {
   const params = useParams<{ id: string }>();
   const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
+  const [formasPago, setFormasPago] = useState<FormaPago[]>([]);
+  const [pagos, setPagos] = useState<Pago[]>([]);
+
+  const [formaPagoId, setFormaPagoId] = useState("");
+  const [referenciaExterna, setReferenciaExterna] = useState("");
+  const [comprobanteUrl, setComprobanteUrl] = useState<string | undefined>(undefined);
+  const [confirmando, setConfirmando] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const esEfectivo = formasPago.find((f) => f.id === formaPagoId)?.nombre.toLowerCase() === "efectivo";
+
+  const cargar = () => {
+    api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
+    api.get<Pago[]>(`/pagos/reserva/${params.id}`).then(setPagos).catch(() => setPagos([]));
+  };
 
   useEffect(() => {
-    api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
+    cargar();
+    api.get<FormaPago[]>("/formas-pago").then(setFormasPago).catch(() => setFormasPago([]));
   }, [params.id]);
+
+  const handleConfirmar = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setConfirmando(true);
+    try {
+      await api.patch(`/reservas/${params.id}/confirmar`, {
+        formaPagoId,
+        referenciaExterna: referenciaExterna || undefined,
+        comprobanteUrl,
+      });
+      setFormaPagoId("");
+      setReferenciaExterna("");
+      setComprobanteUrl(undefined);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo confirmar la reserva");
+    } finally {
+      setConfirmando(false);
+    }
+  };
+
+  const handleCancelar = async () => {
+    if (!confirm("¿Cancelar esta reserva?")) return;
+    setCancelando(true);
+    try {
+      await api.patch(`/reservas/${params.id}/cancelar`);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cancelar la reserva");
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   if (!reserva) return <p className="text-sm text-gray-400">Cargando...</p>;
 
@@ -46,8 +122,99 @@ export default function ReservaDetallePage() {
         <div className="text-right">
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
           <p className="mt-2 text-lg font-semibold">{reserva.total}</p>
+          {reserva.estado !== "CANCELADA" && (
+            <button
+              onClick={handleCancelar}
+              disabled={cancelando}
+              className="mt-2 text-sm text-red-600 hover:underline disabled:opacity-50"
+            >
+              {cancelando ? "Cancelando..." : "Cancelar reserva"}
+            </button>
+          )}
         </div>
       </div>
+
+      {reserva.estado === "PENDIENTE" && (
+        <div className="rounded-lg border bg-white p-5">
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">Confirmar reserva</h2>
+          <form onSubmit={handleConfirmar} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium">Forma de pago</label>
+              <select
+                required
+                value={formaPagoId}
+                onChange={(e) => setFormaPagoId(e.target.value)}
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              >
+                <option value="">Selecciona una forma de pago</option>
+                {formasPago.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium">
+                Número/referencia de pago {esEfectivo ? "(opcional en efectivo)" : ""}
+              </label>
+              <input
+                required={!esEfectivo}
+                value={referenciaExterna}
+                onChange={(e) => setReferenciaExterna(e.target.value)}
+                placeholder="N° de operación, últimos dígitos, etc."
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Foto del comprobante (opcional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  setComprobanteUrl(file ? await fileToDataUrl(file) : undefined);
+                }}
+                className="mt-1 w-full text-sm"
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={confirmando}
+              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {confirmando ? "Confirmando..." : "Confirmar reserva"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {pagos.length > 0 && (
+        <div className="rounded-lg border bg-white p-5">
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">Pagos registrados</h2>
+          <ul className="space-y-2 text-sm">
+            {pagos.map((p) => (
+              <li key={p.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                <div>
+                  <p>
+                    {p.formaPago?.nombre} — {p.monto}
+                  </p>
+                  {p.referenciaExterna && <p className="text-xs text-gray-400">Ref: {p.referenciaExterna}</p>}
+                  <p className="text-xs text-gray-400">{new Date(p.fecha).toLocaleString()}</p>
+                </div>
+                {p.comprobanteUrl && (
+                  <a href={p.comprobanteUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                    Ver comprobante
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="rounded-lg border bg-white p-5">
