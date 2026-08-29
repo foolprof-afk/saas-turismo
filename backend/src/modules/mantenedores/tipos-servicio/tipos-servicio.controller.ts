@@ -21,7 +21,7 @@ export class TiposServicioController {
 
   @Post()
   @Roles('admin')
-  create(@Body() data: { nombre: string; descripcion?: string; precio: number }) {
+  create(@Body() data: { nombre: string; descripcion?: string }) {
     return this.tiposServicioService.create(data);
   }
 

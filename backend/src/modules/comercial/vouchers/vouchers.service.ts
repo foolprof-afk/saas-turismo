@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { QrTokenService } from './qr-token.service';
@@ -13,8 +13,10 @@ export class VouchersService {
   ) {}
 
   /**
-   * Genera el JWT del QR y el voucher asociado a una reserva ya creada.
-   * fechaServicioFin se usa para calcular el exp del JWT (ver diseno-qr-checkin.md).
+   * Genera el JWT del QR y el voucher asociado a una reserva ya creada. El QR codifica una URL
+   * pública (no el JWT crudo) para que, al escanearlo con la cámara del celular, se abra
+   * directamente el visualizador de la reserva. fechaServicioFin se usa para calcular el exp
+   * del JWT (ver diseno-qr-checkin.md).
    */
   async generar(reservaId: string, agenciaId: string, codigoReserva: string, fechaServicioFin: Date) {
     const segundosHastaExpirar =
@@ -25,7 +27,8 @@ export class VouchersService {
       Math.max(segundosHastaExpirar, 3600),
     );
 
-    const qrDataUrl = await QRCode.toDataURL(token);
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
+    const qrDataUrl = await QRCode.toDataURL(`${frontendUrl}/voucher/${token}`);
 
     return this.prisma.voucher.create({
       data: {
@@ -35,5 +38,26 @@ export class VouchersService {
         validoHasta: new Date(fechaServicioFin.getTime() + VOUCHER_EXPIRA_HORAS_MARGEN * 3600 * 1000),
       },
     });
+  }
+
+  /**
+   * Devuelve los datos de la reserva para el visualizador público del voucher (sin autenticación,
+   * validado únicamente por la firma del JWT del QR), de forma que el cliente pueda confirmar
+   * que su reserva es real al escanear el código.
+   */
+  async obtenerPublico(token: string) {
+    const payload = this.qrTokenService.verify(token);
+
+    const reserva = await this.prisma.reserva.findFirst({
+      where: { id: payload.sub, agenciaId: payload.agenciaId },
+      include: {
+        cliente: true,
+        pasajeros: true,
+        voucher: true,
+        itinerario: { include: { dias: { include: { servicios: { include: { servicio: true } } } } } },
+      },
+    });
+    if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    return reserva;
   }
 }

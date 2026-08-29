@@ -242,9 +242,8 @@ model Proveedor {
 
 model TipoServicio {
   id          String  @id @default(cuid())
-  nombre      String  @unique // tour | traslado | hospedaje | actividad_nautica | otro
+  nombre      String  @unique // traslado | tour | hospedaje
   descripcion String?
-  precio      Decimal @default(0) @db.Decimal(12, 2)
 
   servicios Servicio[]
 

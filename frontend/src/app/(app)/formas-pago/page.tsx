@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 interface FormaPago {
   id: string;
   nombre: string;
+  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean };
 }
 
 export default function FormasPagoPage() {
@@ -14,6 +15,8 @@ export default function FormasPagoPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
+  const [requiereReferencia, setRequiereReferencia] = useState(true);
+  const [requiereComprobante, setRequiereComprobante] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -33,11 +36,15 @@ export default function FormasPagoPage() {
   const resetForm = () => {
     setEditingId(null);
     setNombre("");
+    setRequiereReferencia(true);
+    setRequiereComprobante(false);
   };
 
   const editar = (f: FormaPago) => {
     setEditingId(f.id);
     setNombre(f.nombre);
+    setRequiereReferencia(f.config?.requiereReferencia ?? true);
+    setRequiereComprobante(f.config?.requiereComprobante ?? false);
   };
 
   const eliminar = async (id: string) => {
@@ -55,7 +62,7 @@ export default function FormasPagoPage() {
     setError(null);
     setSaving(true);
     try {
-      const data = { nombre, config: {} };
+      const data = { nombre, config: { requiereReferencia, requiereComprobante } };
       if (editingId) {
         await api.put(`/formas-pago/${editingId}`, data);
       } else {
@@ -88,6 +95,25 @@ export default function FormasPagoPage() {
           />
         </div>
 
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={requiereReferencia}
+              onChange={(e) => setRequiereReferencia(e.target.checked)}
+            />
+            Requiere número/referencia de pago al confirmar la reserva
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={requiereComprobante}
+              onChange={(e) => setRequiereComprobante(e.target.checked)}
+            />
+            Requiere foto del comprobante al confirmar la reserva
+          </label>
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -115,20 +141,22 @@ export default function FormasPagoPage() {
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Nombre</th>
+              <th className="px-4 py-2">Ref. obligatoria</th>
+              <th className="px-4 py-2">Comprobante obligatorio</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={2} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && formasPago.length === 0 && (
               <tr>
-                <td colSpan={2} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
                   No hay formas de pago todavía
                 </td>
               </tr>
@@ -136,6 +164,8 @@ export default function FormasPagoPage() {
             {formasPago.map((f) => (
               <tr key={f.id} className="border-t">
                 <td className="px-4 py-2">{f.nombre}</td>
+                <td className="px-4 py-2">{(f.config?.requiereReferencia ?? true) ? "Sí" : "No"}</td>
+                <td className="px-4 py-2">{f.config?.requiereComprobante ? "Sí" : "No"}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(f)} className="mr-3 text-blue-600 hover:underline">
                     Editar
