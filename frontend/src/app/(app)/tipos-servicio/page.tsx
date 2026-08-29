@@ -25,7 +25,7 @@ export default function TiposServicioPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<TipoServicio[]>("/tipos-servicio")
+      .get<TipoServicio[]>("/tipos-servicio?limit=500")
       .then(setTipos)
       .finally(() => setLoading(false));
   };

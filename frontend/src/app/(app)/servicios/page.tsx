@@ -50,14 +50,19 @@ export default function ServiciosPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   const cargar = () => {
     setLoading(true);
     api
-      .get<Servicio[]>("/servicios")
+      .get<Servicio[]>("/servicios?limit=500")
       .then(setServicios)
       .finally(() => setLoading(false));
   };
+
+  const serviciosFiltrados = servicios.filter((s) =>
+    s.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()),
+  );
 
   useEffect(() => {
     cargar();
@@ -297,6 +302,15 @@ export default function ServiciosPage() {
         </div>
       </form>
 
+      <div>
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar servicio por nombre..."
+          className="w-full max-w-sm rounded border px-3 py-2 text-sm"
+        />
+      </div>
+
       <div className="overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
@@ -316,14 +330,14 @@ export default function ServiciosPage() {
                 </td>
               </tr>
             )}
-            {!loading && servicios.length === 0 && (
+            {!loading && serviciosFiltrados.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                  No hay servicios todavía
+                  {servicios.length === 0 ? "No hay servicios todavía" : "Sin resultados para la búsqueda"}
                 </td>
               </tr>
             )}
-            {servicios.map((s) => (
+            {serviciosFiltrados.map((s) => (
               <tr key={s.id} className="border-t">
                 <td className="px-4 py-2">{s.nombre}</td>
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>

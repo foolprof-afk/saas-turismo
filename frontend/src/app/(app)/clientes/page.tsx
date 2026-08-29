@@ -31,7 +31,7 @@ export default function ClientesPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Cliente[]>("/clientes")
+      .get<Cliente[]>("/clientes?limit=500")
       .then(setClientes)
       .finally(() => setLoading(false));
   };

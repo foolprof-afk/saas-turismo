@@ -35,7 +35,7 @@ export default function PlantillasItinerarioPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Plantilla[]>("/plantillas-itinerario")
+      .get<Plantilla[]>("/plantillas-itinerario?limit=500")
       .then(setPlantillas)
       .finally(() => setLoading(false));
   };
