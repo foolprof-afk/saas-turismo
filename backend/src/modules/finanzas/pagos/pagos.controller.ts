@@ -20,7 +20,14 @@ export class PagosController {
   registrar(
     @CurrentUser() user: AuthenticatedUser,
     @Param('reservaId') reservaId: string,
-    @Body() data: { formaPagoId: string; monto: number; monedaId: string; referenciaExterna?: string },
+    @Body()
+    data: {
+      formaPagoId: string;
+      monto: number;
+      monedaId: string;
+      referenciaExterna?: string;
+      comprobanteUrl?: string;
+    },
   ) {
     return this.pagosService.registrar(user.agenciaId, reservaId, data);
   }

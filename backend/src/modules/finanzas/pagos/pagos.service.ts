@@ -15,7 +15,13 @@ export class PagosService {
   async registrar(
     agenciaId: string,
     reservaId: string,
-    data: { formaPagoId: string; monto: number; monedaId: string; referenciaExterna?: string },
+    data: {
+      formaPagoId: string;
+      monto: number;
+      monedaId: string;
+      referenciaExterna?: string;
+      comprobanteUrl?: string;
+    },
   ) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id: reservaId, agenciaId } });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');

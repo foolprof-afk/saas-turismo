@@ -13,6 +13,7 @@ const NAV = [
 ];
 
 const NAV_ADMIN = [
+  { href: "/reservas/cuadre", label: "Cuadre de caja" },
   { href: "/usuarios", label: "Usuarios" },
   { href: "/tipos-servicio", label: "Tipos de servicio" },
   { href: "/plantillas-itinerario", label: "Plantillas" },
