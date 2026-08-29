@@ -19,6 +19,10 @@ interface ServicioOpcion {
   precioBase: string;
   monedaId: string;
 }
+interface PlantillaDetalle {
+  id: string;
+  dias: { servicios: { servicio: { precioBase: string; monedaId: string } }[] }[];
+}
 
 type Pasajero = { nombre: string; telefono: string; tipo: "ADULTO" | "NINO" | "INFANTE" };
 type TipoReserva = "servicio" | "plantilla";
@@ -39,6 +43,7 @@ export default function NuevaReservaPage() {
   const [monedaId, setMonedaId] = useState("");
   const [formaPagoId, setFormaPagoId] = useState("");
   const [precioLiquidado, setPrecioLiquidado] = useState("");
+  const [precioUnitarioPlantilla, setPrecioUnitarioPlantilla] = useState<number | null>(null);
   const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", telefono: "", tipo: "ADULTO" }]);
 
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +57,14 @@ export default function NuevaReservaPage() {
   }, []);
 
   const servicioSeleccionado = servicios.find((s) => s.id === servicioId);
-  const precioMinimo = servicioSeleccionado ? Number(servicioSeleccionado.precioBase) * pasajeros.length : 0;
+  const precioMinimo =
+    tipoReserva === "servicio"
+      ? servicioSeleccionado
+        ? Number(servicioSeleccionado.precioBase) * pasajeros.length
+        : 0
+      : precioUnitarioPlantilla !== null
+        ? precioUnitarioPlantilla * pasajeros.length
+        : 0;
 
   const seleccionarServicio = (id: string) => {
     setServicioId(id);
@@ -63,11 +75,35 @@ export default function NuevaReservaPage() {
     }
   };
 
+  const seleccionarPlantilla = async (id: string) => {
+    setPlantillaItinerarioId(id);
+    if (!id) {
+      setPrecioUnitarioPlantilla(null);
+      return;
+    }
+    try {
+      const detalle = await api.get<PlantillaDetalle>(`/plantillas-itinerario/${id}`);
+      const totalUnitario = detalle.dias.reduce(
+        (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
+        0,
+      );
+      setPrecioUnitarioPlantilla(totalUnitario);
+      const primerServicio = detalle.dias[0]?.servicios[0]?.servicio;
+      if (primerServicio) setMonedaId(primerServicio.monedaId);
+      setPrecioLiquidado(String(totalUnitario * pasajeros.length));
+    } catch {
+      setPrecioUnitarioPlantilla(null);
+    }
+  };
+
   const agregarPasajero = () =>
     setPasajeros((p) => {
       const nuevos = [...p, { nombre: "", telefono: "", tipo: "ADULTO" as const }];
-      if (servicioSeleccionado) {
+      if (tipoReserva === "servicio" && servicioSeleccionado) {
         const nuevoMinimo = Number(servicioSeleccionado.precioBase) * nuevos.length;
+        setPrecioLiquidado((prev) => String(Math.max(Number(prev) || 0, nuevoMinimo)));
+      } else if (tipoReserva === "plantilla" && precioUnitarioPlantilla !== null) {
+        const nuevoMinimo = precioUnitarioPlantilla * nuevos.length;
         setPrecioLiquidado((prev) => String(Math.max(Number(prev) || 0, nuevoMinimo)));
       }
       return nuevos;
@@ -79,7 +115,7 @@ export default function NuevaReservaPage() {
     e.preventDefault();
     setError(null);
 
-    if (tipoReserva === "servicio" && precioLiquidado && Number(precioLiquidado) < precioMinimo) {
+    if (precioLiquidado && Number(precioLiquidado) < precioMinimo) {
       setError(`El precio no puede ser menor al precio establecido (${precioMinimo})`);
       return;
     }
@@ -160,7 +196,7 @@ export default function NuevaReservaPage() {
             <select
               required
               value={plantillaItinerarioId}
-              onChange={(e) => setPlantillaItinerarioId(e.target.value)}
+              onChange={(e) => seleccionarPlantilla(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             >
               <option value="">Seleccionar plantilla...</option>
@@ -236,12 +272,16 @@ export default function NuevaReservaPage() {
 
         <div>
           <label className="block text-sm font-medium">
-            Precio a liquidar{tipoReserva === "servicio" && servicioSeleccionado ? ` (mínimo: ${precioMinimo})` : ""}
+            Precio a liquidar
+            {(tipoReserva === "servicio" && servicioSeleccionado) ||
+            (tipoReserva === "plantilla" && precioUnitarioPlantilla !== null)
+              ? ` (mínimo: ${precioMinimo})`
+              : ""}
           </label>
           <input
             type="number"
             step="0.01"
-            min={tipoReserva === "servicio" ? precioMinimo : 0}
+            min={precioMinimo}
             value={precioLiquidado}
             onChange={(e) => setPrecioLiquidado(e.target.value)}
             placeholder="Se calcula automáticamente según el servicio o la plantilla"

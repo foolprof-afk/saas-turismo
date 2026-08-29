@@ -29,6 +29,7 @@ export default function UsuariosPage() {
   const [password, setPassword] = useState("");
   const [rolId, setRolId] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [estado, setEstado] = useState("ACTIVO");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -36,7 +37,7 @@ export default function UsuariosPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<Usuario[]>("/usuarios")
+      .get<Usuario[]>("/usuarios?limit=500")
       .then(setUsuarios)
       .finally(() => setLoading(false));
   };
@@ -53,6 +54,7 @@ export default function UsuariosPage() {
     setPassword("");
     setRolId("");
     setTelefono("");
+    setEstado("ACTIVO");
   };
 
   const editar = (u: Usuario) => {
@@ -62,15 +64,15 @@ export default function UsuariosPage() {
     setPassword("");
     setRolId(u.rolId ?? u.rol?.id ?? "");
     setTelefono(u.telefono ?? "");
+    setEstado(u.estado);
   };
 
-  const eliminar = async (id: string) => {
-    if (!confirm("¿Eliminar este usuario?")) return;
+  const cambiarEstado = async (u: Usuario) => {
     try {
-      await api.delete(`/usuarios/${id}`);
+      await api.put(`/usuarios/${u.id}`, { estado: u.estado === "ACTIVO" ? "INACTIVO" : "ACTIVO" });
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo eliminar el usuario");
+      setError(err instanceof ApiError ? err.message : "No se pudo cambiar el estado del usuario");
     }
   };
 
@@ -85,6 +87,7 @@ export default function UsuariosPage() {
           email,
           rolId,
           telefono: telefono || undefined,
+          estado,
         };
         if (password) data.password = password;
         await api.put(`/usuarios/${editingId}`, data);
@@ -168,13 +171,28 @@ export default function UsuariosPage() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium">Teléfono (opcional)</label>
-          <input
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium">Teléfono (opcional)</label>
+            <input
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+          </div>
+          {editingId && (
+            <div>
+              <label className="block text-sm font-medium">Estado</label>
+              <select
+                value={estado}
+                onChange={(e) => setEstado(e.target.value)}
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              >
+                <option value="ACTIVO">Activo</option>
+                <option value="INACTIVO">Inactivo</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -231,14 +249,20 @@ export default function UsuariosPage() {
                 <td className="px-4 py-2">{u.email}</td>
                 <td className="px-4 py-2">{u.rol?.nombre}</td>
                 <td className="px-4 py-2">
-                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{u.estado}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs ${
+                      u.estado === "ACTIVO" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {u.estado}
+                  </span>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(u)} className="mr-3 text-blue-600 hover:underline">
                     Editar
                   </button>
-                  <button onClick={() => eliminar(u.id)} className="text-red-600 hover:underline">
-                    Eliminar
+                  <button onClick={() => cambiarEstado(u)} className="text-amber-600 hover:underline">
+                    {u.estado === "ACTIVO" ? "Desactivar" : "Activar"}
                   </button>
                 </td>
               </tr>

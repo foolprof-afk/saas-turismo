@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -26,6 +26,16 @@ export class PlantillasItinerarioController {
   @Roles('admin')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreatePlantillaDto) {
     return this.plantillasService.create(user.agenciaId, dto);
+  }
+
+  @Put(':id')
+  @Roles('admin')
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: CreatePlantillaDto,
+  ) {
+    return this.plantillasService.update(user.agenciaId, id, dto);
   }
 
   @Delete(':id')

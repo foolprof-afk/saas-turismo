@@ -5,8 +5,12 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class ItinerariosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Agenda operativa del día: todos los ItinerarioServicio programados para una fecha. */
-  async findPorFecha(agenciaId: string, fecha: string) {
+  /**
+   * Agenda operativa del día (lo que hay que despachar): todos los ItinerarioServicio
+   * programados para una fecha. Filtrable por usuario/vendedor (vendedorIds), útil para
+   * ver qué reservó cada agente.
+   */
+  async findPorFecha(agenciaId: string, fecha: string, vendedorIds?: string[]) {
     const dia = new Date(fecha);
     const inicioDia = new Date(dia.setHours(0, 0, 0, 0));
     const finDia = new Date(dia.setHours(23, 59, 59, 999));
@@ -15,7 +19,12 @@ export class ItinerariosService {
       where: {
         dia: {
           fecha: { gte: inicioDia, lte: finDia },
-          itinerario: { reserva: { agenciaId } },
+          itinerario: {
+            reserva: {
+              agenciaId,
+              ...(vendedorIds && vendedorIds.length ? { vendedorId: { in: vendedorIds } } : {}),
+            },
+          },
         },
       },
       include: {
@@ -24,7 +33,13 @@ export class ItinerariosService {
         guia: true,
         puntoRecogida: true,
         checkin: true,
-        dia: { include: { itinerario: { include: { reserva: { include: { cliente: true, pasajeros: true } } } } } },
+        dia: {
+          include: {
+            itinerario: {
+              include: { reserva: { include: { cliente: true, vendedor: true, pasajeros: true } } },
+            },
+          },
+        },
       },
       orderBy: { horaInicio: 'asc' },
     });

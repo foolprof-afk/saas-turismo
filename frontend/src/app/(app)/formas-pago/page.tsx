@@ -21,7 +21,7 @@ export default function FormasPagoPage() {
   const cargar = () => {
     setLoading(true);
     api
-      .get<FormaPago[]>("/formas-pago")
+      .get<FormaPago[]>("/formas-pago?limit=500")
       .then(setFormasPago)
       .finally(() => setLoading(false));
   };
