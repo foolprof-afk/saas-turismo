@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { CreateReservaDto } from './dto/create-reserva.dto';
+import { UpdateReservaDto } from './dto/update-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
 import { desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
 
@@ -381,6 +382,162 @@ export class ReservasService {
     await this.vouchersService.generar(reserva.id, agenciaId, reserva.codigoReserva, fechaFin);
 
     return this.findOne(agenciaId, reserva.id);
+  }
+
+  /**
+   * Actualiza fecha, hora, precio, moneda, pasajeros y (en reservas MULTIPLE) las líneas del
+   * itinerario. Solo se permite mientras la reserva está PENDIENTE: al confirmar ya queda un
+   * Pago asociado a un monto/fecha concretos, así que editar esos datos después dejaría el
+   * pago desalineado con la reserva. No permite cambiar el tipo de reserva ni el servicio o
+   * plantilla elegidos (eso es una decisión de creación, no de edición).
+   */
+  async actualizar(agenciaId: string, id: string, dto: UpdateReservaDto) {
+    const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
+    if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    if (reserva.estado !== 'PENDIENTE') {
+      throw new BadRequestException(
+        'Solo se pueden modificar reservas pendientes, sin pago registrado todavía',
+      );
+    }
+
+    const data: Prisma.ReservaUncheckedUpdateInput = {};
+    let fechaInicio = reserva.fechaServicioInicio;
+    let fechaFin = reserva.fechaServicioFin;
+
+    if (reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
+      const lineasMultiples: {
+        servicio: { id: string; monedaId: string };
+        fecha: Date;
+        horaInicio: string;
+        precio: number;
+      }[] = [];
+      for (const linea of dto.serviciosMultiples) {
+        const s = await this.prisma.servicio.findFirst({ where: { id: linea.servicioId, agenciaId } });
+        if (!s) throw new NotFoundException(`Servicio no encontrado: ${linea.servicioId}`);
+        const precioMinimo = Number(s.precioBase);
+        const precio = linea.precio ?? precioMinimo;
+        if (precio < precioMinimo) {
+          throw new BadRequestException(
+            `El precio de "${s.nombre}" no puede ser menor al precio establecido (${precioMinimo})`,
+          );
+        }
+        lineasMultiples.push({
+          servicio: { id: s.id, monedaId: s.monedaId },
+          fecha: new Date(linea.fecha),
+          horaInicio: linea.horaInicio ?? '00:00',
+          precio,
+        });
+      }
+      const fechas = lineasMultiples.map((l) => l.fecha.getTime());
+      fechaInicio = new Date(Math.min(...fechas));
+      fechaFin = new Date(Math.max(...fechas));
+      data.fechaServicioInicio = fechaInicio;
+      data.fechaServicioFin = fechaFin;
+
+      await this.prisma.itinerario.deleteMany({ where: { reservaId: id } });
+      const fechasUnicas = Array.from(new Set(lineasMultiples.map((l) => l.fecha.getTime()))).sort(
+        (a, b) => a - b,
+      );
+      await this.prisma.itinerario.create({
+        data: {
+          reservaId: id,
+          dias: {
+            create: fechasUnicas.map((fechaTime, idx) => ({
+              numeroDia: idx + 1,
+              fecha: new Date(fechaTime),
+              servicios: {
+                create: lineasMultiples
+                  .filter((l) => l.fecha.getTime() === fechaTime)
+                  .map((l) => ({
+                    servicioId: l.servicio.id,
+                    horaInicio: l.horaInicio,
+                    precio: l.precio,
+                    monedaId: l.servicio.monedaId,
+                  })),
+              },
+            })),
+          },
+        },
+      });
+    } else {
+      if (dto.fechaServicioInicio) fechaInicio = new Date(dto.fechaServicioInicio);
+      fechaFin = dto.fechaServicioFin
+        ? new Date(dto.fechaServicioFin)
+        : dto.fechaServicioInicio
+          ? fechaInicio
+          : fechaFin;
+      if (fechaFin < fechaInicio) {
+        throw new BadRequestException('fechaServicioFin no puede ser anterior a fechaServicioInicio');
+      }
+      if (dto.fechaServicioInicio) data.fechaServicioInicio = fechaInicio;
+      if (dto.fechaServicioFin || dto.fechaServicioInicio) data.fechaServicioFin = fechaFin;
+      if (dto.horaServicio !== undefined) data.horaServicio = dto.horaServicio;
+      if (dto.monedaId) data.monedaId = dto.monedaId;
+
+      const cantidadPasajeros = dto.pasajeros?.length ?? (await this.prisma.pasajero.count({ where: { reservaId: id } }));
+      let precioEstablecido = 0;
+      if (reserva.tipo === 'PLANTILLA' && reserva.plantillaItinerarioId) {
+        const plantillaEncontrada = await this.prisma.plantillaItinerario.findFirst({
+          where: { id: reserva.plantillaItinerarioId, agenciaId },
+          include: { dias: { include: { servicios: { include: { servicio: true } } } } },
+        });
+        precioEstablecido =
+          (plantillaEncontrada?.dias.reduce(
+            (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
+            0,
+          ) ?? 0) * cantidadPasajeros;
+      } else if (reserva.servicioId) {
+        const servicioEncontrado = await this.prisma.servicio.findFirst({
+          where: { id: reserva.servicioId, agenciaId },
+        });
+        precioEstablecido = Number(servicioEncontrado?.precioBase ?? 0) * cantidadPasajeros;
+      }
+      if (dto.precioLiquidado !== undefined) {
+        if (dto.precioLiquidado < precioEstablecido) {
+          throw new BadRequestException(
+            `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+          );
+        }
+        data.total = dto.precioLiquidado;
+      }
+
+      // Reservas de "servicio"/"plantilla" tienen un único día de itinerario (o varios, para
+      // plantilla) que se recorren completos: si cambió la fecha de inicio, se recalculan todos
+      // los días de itinerario en base al nuevo inicio, igual que en la creación.
+      if (dto.fechaServicioInicio) {
+        const dias = await this.prisma.itinerarioDia.findMany({
+          where: { itinerario: { reservaId: id } },
+          orderBy: { numeroDia: 'asc' },
+        });
+        for (const dia of dias) {
+          await this.prisma.itinerarioDia.update({
+            where: { id: dia.id },
+            data: { fecha: new Date(fechaInicio.getTime() + (dia.numeroDia - 1) * MS_POR_DIA) },
+          });
+        }
+      }
+    }
+
+    if (dto.pasajeros) {
+      const hayResponsable = dto.pasajeros.some((p) => p.esResponsable);
+      const pasajerosData = dto.pasajeros.map((p, i) => ({
+        ...p,
+        esResponsable: hayResponsable ? Boolean(p.esResponsable) : i === 0,
+      }));
+      await this.prisma.pasajero.deleteMany({ where: { reservaId: id } });
+      data.pasajeros = { create: pasajerosData };
+    }
+
+    await this.prisma.reserva.update({ where: { id }, data });
+
+    if (dto.fechaServicioInicio || dto.serviciosMultiples?.length) {
+      // El voucher (QR) codifica la reserva y su expiración según fechaServicioFin; si esta
+      // cambió hay que regenerarlo para que el QR/expiración sigan siendo correctos.
+      await this.prisma.voucher.deleteMany({ where: { reservaId: id } });
+      await this.vouchersService.generar(id, agenciaId, reserva.codigoReserva, fechaFin);
+    }
+
+    return this.findOne(agenciaId, id);
   }
 
   async cancelar(agenciaId: string, id: string) {

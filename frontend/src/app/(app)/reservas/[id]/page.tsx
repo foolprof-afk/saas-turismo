@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 
 interface MontoPorMoneda {
@@ -252,6 +253,14 @@ export default function ReservaDetallePage() {
               >
                 Enviar por WhatsApp
               </a>
+            )}
+            {reserva.estado === "PENDIENTE" && (
+              <Link
+                href={`/reservas/${reserva.id}/editar`}
+                className="rounded border px-3 py-1 text-xs font-medium hover:bg-gray-50"
+              >
+                Editar reserva
+              </Link>
             )}
           </div>
           {reserva.estado !== "CANCELADA" && (
