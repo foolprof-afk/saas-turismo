@@ -92,8 +92,7 @@ export class CreateReservaDto {
   @IsString()
   monedaId?: string;
 
-  @IsString()
-  formaPagoId: string;
+  // La forma de pago se elige al confirmar la reserva (ver ConfirmarReservaDto), no al crearla.
 
   // Se debe indicar exactamente uno de los tres: un servicio individual (tour/traslado puntual),
   // una plantilla de itinerario (paquete de varios días) o una lista de servicios múltiples

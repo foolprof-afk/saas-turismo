@@ -306,7 +306,6 @@ export class ReservasService {
           horaServicio: tipo === 'MULTIPLE' ? undefined : dto.horaServicio,
           total: total ?? undefined,
           monedaId: monedaId ?? undefined,
-          formaPagoId: dto.formaPagoId,
           plantillaItinerarioId: dto.plantillaItinerarioId,
           servicioId: dto.servicioId,
           pasajeros: { create: pasajerosData },
@@ -390,10 +389,14 @@ export class ReservasService {
   }
 
   /**
-   * Confirma una reserva registrando el pago. Los requisitos (número/referencia de pago y
-   * foto de comprobante) dependen de cómo esté configurada la forma de pago elegida
-   * (FormaPago.config: { requiereReferencia, requiereComprobante }), ya que algunos clientes
-   * tienen crédito o pagan en efectivo y no siempre hay un comprobante digital que adjuntar.
+   * Confirma una reserva registrando el pago. La forma de pago se elige recién en este paso
+   * (no al crear la reserva). Los requisitos (número/referencia de pago y foto de comprobante)
+   * dependen de cómo esté configurada la forma de pago elegida (FormaPago.config:
+   * { requiereReferencia, requiereComprobante, permitePagoDiferido }):
+   * - Si permitePagoDiferido es true, se puede confirmar sin referencia ni comprobante (el
+   *   cliente pagará después); el pago queda registrado con estado PENDIENTE en vez de PAGADO.
+   * - Si no, se aplican requiereReferencia/requiereComprobante como antes (por defecto
+   *   requiereReferencia=true, requiereComprobante=false).
    * En reservas MULTIPLE no hay un total/moneda único, así que monto y monedaId son obligatorios.
    */
   async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
@@ -408,9 +411,15 @@ export class ReservasService {
     });
     if (!formaPago) throw new NotFoundException('Forma de pago no encontrada');
 
-    const config = (formaPago.config as { requiereReferencia?: boolean; requiereComprobante?: boolean }) ?? {};
-    const requiereReferencia = config.requiereReferencia ?? true;
-    const requiereComprobante = config.requiereComprobante ?? false;
+    const config =
+      (formaPago.config as {
+        requiereReferencia?: boolean;
+        requiereComprobante?: boolean;
+        permitePagoDiferido?: boolean;
+      }) ?? {};
+    const permitePagoDiferido = config.permitePagoDiferido ?? false;
+    const requiereReferencia = permitePagoDiferido ? false : (config.requiereReferencia ?? true);
+    const requiereComprobante = permitePagoDiferido ? false : (config.requiereComprobante ?? false);
 
     if (requiereReferencia && !dto.referenciaExterna) {
       throw new BadRequestException(
@@ -431,6 +440,8 @@ export class ReservasService {
       );
     }
 
+    const tienePrueba = Boolean(dto.referenciaExterna || dto.comprobanteUrl);
+
     await this.prisma.$transaction([
       this.prisma.pago.create({
         data: {
@@ -440,10 +451,13 @@ export class ReservasService {
           monedaId: monedaPagoId,
           referenciaExterna: dto.referenciaExterna,
           comprobanteUrl: dto.comprobanteUrl,
-          estado: 'PAGADO',
+          estado: permitePagoDiferido && !tienePrueba ? 'PENDIENTE' : 'PAGADO',
         },
       }),
-      this.prisma.reserva.update({ where: { id }, data: { estado: 'CONFIRMADA' } }),
+      this.prisma.reserva.update({
+        where: { id },
+        data: { estado: 'CONFIRMADA', formaPagoId: dto.formaPagoId },
+      }),
     ]);
 
     return this.findOne(agenciaId, id);
