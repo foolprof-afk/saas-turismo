@@ -42,4 +42,9 @@ export class CreateServicioDto {
   @IsArray()
   @IsString({ each: true })
   impuestoIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  palabrasClave?: string[];
 }

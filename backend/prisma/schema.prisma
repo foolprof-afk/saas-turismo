@@ -283,6 +283,9 @@ model Servicio {
   rutaId           String?
   puntoRecogidaId  String?
   estado           EstadoGeneral @default(ACTIVO)
+  // Palabras clave opcionales (sin el símbolo #) para facilitar la búsqueda cuando la
+  // agencia tiene muchos servicios; se muestran/capturan como hashtags en la UI.
+  palabrasClave    String[]      @default([])
 
   agencia       Agencia        @relation(fields: [agenciaId], references: [id])
   proveedor     Proveedor      @relation(fields: [proveedorId], references: [id])
