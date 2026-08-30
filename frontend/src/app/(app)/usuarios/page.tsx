@@ -8,6 +8,17 @@ interface Rol {
   nombre: string;
 }
 
+interface Cliente {
+  id: string;
+  nombre: string;
+}
+
+interface PermisoAccion {
+  leer?: boolean;
+  escribir?: boolean;
+  eliminar?: boolean;
+}
+
 interface Usuario {
   id: string;
   nombre: string;
@@ -16,11 +27,34 @@ interface Usuario {
   estado: string;
   rol: Rol;
   rolId: string;
+  clienteId?: string | null;
+  cliente?: Cliente | null;
+  permisos?: Record<string, PermisoAccion>;
 }
+
+const PAGINAS = [
+  { key: "reservas-cuadre", label: "Cuadre de caja" },
+  { key: "usuarios", label: "Usuarios" },
+  { key: "tipos-servicio", label: "Tipos de servicio" },
+  { key: "plantillas-itinerario", label: "Plantillas" },
+  { key: "servicios", label: "Servicios" },
+  { key: "proveedores", label: "Proveedores" },
+  { key: "vehiculos", label: "Vehículos" },
+  { key: "guias", label: "Guías" },
+  { key: "rutas", label: "Rutas" },
+  { key: "puntos-recogida", label: "Puntos de recogida" },
+  { key: "impuestos", label: "Impuestos" },
+  { key: "monedas", label: "Monedas" },
+  { key: "formas-pago", label: "Formas de pago" },
+];
+
+const permisosVacios = (): Record<string, PermisoAccion> =>
+  Object.fromEntries(PAGINAS.map((p) => [p.key, { leer: false, escribir: false, eliminar: false }]));
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -30,6 +64,8 @@ export default function UsuariosPage() {
   const [rolId, setRolId] = useState("");
   const [telefono, setTelefono] = useState("");
   const [estado, setEstado] = useState("ACTIVO");
+  const [clienteId, setClienteId] = useState("");
+  const [permisos, setPermisos] = useState<Record<string, PermisoAccion>>(permisosVacios());
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,6 +81,7 @@ export default function UsuariosPage() {
   useEffect(() => {
     cargar();
     api.get<Rol[]>("/roles").then(setRoles).catch(() => null);
+    api.get<Cliente[]>("/clientes?limit=500").then(setClientes).catch(() => null);
   }, []);
 
   const resetForm = () => {
@@ -55,6 +92,8 @@ export default function UsuariosPage() {
     setRolId("");
     setTelefono("");
     setEstado("ACTIVO");
+    setClienteId("");
+    setPermisos(permisosVacios());
   };
 
   const editar = (u: Usuario) => {
@@ -65,6 +104,15 @@ export default function UsuariosPage() {
     setRolId(u.rolId ?? u.rol?.id ?? "");
     setTelefono(u.telefono ?? "");
     setEstado(u.estado);
+    setClienteId(u.clienteId ?? "");
+    setPermisos({ ...permisosVacios(), ...(u.permisos ?? {}) });
+  };
+
+  const togglePermiso = (pagina: string, accion: keyof PermisoAccion) => {
+    setPermisos((prev) => ({
+      ...prev,
+      [pagina]: { ...prev[pagina], [accion]: !prev[pagina]?.[accion] },
+    }));
   };
 
   const cambiarEstado = async (u: Usuario) => {
@@ -88,6 +136,8 @@ export default function UsuariosPage() {
           rolId,
           telefono: telefono || undefined,
           estado,
+          clienteId: clienteId || null,
+          permisos,
         };
         if (password) data.password = password;
         await api.put(`/usuarios/${editingId}`, data);
@@ -98,6 +148,8 @@ export default function UsuariosPage() {
           password,
           rolId,
           telefono: telefono || undefined,
+          clienteId: clienteId || undefined,
+          permisos,
         });
       }
       resetForm();
@@ -195,6 +247,54 @@ export default function UsuariosPage() {
           )}
         </div>
 
+        <div>
+          <label className="block text-sm font-medium">Cliente asociado (opcional)</label>
+          <select
+            value={clienteId}
+            onChange={(e) => setClienteId(e.target.value)}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          >
+            <option value="">Sin cliente</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium">Permisos por página</label>
+          <div className="overflow-hidden rounded border">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-left text-gray-500">
+                <tr>
+                  <th className="px-3 py-2">Página</th>
+                  <th className="px-3 py-2">Leer</th>
+                  <th className="px-3 py-2">Escribir</th>
+                  <th className="px-3 py-2">Eliminar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PAGINAS.map((p) => (
+                  <tr key={p.key} className="border-t">
+                    <td className="px-3 py-2">{p.label}</td>
+                    {(["leer", "escribir", "eliminar"] as const).map((accion) => (
+                      <td key={accion} className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={!!permisos[p.key]?.[accion]}
+                          onChange={() => togglePermiso(p.key, accion)}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -224,6 +324,7 @@ export default function UsuariosPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Correo</th>
               <th className="px-4 py-2">Rol</th>
+              <th className="px-4 py-2">Cliente</th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -231,14 +332,14 @@ export default function UsuariosPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && usuarios.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No hay usuarios todavía
                 </td>
               </tr>
@@ -248,6 +349,7 @@ export default function UsuariosPage() {
                 <td className="px-4 py-2">{u.nombre}</td>
                 <td className="px-4 py-2">{u.email}</td>
                 <td className="px-4 py-2">{u.rol?.nombre}</td>
+                <td className="px-4 py-2">{u.cliente?.nombre ?? "—"}</td>
                 <td className="px-4 py-2">
                   <span
                     className={`rounded-full px-2 py-1 text-xs ${

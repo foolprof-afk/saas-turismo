@@ -46,6 +46,8 @@ export class AuthService {
         email: usuario.email,
         rol: usuario.rol.nombre,
         agenciaId: usuario.agenciaId,
+        clienteId: usuario.clienteId,
+        permisos: usuario.permisos,
       },
     };
   }

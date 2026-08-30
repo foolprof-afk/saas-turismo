@@ -5,6 +5,6 @@ import { BaseCrudController } from '../common/base-crud.controller';
 @Controller('monedas')
 export class MonedasController extends BaseCrudController<any> {
   constructor(private readonly monedasService: MonedasService) {
-    super(monedasService);
+    super(monedasService, 'monedas');
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 
@@ -10,7 +11,7 @@ export class UsuariosService {
   findAll(agenciaId: string, skip = 0, take = 20) {
     return this.prisma.usuario.findMany({
       where: { agenciaId },
-      include: { rol: true },
+      include: { rol: true, cliente: true },
       skip,
       take,
       orderBy: { nombre: 'asc' },
@@ -28,7 +29,7 @@ export class UsuariosService {
   async findOne(agenciaId: string, id: string) {
     const usuario = await this.prisma.usuario.findFirst({
       where: { id, agenciaId },
-      include: { rol: true },
+      include: { rol: true, cliente: true },
     });
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
     return usuario;
@@ -36,9 +37,14 @@ export class UsuariosService {
 
   async create(agenciaId: string, dto: CreateUsuarioDto) {
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const { password, ...rest } = dto;
+    const { password, permisos, ...rest } = dto;
     return this.prisma.usuario.create({
-      data: { ...rest, agenciaId, passwordHash },
+      data: {
+        ...rest,
+        agenciaId,
+        passwordHash,
+        permisos: (permisos ?? {}) as Prisma.InputJsonValue,
+      },
     });
   }
 

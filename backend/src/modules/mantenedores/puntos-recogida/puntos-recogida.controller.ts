@@ -5,6 +5,6 @@ import { BaseCrudController } from '../common/base-crud.controller';
 @Controller('puntos-recogida')
 export class PuntosRecogidaController extends BaseCrudController<any> {
   constructor(private readonly puntosRecogidaService: PuntosRecogidaService) {
-    super(puntosRecogidaService);
+    super(puntosRecogidaService, 'puntos-recogida');
   }
 }

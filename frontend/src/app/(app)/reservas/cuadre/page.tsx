@@ -17,12 +17,26 @@ interface ReservaCuadre {
   cliente: { nombre: string };
   vendedor: { nombre: string };
   formaPago?: { nombre: string } | null;
+  moneda: { codigo: string; simbolo: string };
+}
+
+interface TotalPorMoneda {
+  monedaId: string;
+  monedaCodigo: string;
+  monedaSimbolo: string;
+  total: number;
+  cantidad: number;
+}
+
+interface TotalPorVendedor extends TotalPorMoneda {
+  vendedorId: string;
+  vendedorNombre: string;
 }
 
 interface CuadreResponse {
   reservas: ReservaCuadre[];
-  totalGeneral: number;
-  porVendedor: { vendedorId: string; vendedorNombre: string; total: number; cantidad: number }[];
+  porMoneda: TotalPorMoneda[];
+  porVendedor: TotalPorVendedor[];
 }
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
@@ -143,24 +157,28 @@ export default function CuadreDeCajaPage() {
       {!loading && data && (
         <>
           <div className="rounded-lg border bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por vendedor</h2>
+            <h2 className="mb-3 text-sm font-semibold text-gray-500">
+              Totales por moneda (dinero real en caja por tipo de moneda)
+            </h2>
             <table className="w-full text-sm">
               <thead className="text-left text-gray-500">
                 <tr>
-                  <th className="py-1">Vendedor</th>
+                  <th className="py-1">Moneda</th>
                   <th className="py-1">Cantidad</th>
                   <th className="py-1">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {data.porVendedor.map((v) => (
-                  <tr key={v.vendedorId} className="border-t">
-                    <td className="py-1">{v.vendedorNombre}</td>
-                    <td className="py-1">{v.cantidad}</td>
-                    <td className="py-1">{v.total.toFixed(2)}</td>
+                {data.porMoneda.map((m) => (
+                  <tr key={m.monedaId} className="border-t">
+                    <td className="py-1">{m.monedaCodigo}</td>
+                    <td className="py-1">{m.cantidad}</td>
+                    <td className="py-1 font-semibold">
+                      {m.monedaSimbolo} {m.total.toFixed(2)}
+                    </td>
                   </tr>
                 ))}
-                {data.porVendedor.length === 0 && (
+                {data.porMoneda.length === 0 && (
                   <tr>
                     <td colSpan={3} className="py-4 text-center text-gray-400">
                       Sin resultados
@@ -169,7 +187,39 @@ export default function CuadreDeCajaPage() {
                 )}
               </tbody>
             </table>
-            <p className="mt-3 text-right text-lg font-semibold">Total general: {data.totalGeneral.toFixed(2)}</p>
+          </div>
+
+          <div className="rounded-lg border bg-white p-5">
+            <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por vendedor y moneda</h2>
+            <table className="w-full text-sm">
+              <thead className="text-left text-gray-500">
+                <tr>
+                  <th className="py-1">Vendedor</th>
+                  <th className="py-1">Moneda</th>
+                  <th className="py-1">Cantidad</th>
+                  <th className="py-1">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.porVendedor.map((v) => (
+                  <tr key={`${v.vendedorId}-${v.monedaId}`} className="border-t">
+                    <td className="py-1">{v.vendedorNombre}</td>
+                    <td className="py-1">{v.monedaCodigo}</td>
+                    <td className="py-1">{v.cantidad}</td>
+                    <td className="py-1">
+                      {v.monedaSimbolo} {v.total.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {data.porVendedor.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-gray-400">
+                      Sin resultados
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           <div className="overflow-hidden rounded-lg border bg-white">
@@ -182,13 +232,14 @@ export default function CuadreDeCajaPage() {
                   <th className="px-4 py-2">Fecha</th>
                   <th className="px-4 py-2">Forma de pago</th>
                   <th className="px-4 py-2">Estado</th>
+                  <th className="px-4 py-2">Moneda</th>
                   <th className="px-4 py-2">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {data.reservas.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                       No hay reservas para los filtros seleccionados
                     </td>
                   </tr>
@@ -203,7 +254,10 @@ export default function CuadreDeCajaPage() {
                     <td className="px-4 py-2">
                       <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{r.estado}</span>
                     </td>
-                    <td className="px-4 py-2">{r.total}</td>
+                    <td className="px-4 py-2">{r.moneda?.codigo}</td>
+                    <td className="px-4 py-2">
+                      {r.moneda?.simbolo} {r.total}
+                    </td>
                   </tr>
                 ))}
               </tbody>

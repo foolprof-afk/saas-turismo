@@ -4,12 +4,20 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { useRouter } from "next/navigation";
 import { api } from "./api";
 
+export interface PermisoAccion {
+  leer?: boolean;
+  escribir?: boolean;
+  eliminar?: boolean;
+}
+
 interface Usuario {
   id: string;
   nombre: string;
   email: string;
   rol: string;
   agenciaId: string;
+  clienteId?: string | null;
+  permisos?: Record<string, PermisoAccion>;
 }
 
 interface AuthContextValue {

@@ -1,4 +1,10 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+
+export interface PermisoAccion {
+  leer?: boolean;
+  escribir?: boolean;
+  eliminar?: boolean;
+}
 
 export class CreateUsuarioDto {
   @IsString()
@@ -17,4 +23,12 @@ export class CreateUsuarioDto {
   @IsOptional()
   @IsString()
   telefono?: string;
+
+  @IsOptional()
+  @IsString()
+  clienteId?: string;
+
+  @IsOptional()
+  @IsObject()
+  permisos?: Record<string, PermisoAccion>;
 }

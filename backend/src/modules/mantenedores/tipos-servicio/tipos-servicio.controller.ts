@@ -1,11 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../../common/guards/roles.guard';
-import { Roles } from '../../../common/decorators/roles.decorator';
+import { CurrentUser, AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
+import { assertPermiso } from '../../../common/utils/permisos.util';
 import { TiposServicioService } from './tipos-servicio.service';
 
 @Controller('tipos-servicio')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class TiposServicioController {
   constructor(private readonly tiposServicioService: TiposServicioService) {}
 
@@ -20,20 +20,20 @@ export class TiposServicioController {
   }
 
   @Post()
-  @Roles('admin')
-  create(@Body() data: { nombre: string; descripcion?: string }) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() data: { nombre: string; descripcion?: string }) {
+    assertPermiso(user, 'tipos-servicio', 'escribir');
     return this.tiposServicioService.create(data);
   }
 
   @Put(':id')
-  @Roles('admin')
-  update(@Param('id') id: string, @Body() data: Record<string, unknown>) {
+  update(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Body() data: Record<string, unknown>) {
+    assertPermiso(user, 'tipos-servicio', 'escribir');
     return this.tiposServicioService.update(id, data);
   }
 
   @Delete(':id')
-  @Roles('admin')
-  remove(@Param('id') id: string) {
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    assertPermiso(user, 'tipos-servicio', 'eliminar');
     return this.tiposServicioService.remove(id);
   }
 }

@@ -112,17 +112,20 @@ model Usuario {
   id           String        @id @default(cuid())
   agenciaId    String
   rolId        String
+  clienteId    String? // cliente (cuenta) al que pertenece este usuario; un cliente puede tener varios usuarios
   nombre       String
   email        String
   passwordHash String
   telefono     String?
   comisionPct  Decimal?      @db.Decimal(5, 2) // solo aplica si rol = vendedor
+  permisos     Json          @default("{}") // { [pagina]: { leer, escribir, eliminar } }; ignorado si rol = admin (acceso total)
   estado       EstadoGeneral @default(ACTIVO)
   ultimoLogin  DateTime?
   createdAt    DateTime      @default(now())
 
   agencia          Agencia            @relation(fields: [agenciaId], references: [id])
   rol              Rol                @relation(fields: [rolId], references: [id])
+  cliente          Cliente?           @relation("ClienteUsuarios", fields: [clienteId], references: [id])
   reservasVendidas Reserva[]          @relation("VendedorReserva")
   checkins         CheckIn[]
   clienteVinculado Cliente?
@@ -147,9 +150,10 @@ model Cliente {
   notas     String?
   createdAt DateTime @default(now())
 
-  agencia  Agencia   @relation(fields: [agenciaId], references: [id])
-  usuario  Usuario?  @relation(fields: [usuarioId], references: [id])
-  reservas Reserva[]
+  agencia            Agencia   @relation(fields: [agenciaId], references: [id])
+  usuario            Usuario?  @relation(fields: [usuarioId], references: [id])
+  usuariosDelCliente Usuario[] @relation("ClienteUsuarios")
+  reservas           Reserva[]
 
   @@map("clientes")
 }
