@@ -29,7 +29,7 @@ interface ReservaDetalle {
   horaServicio?: string | null;
   cliente: { nombre: string; email?: string };
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
-  voucher?: { qrUrl: string; codigo: string; validoHasta?: string };
+  voucher?: { qrUrl: string; codigo: string; validoHasta?: string; url?: string };
   itinerario?: {
     dias: {
       numeroDia: number;
@@ -210,11 +210,12 @@ export default function ReservaDetallePage() {
   };
 
   const primerTelefono = reserva.pasajeros.find((p) => p.telefono)?.telefono;
-  const linkWhatsapp = primerTelefono
-    ? `https://wa.me/${primerTelefono.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola, aquí está tu voucher de la reserva ${reserva.codigoReserva}. Te lo adjunto en PDF.`,
-      )}`
-    : null;
+  const linkWhatsapp =
+    primerTelefono && reserva.voucher?.url
+      ? `https://wa.me/${primerTelefono.replace(/\D/g, "")}?text=${encodeURIComponent(
+          `Hola, aquí está el enlace de tu reserva ${reserva.codigoReserva}: ${reserva.voucher.url}`,
+        )}`
+      : null;
 
   return (
     <div className="max-w-3xl space-y-6">

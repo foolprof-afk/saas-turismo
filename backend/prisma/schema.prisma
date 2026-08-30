@@ -227,6 +227,9 @@ model Voucher {
   reservaId   String   @unique
   codigo      String   @unique
   qrUrl       String
+  // URL pública (texto plano) que codifica el QR, para poder compartirla directamente
+  // (ej. por WhatsApp) sin tener que decodificar la imagen del QR.
+  url         String?
   pdfUrl      String?
   emitidoAt   DateTime @default(now())
   validoHasta DateTime?

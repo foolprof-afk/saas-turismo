@@ -21,7 +21,7 @@ interface ReservaPublica {
   horaServicio?: string | null;
   cliente: { nombre: string };
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
-  voucher?: { codigo: string; validoHasta?: string };
+  voucher?: { codigo: string; validoHasta?: string; qrUrl?: string };
   itinerario?: {
     dias: {
       numeroDia: number;
@@ -86,6 +86,13 @@ export default function VoucherPublicoPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Reserva válida</p>
           <h1 className="mt-1 text-xl font-bold">{reserva.codigoReserva}</h1>
           <span className="mt-2 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
+          {reserva.voucher?.qrUrl && (
+            <img
+              src={reserva.voucher.qrUrl}
+              alt="Código QR del voucher"
+              className="mx-auto mt-4 h-40 w-40"
+            />
+          )}
         </div>
 
         <div className="rounded-lg border bg-white p-5">
