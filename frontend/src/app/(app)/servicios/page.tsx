@@ -25,6 +25,7 @@ interface Servicio {
   rutaId?: string | null;
   puntoRecogidaId?: string | null;
   estado: string;
+  palabrasClave?: string[];
 }
 
 export default function ServiciosPage() {
@@ -47,6 +48,7 @@ export default function ServiciosPage() {
   const [monedaId, setMonedaId] = useState("");
   const [rutaId, setRutaId] = useState("");
   const [puntoRecogidaId, setPuntoRecogidaId] = useState("");
+  const [palabrasClaveInput, setPalabrasClaveInput] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,8 +62,21 @@ export default function ServiciosPage() {
       .finally(() => setLoading(false));
   };
 
-  const serviciosFiltrados = servicios.filter((s) =>
-    s.nombre.toLowerCase().includes(busqueda.trim().toLowerCase()),
+  const parsearPalabrasClave = (texto: string): string[] =>
+    Array.from(
+      new Set(
+        texto
+          .split(/[\s,]+/)
+          .map((p) => p.replace(/^#/, "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+
+  const busquedaNorm = busqueda.trim().toLowerCase().replace(/^#/, "");
+  const serviciosFiltrados = servicios.filter(
+    (s) =>
+      s.nombre.toLowerCase().includes(busquedaNorm) ||
+      (s.palabrasClave ?? []).some((p) => p.includes(busquedaNorm)),
   );
 
   useEffect(() => {
@@ -85,6 +100,7 @@ export default function ServiciosPage() {
     setMonedaId("");
     setRutaId("");
     setPuntoRecogidaId("");
+    setPalabrasClaveInput("");
   };
 
   const editar = (s: Servicio) => {
@@ -99,6 +115,7 @@ export default function ServiciosPage() {
     setMonedaId(s.monedaId);
     setRutaId(s.rutaId ?? "");
     setPuntoRecogidaId(s.puntoRecogidaId ?? "");
+    setPalabrasClaveInput((s.palabrasClave ?? []).map((p) => `#${p}`).join(" "));
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -117,6 +134,7 @@ export default function ServiciosPage() {
         monedaId,
         rutaId: rutaId || undefined,
         puntoRecogidaId: puntoRecogidaId || undefined,
+        palabrasClave: parsearPalabrasClave(palabrasClaveInput),
       };
       if (editingId) {
         await api.put(`/servicios/${editingId}`, data);
@@ -280,6 +298,20 @@ export default function ServiciosPage() {
           </div>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium">Palabras clave (opcional)</label>
+          <input
+            value={palabrasClaveInput}
+            onChange={(e) => setPalabrasClaveInput(e.target.value)}
+            placeholder="#playa #familiar #economico"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Escribe una o más palabras separadas por espacio, con # o sin él. Ayudan a los
+            vendedores a encontrar este servicio al buscarlo cuando hay muchos creados.
+          </p>
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -306,7 +338,7 @@ export default function ServiciosPage() {
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar servicio por nombre..."
+          placeholder="Buscar servicio por nombre o #palabra-clave..."
           className="w-full max-w-sm rounded border px-3 py-2 text-sm"
         />
       </div>
@@ -339,7 +371,14 @@ export default function ServiciosPage() {
             )}
             {serviciosFiltrados.map((s) => (
               <tr key={s.id} className="border-t">
-                <td className="px-4 py-2">{s.nombre}</td>
+                <td className="px-4 py-2">
+                  {s.nombre}
+                  {s.palabrasClave && s.palabrasClave.length > 0 && (
+                    <p className="text-xs text-gray-400">
+                      {s.palabrasClave.map((p) => `#${p}`).join(" ")}
+                    </p>
+                  )}
+                </td>
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{s.precioBase}</td>

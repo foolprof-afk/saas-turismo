@@ -19,6 +19,7 @@ interface ServicioOpcion {
   nombre: string;
   precioBase: string;
   monedaId: string;
+  palabrasClave?: string[];
 }
 interface PlantillaDetalle {
   id: string;
@@ -52,7 +53,7 @@ export default function NuevaReservaPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get<ServicioOpcion[]>("/servicios").then(setServicios).catch(() => null);
+    api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
     api.get<Opcion[]>("/plantillas-itinerario").then(setPlantillas).catch(() => null);
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
   }, []);

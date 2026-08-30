@@ -6,6 +6,7 @@ interface ServicioOpcion {
   id: string;
   nombre: string;
   precioBase: string;
+  palabrasClave?: string[];
 }
 
 interface BuscadorServicioProps {
@@ -41,8 +42,13 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
     return () => document.removeEventListener("mousedown", onClickFuera);
   }, []);
 
+  const queryNorm = query.trim().toLowerCase().replace(/^#/, "");
   const filtrados = servicios
-    .filter((s) => s.nombre.toLowerCase().includes(query.toLowerCase()))
+    .filter(
+      (s) =>
+        s.nombre.toLowerCase().includes(queryNorm) ||
+        (s.palabrasClave ?? []).some((p) => p.includes(queryNorm)),
+    )
     .slice(0, 30);
 
   return (
@@ -75,6 +81,11 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
               className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
             >
               {s.nombre} <span className="text-gray-400">— {s.precioBase}</span>
+              {s.palabrasClave && s.palabrasClave.length > 0 && (
+                <span className="ml-1 text-xs text-gray-400">
+                  {s.palabrasClave.map((p) => `#${p}`).join(" ")}
+                </span>
+              )}
             </button>
           ))}
         </div>
