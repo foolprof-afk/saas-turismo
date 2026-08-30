@@ -4,21 +4,43 @@ import { useEffect, useState, FormEvent } from "react";
 import { useParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 
+interface MontoPorMoneda {
+  monedaId: string;
+  monedaCodigo: string;
+  monedaSimbolo: string;
+  total: number;
+}
+
+interface Moneda {
+  id: string;
+  codigo: string;
+  simbolo: string;
+}
+
 interface ReservaDetalle {
   id: string;
   codigoReserva: string;
   estado: string;
-  total: string;
+  total: string | null;
+  monedaId: string | null;
+  moneda?: { codigo: string; simbolo: string } | null;
+  montos: MontoPorMoneda[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string; email?: string };
-  pasajeros: { nombre: string; telefono?: string | null; tipo: string }[];
+  pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
   voucher?: { qrUrl: string; codigo: string; validoHasta?: string };
   itinerario?: {
     dias: {
       numeroDia: number;
       fecha: string;
-      servicios: { horaInicio: string; estado: string; servicio: { nombre: string } }[];
+      servicios: {
+        horaInicio: string;
+        estado: string;
+        servicio: { nombre: string };
+        precio?: string | null;
+        moneda?: { codigo: string; simbolo: string } | null;
+      }[];
     }[];
   };
 }
@@ -48,12 +70,18 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+function montoTexto(reserva: ReservaDetalle): string {
+  if (!reserva.montos || reserva.montos.length === 0) return "-";
+  return reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
+}
+
 function itinerarioLineas(reserva: ReservaDetalle): string[] {
   if (!reserva.itinerario) return [];
   const lineas: string[] = [];
   reserva.itinerario.dias.forEach((dia) => {
     dia.servicios.forEach((s) => {
-      lineas.push(`${s.horaInicio} ${s.servicio.nombre}`);
+      const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${s.precio} ${s.moneda.codigo})` : "";
+      lineas.push(`${s.horaInicio} ${s.servicio.nombre}${precio}`);
     });
   });
   return lineas;
@@ -64,10 +92,13 @@ export default function ReservaDetallePage() {
   const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
   const [formasPago, setFormasPago] = useState<FormaPago[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
+  const [monedas, setMonedas] = useState<Moneda[]>([]);
 
   const [formaPagoId, setFormaPagoId] = useState("");
   const [referenciaExterna, setReferenciaExterna] = useState("");
   const [comprobanteUrl, setComprobanteUrl] = useState<string | undefined>(undefined);
+  const [monto, setMonto] = useState("");
+  const [monedaPagoId, setMonedaPagoId] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +106,7 @@ export default function ReservaDetallePage() {
   const formaPagoSeleccionada = formasPago.find((f) => f.id === formaPagoId);
   const requiereReferencia = formaPagoSeleccionada?.config?.requiereReferencia ?? true;
   const requiereComprobante = formaPagoSeleccionada?.config?.requiereComprobante ?? false;
+  const requiereMontoManual = reserva?.total === null;
 
   const cargar = () => {
     api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
@@ -84,21 +116,30 @@ export default function ReservaDetallePage() {
   useEffect(() => {
     cargar();
     api.get<FormaPago[]>("/formas-pago").then(setFormasPago).catch(() => setFormasPago([]));
+    api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => setMonedas([]));
   }, [params.id]);
 
   const handleConfirmar = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (requiereMontoManual && (!monto || !monedaPagoId)) {
+      setError("Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago");
+      return;
+    }
     setConfirmando(true);
     try {
       await api.patch(`/reservas/${params.id}/confirmar`, {
         formaPagoId,
         referenciaExterna: referenciaExterna || undefined,
         comprobanteUrl,
+        monto: monto ? Number(monto) : undefined,
+        monedaId: monedaPagoId || undefined,
       });
       setFormaPagoId("");
       setReferenciaExterna("");
       setComprobanteUrl(undefined);
+      setMonto("");
+      setMonedaPagoId("");
       cargar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo confirmar la reserva");
@@ -132,11 +173,11 @@ export default function ReservaDetallePage() {
         reserva.horaServicio ? " " + reserva.horaServicio : ""
       }`,
     );
-    lineas.push(`Total: ${reserva.total}`);
+    lineas.push(`Total: ${montoTexto(reserva)}`);
     lineas.push("");
     lineas.push("Pasajeros:");
     reserva.pasajeros.forEach((p) => {
-      lineas.push(`- ${p.nombre} (${p.tipo})${p.telefono ? " " + p.telefono : ""}`);
+      lineas.push(`- ${p.nombre} (${p.tipo})${p.esResponsable ? " [Responsable]" : ""}${p.telefono ? " " + p.telefono : ""}`);
     });
     const lineasItinerario = itinerarioLineas(reserva);
     if (lineasItinerario.length > 0) {
@@ -187,7 +228,7 @@ export default function ReservaDetallePage() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
-          <p className="mt-2 text-lg font-semibold">{reserva.total}</p>
+          <p className="mt-2 text-lg font-semibold">{montoTexto(reserva)}</p>
           <div className="flex gap-2">
             <button
               onClick={() => window.print()}
@@ -244,6 +285,43 @@ export default function ReservaDetallePage() {
                 ))}
               </select>
             </div>
+
+            {requiereMontoManual && (
+              <div className="grid grid-cols-2 gap-3 rounded border border-amber-200 bg-amber-50 p-3">
+                <div>
+                  <label className="block text-sm font-medium">Monto de este pago</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={monto}
+                    onChange={(e) => setMonto(e.target.value)}
+                    className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Moneda</label>
+                  <select
+                    required
+                    value={monedaPagoId}
+                    onChange={(e) => setMonedaPagoId(e.target.value)}
+                    className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {monedas.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.codigo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="col-span-2 text-xs text-amber-700">
+                  Esta reserva tiene servicios en distintas monedas ({montoTexto(reserva)}). Indica el monto y
+                  moneda de este pago en particular.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium">
                 Número/referencia de pago {requiereReferencia ? "" : "(opcional)"}
@@ -328,6 +406,11 @@ export default function ReservaDetallePage() {
             {reserva.pasajeros.map((p, i) => (
               <li key={i}>
                 {p.nombre} <span className="text-gray-400">({p.tipo})</span>
+                {p.esResponsable && (
+                  <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                    Responsable
+                  </span>
+                )}
                 {p.telefono && <span className="text-gray-400"> — {p.telefono}</span>}
               </li>
             ))}
@@ -348,6 +431,12 @@ export default function ReservaDetallePage() {
                   {dia.servicios.map((s, i) => (
                     <li key={i}>
                       {s.horaInicio} — {s.servicio.nombre}{" "}
+                      {s.precio && s.moneda && (
+                        <span className="text-gray-500">
+                          ({s.moneda.simbolo}
+                          {s.precio} {s.moneda.codigo})
+                        </span>
+                      )}{" "}
                       <span className="text-xs text-gray-400">({s.estado})</span>
                     </li>
                   ))}
@@ -366,11 +455,12 @@ export default function ReservaDetallePage() {
           Fecha: {new Date(reserva.fechaServicioInicio).toLocaleDateString()}
           {reserva.horaServicio ? ` ${reserva.horaServicio}` : ""}
         </p>
-        <p>Total: {reserva.total}</p>
+        <p>Total: {montoTexto(reserva)}</p>
         <p className="mt-2 font-bold">Pasajeros:</p>
         {reserva.pasajeros.map((p, i) => (
           <p key={i}>
-            - {p.nombre} ({p.tipo}){p.telefono ? ` ${p.telefono}` : ""}
+            - {p.nombre} ({p.tipo}){p.esResponsable ? " [Responsable]" : ""}
+            {p.telefono ? ` ${p.telefono}` : ""}
           </p>
         ))}
         {itinerarioLineas(reserva).length > 0 && (

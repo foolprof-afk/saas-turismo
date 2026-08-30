@@ -5,22 +5,41 @@ import { useParams } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
+interface MontoPorMoneda {
+  monedaId: string;
+  monedaCodigo: string;
+  monedaSimbolo: string;
+  total: number;
+}
+
 interface ReservaPublica {
   codigoReserva: string;
   estado: string;
-  total: string;
+  total: string | null;
+  montos: MontoPorMoneda[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string };
-  pasajeros: { nombre: string; telefono?: string | null; tipo: string }[];
+  pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
   voucher?: { codigo: string; validoHasta?: string };
   itinerario?: {
     dias: {
       numeroDia: number;
       fecha: string;
-      servicios: { horaInicio: string; estado: string; servicio: { nombre: string } }[];
+      servicios: {
+        horaInicio: string;
+        estado: string;
+        servicio: { nombre: string };
+        precio?: string | null;
+        moneda?: { codigo: string; simbolo: string } | null;
+      }[];
     }[];
   };
+}
+
+function montoTexto(reserva: ReservaPublica): string {
+  if (!reserva.montos || reserva.montos.length === 0) return "-";
+  return reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
 }
 
 export default function VoucherPublicoPage() {
@@ -80,7 +99,7 @@ export default function VoucherPublicoPage() {
             {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
           </p>
           <p className="text-sm">
-            <span className="text-gray-500">Total:</span> {reserva.total}
+            <span className="text-gray-500">Total:</span> {montoTexto(reserva)}
           </p>
         </div>
 
@@ -90,6 +109,11 @@ export default function VoucherPublicoPage() {
             {reserva.pasajeros.map((p, i) => (
               <li key={i}>
                 {p.nombre} <span className="text-gray-400">({p.tipo})</span>
+                {p.esResponsable && (
+                  <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                    Responsable
+                  </span>
+                )}
                 {p.telefono && <span className="text-gray-400"> — {p.telefono}</span>}
               </li>
             ))}
@@ -108,7 +132,13 @@ export default function VoucherPublicoPage() {
                   <ul className="ml-4 list-disc text-sm text-gray-600">
                     {dia.servicios.map((s, i) => (
                       <li key={i}>
-                        {s.horaInicio} — {s.servicio.nombre}
+                        {s.horaInicio} — {s.servicio.nombre}{" "}
+                        {s.precio && s.moneda && (
+                          <span className="text-gray-500">
+                            ({s.moneda.simbolo}
+                            {s.precio} {s.moneda.codigo})
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>

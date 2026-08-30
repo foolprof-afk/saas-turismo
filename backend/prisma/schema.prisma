@@ -29,6 +29,12 @@ enum EstadoReserva {
   CANCELADA
 }
 
+enum TipoReserva {
+  SERVICIO
+  PLANTILLA
+  MULTIPLE
+}
+
 enum EstadoItinerarioServicio {
   PENDIENTE
   EN_CURSO
@@ -165,11 +171,15 @@ model Reserva {
   vendedorId            String
   codigoReserva         String        @unique
   estado                EstadoReserva @default(PENDIENTE)
+  tipo                  TipoReserva   @default(SERVICIO)
   fechaServicioInicio   DateTime
   fechaServicioFin      DateTime
   horaServicio          String?
-  total                 Decimal       @db.Decimal(12, 2)
-  monedaId              String
+  // total/monedaId quedan null cuando tipo = MULTIPLE, porque cada servicio de la reserva
+  // puede venderse en una moneda distinta y sumar montos de monedas distintas no refleja
+  // el dinero real; en ese caso el detalle vive en ItinerarioServicio.precio/monedaId.
+  total                 Decimal?      @db.Decimal(12, 2)
+  monedaId              String?
   formaPagoId           String
   plantillaItinerarioId String?
   servicioId            String?
@@ -180,7 +190,7 @@ model Reserva {
   agencia              Agencia               @relation(fields: [agenciaId], references: [id])
   cliente              Cliente               @relation(fields: [clienteId], references: [id])
   vendedor             Usuario               @relation("VendedorReserva", fields: [vendedorId], references: [id])
-  moneda               Moneda                @relation(fields: [monedaId], references: [id])
+  moneda               Moneda?               @relation(fields: [monedaId], references: [id])
   formaPago            FormaPago             @relation(fields: [formaPagoId], references: [id])
   plantillaItinerario  PlantillaItinerario?  @relation(fields: [plantillaItinerarioId], references: [id])
   servicio             Servicio?             @relation(fields: [servicioId], references: [id])
@@ -201,6 +211,9 @@ model Pasajero {
   telefono   String?
   tipo       TipoPasajero @default(ADULTO)
   nacionalidad String?
+  // Responsable/titular del grupo dentro de la reserva. Una reserva puede llevar varios
+  // pasajeros pero siempre debe tener exactamente un responsable de contacto.
+  esResponsable Boolean   @default(false)
 
   reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
 
@@ -370,12 +383,18 @@ model ItinerarioServicio {
   guiaId           String?
   puntoRecogidaId  String?
   estado           EstadoItinerarioServicio @default(PENDIENTE)
+  // Precio liquidado y moneda de esta línea de servicio dentro de la reserva. Solo se usan
+  // cuando la reserva es de tipo MULTIPLE (varios servicios, cada uno con su propia moneda);
+  // para reservas de un solo servicio o plantilla, el precio vive en Reserva.total/monedaId.
+  precio           Decimal?                 @db.Decimal(12, 2)
+  monedaId         String?
 
   dia            ItinerarioDia   @relation(fields: [itinerarioDiaId], references: [id], onDelete: Cascade)
   servicio       Servicio        @relation(fields: [servicioId], references: [id])
   vehiculo       Vehiculo?       @relation(fields: [vehiculoId], references: [id])
   guia           Guia?           @relation(fields: [guiaId], references: [id])
   puntoRecogida  PuntoRecogida?  @relation(fields: [puntoRecogidaId], references: [id])
+  moneda         Moneda?         @relation(fields: [monedaId], references: [id])
 
   checkin             CheckIn?
   liquidacionDetalles LiquidacionDetalle[]
@@ -477,9 +496,10 @@ model Moneda {
   tasaCambio   Decimal  @db.Decimal(10, 4) @default(1)
   esPrincipal  Boolean  @default(false)
 
-  agencia   Agencia    @relation(fields: [agenciaId], references: [id])
-  servicios Servicio[]
-  reservas  Reserva[]
+  agencia            Agencia              @relation(fields: [agenciaId], references: [id])
+  servicios          Servicio[]
+  reservas           Reserva[]
+  itinerarioServicios ItinerarioServicio[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")

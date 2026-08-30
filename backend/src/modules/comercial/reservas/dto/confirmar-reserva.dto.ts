@@ -15,8 +15,15 @@ export class ConfirmarReservaDto {
   @IsString()
   comprobanteUrl?: string;
 
-  // Si no se especifica, se usa el total de la reserva.
+  // Si no se especifica, se usa el total de la reserva. Obligatorio en reservas "múltiple"
+  // (sin un total único porque cada servicio puede estar en una moneda distinta).
   @IsOptional()
   @IsNumber()
   monto?: number;
+
+  // Igual que monto: obligatorio en reservas "múltiple", opcional en las demás (se usa la
+  // moneda de la reserva).
+  @IsOptional()
+  @IsString()
+  monedaId?: string;
 }

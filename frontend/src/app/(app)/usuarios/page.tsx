@@ -32,7 +32,14 @@ interface Usuario {
   permisos?: Record<string, PermisoAccion>;
 }
 
-const PAGINAS = [
+const PAGINAS_BASE = [
+  { key: "dashboard", label: "Dashboard" },
+  { key: "reservas", label: "Reservas" },
+  { key: "clientes", label: "Clientes" },
+  { key: "operacion", label: "Operación" },
+];
+
+const PAGINAS_ADMIN = [
   { key: "reservas-cuadre", label: "Cuadre de caja" },
   { key: "usuarios", label: "Usuarios" },
   { key: "tipos-servicio", label: "Tipos de servicio" },
@@ -48,8 +55,12 @@ const PAGINAS = [
   { key: "formas-pago", label: "Formas de pago" },
 ];
 
-const permisosVacios = (): Record<string, PermisoAccion> =>
-  Object.fromEntries(PAGINAS.map((p) => [p.key, { leer: false, escribir: false, eliminar: false }]));
+const PAGINAS = [...PAGINAS_BASE, ...PAGINAS_ADMIN];
+
+const permisosVacios = (): Record<string, PermisoAccion> => ({
+  ...Object.fromEntries(PAGINAS_BASE.map((p) => [p.key, { leer: true, escribir: true, eliminar: true }])),
+  ...Object.fromEntries(PAGINAS_ADMIN.map((p) => [p.key, { leer: false, escribir: false, eliminar: false }])),
+});
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
