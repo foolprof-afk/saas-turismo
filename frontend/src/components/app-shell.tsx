@@ -6,10 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/reservas", label: "Reservas" },
-  { href: "/clientes", label: "Clientes" },
-  { href: "/operacion", label: "Operación" },
+  { href: "/dashboard", label: "Dashboard", pagina: "dashboard" },
+  { href: "/reservas", label: "Reservas", pagina: "reservas" },
+  { href: "/clientes", label: "Clientes", pagina: "clientes" },
+  { href: "/operacion", label: "Operación", pagina: "operacion" },
 ];
 
 const NAV_ADMIN = [
@@ -44,7 +44,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const items =
     usuario.rol === "admin"
       ? [...NAV, ...NAV_ADMIN]
-      : [...NAV, ...NAV_ADMIN.filter((item) => usuario.permisos?.[item.pagina]?.leer)];
+      : [
+          ...NAV.filter((item) => usuario.permisos?.[item.pagina]?.leer !== false),
+          ...NAV_ADMIN.filter((item) => usuario.permisos?.[item.pagina]?.leer === true),
+        ];
 
   return (
     <div className="flex min-h-screen">

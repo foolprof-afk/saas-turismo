@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
 import { QrTokenService } from './qr-token.service';
 
 const VOUCHER_EXPIRA_HORAS_MARGEN = 24;
@@ -54,10 +55,13 @@ export class VouchersService {
         cliente: true,
         pasajeros: true,
         voucher: true,
-        itinerario: { include: { dias: { include: { servicios: { include: { servicio: true } } } } } },
+        moneda: true,
+        itinerario: {
+          include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
+        },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
-    return reserva;
+    return { ...reserva, montos: desglosePorMoneda(reserva) };
   }
 }

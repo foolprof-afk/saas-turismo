@@ -5,8 +5,13 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { CreateReservaDto } from './dto/create-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
+import { desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+const INCLUDE_ITINERARIO_MONTOS = {
+  dias: { include: { servicios: { include: { moneda: true } } } },
+} as const;
 
 export interface FiltrosReserva {
   estado?: string;
@@ -24,18 +29,19 @@ export class ReservasService {
   ) {}
 
   /**
-   * Si se especifica codigoReserva, se filtra únicamente por el código de la reserva
-   * (búsqueda parcial) y se ignoran el resto de filtros, incluidas las fechas.
+   * Si se especifica codigoReserva, se busca por coincidencia parcial y se ignora el rango
+   * de fechas (no tiene sentido acotar por fecha una búsqueda por código específico), pero
+   * el resto de filtros (estado, vendedor) se siguen aplicando en conjunto.
    */
   private construirWhere(agenciaId: string, filtros: FiltrosReserva = {}): Prisma.ReservaWhereInput {
-    if (filtros.codigoReserva) {
-      return { agenciaId, codigoReserva: { contains: filtros.codigoReserva, mode: 'insensitive' } };
-    }
-
     const where: Prisma.ReservaWhereInput = { agenciaId };
+
+    if (filtros.codigoReserva) {
+      where.codigoReserva = { contains: filtros.codigoReserva, mode: 'insensitive' };
+    }
     if (filtros.estado) where.estado = filtros.estado as Prisma.EnumEstadoReservaFilter['equals'];
     if (filtros.vendedorId) where.vendedorId = filtros.vendedorId;
-    if (filtros.fechaInicio || filtros.fechaFin) {
+    if (!filtros.codigoReserva && (filtros.fechaInicio || filtros.fechaFin)) {
       where.fechaServicioInicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
         ...(filtros.fechaFin ? { lte: new Date(filtros.fechaFin) } : {}),
@@ -44,25 +50,41 @@ export class ReservasService {
     return where;
   }
 
-  findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}) {
-    return this.prisma.reserva.findMany({
+  async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}) {
+    const reservas = await this.prisma.reserva.findMany({
       where: this.construirWhere(agenciaId, filtros),
-      include: { cliente: true, vendedor: true, voucher: true, pasajeros: { take: 1 } },
+      include: {
+        cliente: true,
+        vendedor: true,
+        voucher: true,
+        pasajeros: true,
+        moneda: true,
+        itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+      },
       skip,
       take,
       orderBy: { createdAt: 'desc' },
     });
+    return reservas.map((r) => ({ ...r, montos: desglosePorMoneda(r) }));
   }
 
   /**
    * Cuadre de caja: listado + totales por vendedor y por moneda, para liquidaciones diarias
    * o por rango de fechas. Los totales se agrupan por moneda porque sumar montos de distintas
-   * monedas en un solo número no refleja el dinero real disponible en caja.
+   * monedas en un solo número no refleja el dinero real disponible en caja. Las reservas de
+   * tipo MULTIPLE aportan un monto por cada línea de servicio (pueden caer en más de una moneda).
    */
   async cuadre(agenciaId: string, filtros: FiltrosReserva = {}) {
     const reservas = await this.prisma.reserva.findMany({
       where: this.construirWhere(agenciaId, filtros),
-      include: { cliente: true, vendedor: true, formaPago: true, pagos: true, moneda: true },
+      include: {
+        cliente: true,
+        vendedor: true,
+        formaPago: true,
+        pagos: true,
+        moneda: true,
+        itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+      },
       orderBy: { fechaServicioInicio: 'asc' },
     });
 
@@ -84,32 +106,32 @@ export class ReservasService {
     >();
 
     for (const reserva of reservas) {
-      const monto = Number(reserva.total);
+      for (const monto of desglosePorMoneda(reserva)) {
+        const claveVendedorMoneda = `${reserva.vendedorId}:${monto.monedaId}`;
+        const entryVendedor = porVendedorMoneda.get(claveVendedorMoneda) ?? {
+          vendedorId: reserva.vendedorId,
+          vendedorNombre: reserva.vendedor.nombre,
+          monedaId: monto.monedaId,
+          monedaCodigo: monto.monedaCodigo,
+          monedaSimbolo: monto.monedaSimbolo,
+          total: 0,
+          cantidad: 0,
+        };
+        entryVendedor.total += monto.total;
+        entryVendedor.cantidad += 1;
+        porVendedorMoneda.set(claveVendedorMoneda, entryVendedor);
 
-      const claveVendedorMoneda = `${reserva.vendedorId}:${reserva.monedaId}`;
-      const entryVendedor = porVendedorMoneda.get(claveVendedorMoneda) ?? {
-        vendedorId: reserva.vendedorId,
-        vendedorNombre: reserva.vendedor.nombre,
-        monedaId: reserva.monedaId,
-        monedaCodigo: reserva.moneda.codigo,
-        monedaSimbolo: reserva.moneda.simbolo,
-        total: 0,
-        cantidad: 0,
-      };
-      entryVendedor.total += monto;
-      entryVendedor.cantidad += 1;
-      porVendedorMoneda.set(claveVendedorMoneda, entryVendedor);
-
-      const entryMoneda = porMoneda.get(reserva.monedaId) ?? {
-        monedaId: reserva.monedaId,
-        monedaCodigo: reserva.moneda.codigo,
-        monedaSimbolo: reserva.moneda.simbolo,
-        total: 0,
-        cantidad: 0,
-      };
-      entryMoneda.total += monto;
-      entryMoneda.cantidad += 1;
-      porMoneda.set(reserva.monedaId, entryMoneda);
+        const entryMoneda = porMoneda.get(monto.monedaId) ?? {
+          monedaId: monto.monedaId,
+          monedaCodigo: monto.monedaCodigo,
+          monedaSimbolo: monto.monedaSimbolo,
+          total: 0,
+          cantidad: 0,
+        };
+        entryMoneda.total += monto.total;
+        entryMoneda.cantidad += 1;
+        porMoneda.set(monto.monedaId, entryMoneda);
+      }
     }
 
     return {
@@ -127,22 +149,20 @@ export class ReservasService {
         vendedor: true,
         pasajeros: true,
         voucher: true,
-        itinerario: { include: { dias: { include: { servicios: { include: { servicio: true } } } } } },
+        moneda: true,
+        itinerario: {
+          include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
+        },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
-    return reserva;
+    return { ...reserva, montos: desglosePorMoneda(reserva) };
   }
 
   private generarCodigoReserva(): string {
     return `RES-${randomBytes(4).toString('hex').toUpperCase()}`;
   }
 
-  /**
-   * Crea la reserva y, si se especifica plantillaItinerarioId, clona la plantilla
-   * (días + servicios) hacia un Itinerario real "congelado" con fechas concretas.
-   * Todo ocurre en una transacción para garantizar atomicidad (ver arquitectura-backend.md).
-   */
   /**
    * Cliente = identidad comercial bajo la cual vende el usuario logueado (no se elige a mano,
    * ver arquitectura-backend.md). Si el usuario aún no tiene un Cliente vinculado, se crea uno
@@ -158,52 +178,120 @@ export class ReservasService {
     });
   }
 
+  /**
+   * Crea la reserva en uno de tres modos, mutuamente excluyentes:
+   * - servicioId: un solo servicio puntual (tour/traslado), un solo día.
+   * - plantillaItinerarioId: clona una plantilla (varios días/servicios) con fechas concretas.
+   * - serviciosMultiples: combinación libre armada por el vendedor; cada línea puede tener su
+   *   propia fecha/hora/precio y usa la moneda del servicio (no hay una moneda única de reserva).
+   * Todo ocurre en una transacción para garantizar atomicidad (ver arquitectura-backend.md).
+   */
   async create(agenciaId: string, vendedorId: string, dto: CreateReservaDto) {
-    if (!dto.servicioId && !dto.plantillaItinerarioId) {
-      throw new BadRequestException('Debes seleccionar un servicio o una plantilla de itinerario');
-    }
-    if (dto.servicioId && dto.plantillaItinerarioId) {
-      throw new BadRequestException('Selecciona solo un servicio o una plantilla, no ambos');
-    }
-
-    const fechaInicio = new Date(dto.fechaServicioInicio);
-    const fechaFin = dto.fechaServicioFin ? new Date(dto.fechaServicioFin) : fechaInicio;
-
-    if (fechaFin < fechaInicio) {
-      throw new BadRequestException('fechaServicioFin no puede ser anterior a fechaServicioInicio');
-    }
-
-    let plantilla = null;
-    let servicio = null;
-    let precioEstablecido = 0;
-
-    if (dto.plantillaItinerarioId) {
-      plantilla = await this.prisma.plantillaItinerario.findFirst({
-        where: { id: dto.plantillaItinerarioId, agenciaId },
-        include: { dias: { include: { servicios: { include: { servicio: true } } }, orderBy: { numeroDia: 'asc' } } },
-      });
-      if (!plantilla) throw new NotFoundException('Plantilla de itinerario no encontrada');
-      precioEstablecido =
-        plantilla.dias.reduce(
-          (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
-          0,
-        ) * dto.pasajeros.length;
-    } else {
-      servicio = await this.prisma.servicio.findFirst({ where: { id: dto.servicioId, agenciaId } });
-      if (!servicio) throw new NotFoundException('Servicio no encontrado');
-      precioEstablecido = Number(servicio.precioBase) * dto.pasajeros.length;
-    }
-
-    // El precio se puede subir (el agente gana más), pero nunca bajar del precio establecido
-    // por el dueño de la agencia madre en el servicio/plantilla.
-    if (dto.precioLiquidado !== undefined && dto.precioLiquidado < precioEstablecido) {
+    const modosProvistos =
+      (dto.servicioId ? 1 : 0) +
+      (dto.plantillaItinerarioId ? 1 : 0) +
+      (dto.serviciosMultiples?.length ? 1 : 0);
+    if (modosProvistos !== 1) {
       throw new BadRequestException(
-        `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+        'Debes elegir exactamente un tipo de reserva: un servicio individual, una plantilla de itinerario o servicios múltiples',
       );
     }
-    const total = dto.precioLiquidado ?? precioEstablecido;
+
+    let plantilla: {
+      dias: { numeroDia: number; servicios: { servicioId: string; horaInicio: string }[] }[];
+    } | null = null;
+    let servicio: { id: string } | null = null;
+    let lineasMultiples: {
+      servicio: { id: string; nombre: string; monedaId: string };
+      fecha: Date;
+      horaInicio: string;
+      precio: number;
+    }[] = [];
+    let tipo: 'SERVICIO' | 'PLANTILLA' | 'MULTIPLE' = 'SERVICIO';
+    let fechaInicio: Date;
+    let fechaFin: Date;
+    let total: number | null = null;
+    let monedaId: string | null = null;
+
+    if (dto.serviciosMultiples?.length) {
+      tipo = 'MULTIPLE';
+      for (const linea of dto.serviciosMultiples) {
+        const s = await this.prisma.servicio.findFirst({ where: { id: linea.servicioId, agenciaId } });
+        if (!s) throw new NotFoundException(`Servicio no encontrado: ${linea.servicioId}`);
+        const precioMinimo = Number(s.precioBase);
+        const precio = linea.precio ?? precioMinimo;
+        if (precio < precioMinimo) {
+          throw new BadRequestException(
+            `El precio de "${s.nombre}" no puede ser menor al precio establecido (${precioMinimo})`,
+          );
+        }
+        lineasMultiples.push({
+          servicio: { id: s.id, nombre: s.nombre, monedaId: s.monedaId },
+          fecha: new Date(linea.fecha),
+          horaInicio: linea.horaInicio ?? '00:00',
+          precio,
+        });
+      }
+      const fechas = lineasMultiples.map((l) => l.fecha.getTime());
+      fechaInicio = new Date(Math.min(...fechas));
+      fechaFin = new Date(Math.max(...fechas));
+    } else {
+      if (!dto.fechaServicioInicio) {
+        throw new BadRequestException('fechaServicioInicio es obligatoria');
+      }
+      if (!dto.monedaId) {
+        throw new BadRequestException('monedaId es obligatorio');
+      }
+      fechaInicio = new Date(dto.fechaServicioInicio);
+      fechaFin = dto.fechaServicioFin ? new Date(dto.fechaServicioFin) : fechaInicio;
+      if (fechaFin < fechaInicio) {
+        throw new BadRequestException('fechaServicioFin no puede ser anterior a fechaServicioInicio');
+      }
+
+      let precioEstablecido = 0;
+      if (dto.plantillaItinerarioId) {
+        tipo = 'PLANTILLA';
+        const plantillaEncontrada = await this.prisma.plantillaItinerario.findFirst({
+          where: { id: dto.plantillaItinerarioId, agenciaId },
+          include: {
+            dias: { include: { servicios: { include: { servicio: true } } }, orderBy: { numeroDia: 'asc' } },
+          },
+        });
+        if (!plantillaEncontrada) throw new NotFoundException('Plantilla de itinerario no encontrada');
+        plantilla = plantillaEncontrada;
+        precioEstablecido =
+          plantillaEncontrada.dias.reduce(
+            (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
+            0,
+          ) * dto.pasajeros.length;
+      } else {
+        tipo = 'SERVICIO';
+        const servicioEncontrado = await this.prisma.servicio.findFirst({
+          where: { id: dto.servicioId, agenciaId },
+        });
+        if (!servicioEncontrado) throw new NotFoundException('Servicio no encontrado');
+        servicio = servicioEncontrado;
+        precioEstablecido = Number(servicioEncontrado.precioBase) * dto.pasajeros.length;
+      }
+
+      if (dto.precioLiquidado !== undefined && dto.precioLiquidado < precioEstablecido) {
+        throw new BadRequestException(
+          `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+        );
+      }
+      total = dto.precioLiquidado ?? precioEstablecido;
+      monedaId = dto.monedaId;
+    }
 
     const cliente = await this.resolverClientePropio(agenciaId, vendedorId);
+
+    // Toda reserva debe tener exactamente un responsable; si el vendedor no marcó a nadie,
+    // se asume responsable al primer pasajero de la lista.
+    const hayResponsable = dto.pasajeros.some((p) => p.esResponsable);
+    const pasajerosData = dto.pasajeros.map((p, i) => ({
+      ...p,
+      esResponsable: hayResponsable ? Boolean(p.esResponsable) : i === 0,
+    }));
 
     const reserva = await this.prisma.$transaction(async (tx) => {
       const nuevaReserva = await tx.reserva.create({
@@ -212,15 +300,16 @@ export class ReservasService {
           clienteId: cliente.id,
           vendedorId,
           codigoReserva: this.generarCodigoReserva(),
+          tipo,
           fechaServicioInicio: fechaInicio,
           fechaServicioFin: fechaFin,
-          horaServicio: dto.horaServicio,
-          total,
-          monedaId: dto.monedaId,
+          horaServicio: tipo === 'MULTIPLE' ? undefined : dto.horaServicio,
+          total: total ?? undefined,
+          monedaId: monedaId ?? undefined,
           formaPagoId: dto.formaPagoId,
           plantillaItinerarioId: dto.plantillaItinerarioId,
           servicioId: dto.servicioId,
-          pasajeros: { create: dto.pasajeros },
+          pasajeros: { create: pasajerosData },
         },
       });
 
@@ -259,17 +348,38 @@ export class ReservasService {
             },
           },
         });
+      } else if (lineasMultiples.length > 0) {
+        // Un día de itinerario por cada fecha distinta (varias líneas pueden compartir fecha).
+        const fechasUnicas = Array.from(new Set(lineasMultiples.map((l) => l.fecha.getTime()))).sort(
+          (a, b) => a - b,
+        );
+        await tx.itinerario.create({
+          data: {
+            reservaId: nuevaReserva.id,
+            dias: {
+              create: fechasUnicas.map((fechaTime, idx) => ({
+                numeroDia: idx + 1,
+                fecha: new Date(fechaTime),
+                servicios: {
+                  create: lineasMultiples
+                    .filter((l) => l.fecha.getTime() === fechaTime)
+                    .map((l) => ({
+                      servicioId: l.servicio.id,
+                      horaInicio: l.horaInicio,
+                      precio: l.precio,
+                      monedaId: l.servicio.monedaId,
+                    })),
+                },
+              })),
+            },
+          },
+        });
       }
 
       return nuevaReserva;
     });
 
-    const voucher = await this.vouchersService.generar(
-      reserva.id,
-      agenciaId,
-      reserva.codigoReserva,
-      fechaFin,
-    );
+    await this.vouchersService.generar(reserva.id, agenciaId, reserva.codigoReserva, fechaFin);
 
     return this.findOne(agenciaId, reserva.id);
   }
@@ -284,6 +394,7 @@ export class ReservasService {
    * foto de comprobante) dependen de cómo esté configurada la forma de pago elegida
    * (FormaPago.config: { requiereReferencia, requiereComprobante }), ya que algunos clientes
    * tienen crédito o pagan en efectivo y no siempre hay un comprobante digital que adjuntar.
+   * En reservas MULTIPLE no hay un total/moneda único, así que monto y monedaId son obligatorios.
    */
   async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
@@ -312,13 +423,21 @@ export class ReservasService {
       );
     }
 
+    const monto = dto.monto ?? (reserva.total !== null ? Number(reserva.total) : undefined);
+    const monedaPagoId = dto.monedaId ?? reserva.monedaId ?? undefined;
+    if (monto === undefined || !monedaPagoId) {
+      throw new BadRequestException(
+        'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
+      );
+    }
+
     await this.prisma.$transaction([
       this.prisma.pago.create({
         data: {
           reservaId: id,
           formaPagoId: dto.formaPagoId,
-          monto: dto.monto ?? reserva.total,
-          monedaId: reserva.monedaId,
+          monto,
+          monedaId: monedaPagoId,
           referenciaExterna: dto.referenciaExterna,
           comprobanteUrl: dto.comprobanteUrl,
           estado: 'PAGADO',
