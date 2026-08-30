@@ -5,6 +5,6 @@ import { BaseCrudController } from '../common/base-crud.controller';
 @Controller('vehiculos')
 export class VehiculosController extends BaseCrudController<any> {
   constructor(private readonly vehiculosService: VehiculosService) {
-    super(vehiculosService);
+    super(vehiculosService, 'vehiculos');
   }
 }

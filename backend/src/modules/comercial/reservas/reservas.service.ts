@@ -54,37 +54,68 @@ export class ReservasService {
     });
   }
 
-  /** Cuadre de caja: listado + totales por vendedor, para liquidaciones diarias o por rango de fechas. */
+  /**
+   * Cuadre de caja: listado + totales por vendedor y por moneda, para liquidaciones diarias
+   * o por rango de fechas. Los totales se agrupan por moneda porque sumar montos de distintas
+   * monedas en un solo número no refleja el dinero real disponible en caja.
+   */
   async cuadre(agenciaId: string, filtros: FiltrosReserva = {}) {
     const reservas = await this.prisma.reserva.findMany({
       where: this.construirWhere(agenciaId, filtros),
-      include: { cliente: true, vendedor: true, formaPago: true, pagos: true },
+      include: { cliente: true, vendedor: true, formaPago: true, pagos: true, moneda: true },
       orderBy: { fechaServicioInicio: 'asc' },
     });
 
-    const porVendedor = new Map<
+    const porVendedorMoneda = new Map<
       string,
-      { vendedorId: string; vendedorNombre: string; total: number; cantidad: number }
+      {
+        vendedorId: string;
+        vendedorNombre: string;
+        monedaId: string;
+        monedaCodigo: string;
+        monedaSimbolo: string;
+        total: number;
+        cantidad: number;
+      }
     >();
-    let totalGeneral = 0;
+    const porMoneda = new Map<
+      string,
+      { monedaId: string; monedaCodigo: string; monedaSimbolo: string; total: number; cantidad: number }
+    >();
 
     for (const reserva of reservas) {
-      totalGeneral += Number(reserva.total);
-      const entry = porVendedor.get(reserva.vendedorId) ?? {
+      const monto = Number(reserva.total);
+
+      const claveVendedorMoneda = `${reserva.vendedorId}:${reserva.monedaId}`;
+      const entryVendedor = porVendedorMoneda.get(claveVendedorMoneda) ?? {
         vendedorId: reserva.vendedorId,
         vendedorNombre: reserva.vendedor.nombre,
+        monedaId: reserva.monedaId,
+        monedaCodigo: reserva.moneda.codigo,
+        monedaSimbolo: reserva.moneda.simbolo,
         total: 0,
         cantidad: 0,
       };
-      entry.total += Number(reserva.total);
-      entry.cantidad += 1;
-      porVendedor.set(reserva.vendedorId, entry);
+      entryVendedor.total += monto;
+      entryVendedor.cantidad += 1;
+      porVendedorMoneda.set(claveVendedorMoneda, entryVendedor);
+
+      const entryMoneda = porMoneda.get(reserva.monedaId) ?? {
+        monedaId: reserva.monedaId,
+        monedaCodigo: reserva.moneda.codigo,
+        monedaSimbolo: reserva.moneda.simbolo,
+        total: 0,
+        cantidad: 0,
+      };
+      entryMoneda.total += monto;
+      entryMoneda.cantidad += 1;
+      porMoneda.set(reserva.monedaId, entryMoneda);
     }
 
     return {
       reservas,
-      totalGeneral,
-      porVendedor: Array.from(porVendedor.values()),
+      porMoneda: Array.from(porMoneda.values()),
+      porVendedor: Array.from(porVendedorMoneda.values()),
     };
   }
 

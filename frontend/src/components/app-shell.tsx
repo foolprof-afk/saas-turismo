@@ -13,19 +13,19 @@ const NAV = [
 ];
 
 const NAV_ADMIN = [
-  { href: "/reservas/cuadre", label: "Cuadre de caja" },
-  { href: "/usuarios", label: "Usuarios" },
-  { href: "/tipos-servicio", label: "Tipos de servicio" },
-  { href: "/plantillas-itinerario", label: "Plantillas" },
-  { href: "/servicios", label: "Servicios" },
-  { href: "/proveedores", label: "Proveedores" },
-  { href: "/vehiculos", label: "Vehículos" },
-  { href: "/guias", label: "Guías" },
-  { href: "/rutas", label: "Rutas" },
-  { href: "/puntos-recogida", label: "Puntos de recogida" },
-  { href: "/impuestos", label: "Impuestos" },
-  { href: "/monedas", label: "Monedas" },
-  { href: "/formas-pago", label: "Formas de pago" },
+  { href: "/reservas/cuadre", label: "Cuadre de caja", pagina: "reservas-cuadre" },
+  { href: "/usuarios", label: "Usuarios", pagina: "usuarios" },
+  { href: "/tipos-servicio", label: "Tipos de servicio", pagina: "tipos-servicio" },
+  { href: "/plantillas-itinerario", label: "Plantillas", pagina: "plantillas-itinerario" },
+  { href: "/servicios", label: "Servicios", pagina: "servicios" },
+  { href: "/proveedores", label: "Proveedores", pagina: "proveedores" },
+  { href: "/vehiculos", label: "Vehículos", pagina: "vehiculos" },
+  { href: "/guias", label: "Guías", pagina: "guias" },
+  { href: "/rutas", label: "Rutas", pagina: "rutas" },
+  { href: "/puntos-recogida", label: "Puntos de recogida", pagina: "puntos-recogida" },
+  { href: "/impuestos", label: "Impuestos", pagina: "impuestos" },
+  { href: "/monedas", label: "Monedas", pagina: "monedas" },
+  { href: "/formas-pago", label: "Formas de pago", pagina: "formas-pago" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -41,7 +41,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">Cargando...</div>;
   }
 
-  const items = usuario.rol === "admin" ? [...NAV, ...NAV_ADMIN] : NAV;
+  const items =
+    usuario.rol === "admin"
+      ? [...NAV, ...NAV_ADMIN]
+      : [...NAV, ...NAV_ADMIN.filter((item) => usuario.permisos?.[item.pagina]?.leer)];
 
   return (
     <div className="flex min-h-screen">
