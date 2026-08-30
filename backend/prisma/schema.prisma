@@ -180,7 +180,9 @@ model Reserva {
   // el dinero real; en ese caso el detalle vive en ItinerarioServicio.precio/monedaId.
   total                 Decimal?      @db.Decimal(12, 2)
   monedaId              String?
-  formaPagoId           String
+  // formaPagoId queda null hasta que se confirma la reserva: la forma de pago se elige en la
+  // pantalla de confirmación, no al crear la reserva.
+  formaPagoId           String?
   plantillaItinerarioId String?
   servicioId            String?
   qrCode                String?       @unique
@@ -191,7 +193,7 @@ model Reserva {
   cliente              Cliente               @relation(fields: [clienteId], references: [id])
   vendedor             Usuario               @relation("VendedorReserva", fields: [vendedorId], references: [id])
   moneda               Moneda?               @relation(fields: [monedaId], references: [id])
-  formaPago            FormaPago             @relation(fields: [formaPagoId], references: [id])
+  formaPago            FormaPago?            @relation(fields: [formaPagoId], references: [id])
   plantillaItinerario  PlantillaItinerario?  @relation(fields: [plantillaItinerarioId], references: [id])
   servicio             Servicio?             @relation(fields: [servicioId], references: [id])
 

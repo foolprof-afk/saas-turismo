@@ -6,7 +6,7 @@ import { api, ApiError } from "@/lib/api";
 interface FormaPago {
   id: string;
   nombre: string;
-  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean };
+  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean; permitePagoDiferido?: boolean };
 }
 
 export default function FormasPagoPage() {
@@ -17,6 +17,7 @@ export default function FormasPagoPage() {
   const [nombre, setNombre] = useState("");
   const [requiereReferencia, setRequiereReferencia] = useState(true);
   const [requiereComprobante, setRequiereComprobante] = useState(false);
+  const [permitePagoDiferido, setPermitePagoDiferido] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,6 +39,7 @@ export default function FormasPagoPage() {
     setNombre("");
     setRequiereReferencia(true);
     setRequiereComprobante(false);
+    setPermitePagoDiferido(false);
   };
 
   const editar = (f: FormaPago) => {
@@ -45,6 +47,7 @@ export default function FormasPagoPage() {
     setNombre(f.nombre);
     setRequiereReferencia(f.config?.requiereReferencia ?? true);
     setRequiereComprobante(f.config?.requiereComprobante ?? false);
+    setPermitePagoDiferido(f.config?.permitePagoDiferido ?? false);
   };
 
   const eliminar = async (id: string) => {
@@ -62,7 +65,7 @@ export default function FormasPagoPage() {
     setError(null);
     setSaving(true);
     try {
-      const data = { nombre, config: { requiereReferencia, requiereComprobante } };
+      const data = { nombre, config: { requiereReferencia, requiereComprobante, permitePagoDiferido } };
       if (editingId) {
         await api.put(`/formas-pago/${editingId}`, data);
       } else {
@@ -112,6 +115,21 @@ export default function FormasPagoPage() {
             />
             Requiere foto del comprobante al confirmar la reserva
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={permitePagoDiferido}
+              onChange={(e) => setPermitePagoDiferido(e.target.checked)}
+            />
+            Permite confirmar la reserva sin registrar el pago (pagarán después)
+          </label>
+          {permitePagoDiferido && (
+            <p className="text-xs text-gray-400">
+              Con esta opción, al confirmar una reserva con esta forma de pago se pueden dejar
+              vacíos el número de referencia y el comprobante; el pago queda marcado como
+              pendiente.
+            </p>
+          )}
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -143,20 +161,21 @@ export default function FormasPagoPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Ref. obligatoria</th>
               <th className="px-4 py-2">Comprobante obligatorio</th>
+              <th className="px-4 py-2">Pago diferido</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && formasPago.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   No hay formas de pago todavía
                 </td>
               </tr>
@@ -166,6 +185,7 @@ export default function FormasPagoPage() {
                 <td className="px-4 py-2">{f.nombre}</td>
                 <td className="px-4 py-2">{(f.config?.requiereReferencia ?? true) ? "Sí" : "No"}</td>
                 <td className="px-4 py-2">{f.config?.requiereComprobante ? "Sí" : "No"}</td>
+                <td className="px-4 py-2">{f.config?.permitePagoDiferido ? "Sí" : "No"}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(f)} className="mr-3 text-blue-600 hover:underline">
                     Editar

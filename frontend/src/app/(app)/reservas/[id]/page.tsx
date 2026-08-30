@@ -48,7 +48,7 @@ interface ReservaDetalle {
 interface FormaPago {
   id: string;
   nombre: string;
-  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean };
+  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean; permitePagoDiferido?: boolean };
 }
 
 interface Pago {
@@ -104,8 +104,9 @@ export default function ReservaDetallePage() {
   const [error, setError] = useState<string | null>(null);
 
   const formaPagoSeleccionada = formasPago.find((f) => f.id === formaPagoId);
-  const requiereReferencia = formaPagoSeleccionada?.config?.requiereReferencia ?? true;
-  const requiereComprobante = formaPagoSeleccionada?.config?.requiereComprobante ?? false;
+  const permitePagoDiferido = formaPagoSeleccionada?.config?.permitePagoDiferido ?? false;
+  const requiereReferencia = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereReferencia ?? true);
+  const requiereComprobante = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereComprobante ?? false);
   const requiereMontoManual = reserva?.total === null;
 
   const cargar = () => {
@@ -285,6 +286,14 @@ export default function ReservaDetallePage() {
                 ))}
               </select>
             </div>
+
+            {permitePagoDiferido && (
+              <p className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700">
+                Esta forma de pago permite confirmar la reserva sin registrar el pago todavía. Si
+                dejas la referencia y el comprobante vacíos, el pago quedará marcado como
+                pendiente.
+              </p>
+            )}
 
             {requiereMontoManual && (
               <div className="grid grid-cols-2 gap-3 rounded border border-amber-200 bg-amber-50 p-3">

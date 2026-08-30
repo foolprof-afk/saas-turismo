@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { BuscadorServicio } from "@/components/buscador-servicio";
 
 interface Opcion {
   id: string;
@@ -34,7 +35,6 @@ export default function NuevaReservaPage() {
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [plantillas, setPlantillas] = useState<Opcion[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
-  const [formasPago, setFormasPago] = useState<Opcion[]>([]);
 
   const [tipoReserva, setTipoReserva] = useState<TipoReserva>("servicio");
   const [servicioId, setServicioId] = useState("");
@@ -42,7 +42,6 @@ export default function NuevaReservaPage() {
   const [fechaServicioInicio, setFechaServicioInicio] = useState("");
   const [horaServicio, setHoraServicio] = useState("");
   const [monedaId, setMonedaId] = useState("");
-  const [formaPagoId, setFormaPagoId] = useState("");
   const [precioLiquidado, setPrecioLiquidado] = useState("");
   const [precioUnitarioPlantilla, setPrecioUnitarioPlantilla] = useState<number | null>(null);
   const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", telefono: "", tipo: "ADULTO" }]);
@@ -56,7 +55,6 @@ export default function NuevaReservaPage() {
     api.get<ServicioOpcion[]>("/servicios").then(setServicios).catch(() => null);
     api.get<Opcion[]>("/plantillas-itinerario").then(setPlantillas).catch(() => null);
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
-    api.get<Opcion[]>("/formas-pago").then(setFormasPago).catch(() => null);
   }, []);
 
   const servicioSeleccionado = servicios.find((s) => s.id === servicioId);
@@ -176,7 +174,6 @@ export default function NuevaReservaPage() {
         fechaServicioInicio: tipoReserva !== "multiple" ? fechaServicioInicio : undefined,
         horaServicio: tipoReserva !== "multiple" ? horaServicio || undefined : undefined,
         monedaId: tipoReserva !== "multiple" ? monedaId : undefined,
-        formaPagoId,
         precioLiquidado: tipoReserva !== "multiple" && precioLiquidado ? Number(precioLiquidado) : undefined,
         pasajeros: pasajerosPayload,
       });
@@ -239,19 +236,9 @@ export default function NuevaReservaPage() {
         {tipoReserva === "servicio" && (
           <div>
             <label className="block text-sm font-medium">Servicio</label>
-            <select
-              required
-              value={servicioId}
-              onChange={(e) => seleccionarServicio(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            >
-              <option value="">Seleccionar servicio...</option>
-              {servicios.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nombre} — {s.precioBase}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <BuscadorServicio required servicios={servicios} value={servicioId} onChange={seleccionarServicio} />
+            </div>
           </div>
         )}
 
@@ -292,19 +279,14 @@ export default function NuevaReservaPage() {
                 return (
                   <div key={i} className="space-y-2 rounded border p-3">
                     <div className="flex items-center gap-2">
-                      <select
-                        required
-                        value={l.servicioId}
-                        onChange={(e) => seleccionarServicioLinea(i, e.target.value)}
-                        className="flex-1 rounded border px-3 py-2 text-sm"
-                      >
-                        <option value="">Seleccionar servicio...</option>
-                        {servicios.map((sv) => (
-                          <option key={sv.id} value={sv.id}>
-                            {sv.nombre} — {sv.precioBase}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex-1">
+                        <BuscadorServicio
+                          required
+                          servicios={servicios}
+                          value={l.servicioId}
+                          onChange={(id) => seleccionarServicioLinea(i, id)}
+                        />
+                      </div>
                       {lineas.length > 1 && (
                         <button
                           type="button"
@@ -373,39 +355,21 @@ export default function NuevaReservaPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium">Moneda</label>
-                <select
-                  required
-                  value={monedaId}
-                  onChange={(e) => setMonedaId(e.target.value)}
-                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                >
-                  <option value="">Seleccionar...</option>
-                  {monedas.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.codigo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Forma de pago</label>
-                <select
-                  required
-                  value={formaPagoId}
-                  onChange={(e) => setFormaPagoId(e.target.value)}
-                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                >
-                  <option value="">Seleccionar...</option>
-                  {formasPago.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium">Moneda</label>
+              <select
+                required
+                value={monedaId}
+                onChange={(e) => setMonedaId(e.target.value)}
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              >
+                <option value="">Seleccionar...</option>
+                {monedas.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.codigo}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -430,25 +394,6 @@ export default function NuevaReservaPage() {
               </p>
             </div>
           </>
-        )}
-
-        {tipoReserva === "multiple" && (
-          <div>
-            <label className="block text-sm font-medium">Forma de pago</label>
-            <select
-              required
-              value={formaPagoId}
-              onChange={(e) => setFormaPagoId(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            >
-              <option value="">Seleccionar...</option>
-              {formasPago.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
         )}
 
         <div>
@@ -504,6 +449,10 @@ export default function NuevaReservaPage() {
             ))}
           </div>
         </div>
+
+        <p className="text-xs text-gray-400">
+          La forma de pago se elige al confirmar la reserva, en la siguiente pantalla.
+        </p>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
