@@ -76,17 +76,18 @@ export function desglosePorMoneda(reserva: ReservaConMontos): MontoPorMoneda[] {
 /**
  * Convierte una lista de montos por moneda a un único total expresado en la moneda principal
  * de la agencia (Moneda.esPrincipal = true). tasaCambio de cada moneda representa cuántas
- * unidades de la moneda principal equivalen a 1 unidad de esa moneda (p. ej. si la moneda
- * principal es GTQ y 1 USD = 7.75 GTQ, la tasaCambio del USD es 7.75). Se divide también por
- * la tasaCambio de la moneda principal por si no está exactamente en 1. Si no hay moneda
- * principal configurada, no hay forma de convertir y se retorna null.
+ * unidades de esa moneda equivalen a 1 unidad de la moneda principal (p. ej. si la moneda
+ * principal es USD y 1 USD = 7.5 GTQ, la tasaCambio del GTQ es 7.5). Por eso para convertir a
+ * la principal se divide por la tasaCambio de la moneda de origen y se multiplica por la
+ * tasaCambio de la principal (que normalmente es 1). Si no hay moneda principal configurada,
+ * no hay forma de convertir y se retorna null.
  */
 export function convertirAPrincipal(
   montos: MontoPorMoneda[],
   principal: MonedaPrincipalInfo | null,
 ): MontoPorMoneda | null {
   if (!principal) return null;
-  const total = montos.reduce((acc, m) => acc + (m.total * m.tasaCambio) / principal.tasaCambio, 0);
+  const total = montos.reduce((acc, m) => acc + (m.total * principal.tasaCambio) / m.tasaCambio, 0);
   return {
     monedaId: principal.id,
     monedaCodigo: principal.codigo,

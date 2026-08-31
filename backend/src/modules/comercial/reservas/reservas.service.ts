@@ -660,7 +660,7 @@ export class ReservasService {
         const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
         if (monedaPrincipal && monedaPago) {
           const totalReservaPrincipal = convertirAPrincipal(montosReserva, monedaPrincipal)?.total ?? 0;
-          const montoPrincipal = (monto * Number(monedaPago.tasaCambio)) / monedaPrincipal.tasaCambio;
+          const montoPrincipal = (monto * monedaPrincipal.tasaCambio) / Number(monedaPago.tasaCambio);
           if (montoPrincipal < totalReservaPrincipal - 0.01) {
             throw new BadRequestException(
               `El monto del pago (equivalente a ${montoPrincipal.toFixed(2)} ${monedaPrincipal.codigo}) no cubre el total de los servicios de la reserva (${totalReservaPrincipal.toFixed(2)} ${monedaPrincipal.codigo})`,
