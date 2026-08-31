@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -22,6 +22,13 @@ export class ReservasController {
   @Get('cuadre')
   cuadre(@CurrentUser() user: AuthenticatedUser, @Query() filtros: FiltrosReservaDto) {
     return this.reservasService.cuadre(user.agenciaId, filtros, user);
+  }
+
+  @Get('cuadre/enlace')
+  @Roles('admin', 'vendedor')
+  generarEnlaceCliente(@CurrentUser() user: AuthenticatedUser, @Query() filtros: FiltrosReservaDto) {
+    if (!filtros.clienteId) throw new BadRequestException('clienteId es obligatorio');
+    return this.reservasService.generarEnlaceCliente(user.agenciaId, filtros.clienteId, filtros);
   }
 
   @Get(':id')

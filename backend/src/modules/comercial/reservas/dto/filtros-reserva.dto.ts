@@ -24,6 +24,10 @@ export class FiltrosReservaDto {
 
   @IsOptional()
   @IsString()
+  clienteId?: string;
+
+  @IsOptional()
+  @IsString()
   fechaInicio?: string;
 
   @IsOptional()
