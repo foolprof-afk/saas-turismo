@@ -6,7 +6,7 @@ import { VouchersService } from '../vouchers/vouchers.service';
 import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
-import { desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
+import { convertirAPrincipal, desglosePorMoneda, MonedaPrincipalInfo } from '../../../common/utils/reserva-montos.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -51,22 +51,39 @@ export class ReservasService {
     return where;
   }
 
+  /**
+   * Moneda marcada como principal en el mantenedor de monedas: todos los cuadres/pagos se
+   * normalizan a esta moneda usando la tasaCambio de cada moneda. Si no hay ninguna marcada
+   * como principal, se retorna null y los totales convertidos simplemente no se calculan.
+   */
+  private async obtenerMonedaPrincipal(agenciaId: string): Promise<MonedaPrincipalInfo | null> {
+    const moneda = await this.prisma.moneda.findFirst({ where: { agenciaId, esPrincipal: true } });
+    if (!moneda) return null;
+    return { id: moneda.id, codigo: moneda.codigo, simbolo: moneda.simbolo, tasaCambio: Number(moneda.tasaCambio) };
+  }
+
   async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}) {
-    const reservas = await this.prisma.reserva.findMany({
-      where: this.construirWhere(agenciaId, filtros),
-      include: {
-        cliente: true,
-        vendedor: true,
-        voucher: true,
-        pasajeros: true,
-        moneda: true,
-        itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
-      },
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
+    const [reservas, monedaPrincipal] = await Promise.all([
+      this.prisma.reserva.findMany({
+        where: this.construirWhere(agenciaId, filtros),
+        include: {
+          cliente: true,
+          vendedor: true,
+          voucher: true,
+          pasajeros: true,
+          moneda: true,
+          itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+        },
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.obtenerMonedaPrincipal(agenciaId),
+    ]);
+    return reservas.map((r) => {
+      const montos = desglosePorMoneda(r);
+      return { ...r, montos, totalPrincipal: convertirAPrincipal(montos, monedaPrincipal) };
     });
-    return reservas.map((r) => ({ ...r, montos: desglosePorMoneda(r) }));
   }
 
   /**
@@ -74,20 +91,26 @@ export class ReservasService {
    * o por rango de fechas. Los totales se agrupan por moneda porque sumar montos de distintas
    * monedas en un solo número no refleja el dinero real disponible en caja. Las reservas de
    * tipo MULTIPLE aportan un monto por cada línea de servicio (pueden caer en más de una moneda).
+   * Adicionalmente se calcula totalGeneral: la suma de todo convertida a la moneda marcada como
+   * principal en el mantenedor de monedas (usando la tasaCambio de cada moneda), para tener un
+   * único número de referencia sin importar en qué moneda se cobró cada reserva.
    */
   async cuadre(agenciaId: string, filtros: FiltrosReserva = {}) {
-    const reservas = await this.prisma.reserva.findMany({
-      where: this.construirWhere(agenciaId, filtros),
-      include: {
-        cliente: true,
-        vendedor: true,
-        formaPago: true,
-        pagos: true,
-        moneda: true,
-        itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
-      },
-      orderBy: { fechaServicioInicio: 'asc' },
-    });
+    const [reservas, monedaPrincipal] = await Promise.all([
+      this.prisma.reserva.findMany({
+        where: this.construirWhere(agenciaId, filtros),
+        include: {
+          cliente: true,
+          vendedor: true,
+          formaPago: true,
+          pagos: true,
+          moneda: true,
+          itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+        },
+        orderBy: { fechaServicioInicio: 'asc' },
+      }),
+      this.obtenerMonedaPrincipal(agenciaId),
+    ]);
 
     const porVendedorMoneda = new Map<
       string,
@@ -97,13 +120,21 @@ export class ReservasService {
         monedaId: string;
         monedaCodigo: string;
         monedaSimbolo: string;
+        tasaCambio: number;
         total: number;
         cantidad: number;
       }
     >();
     const porMoneda = new Map<
       string,
-      { monedaId: string; monedaCodigo: string; monedaSimbolo: string; total: number; cantidad: number }
+      {
+        monedaId: string;
+        monedaCodigo: string;
+        monedaSimbolo: string;
+        tasaCambio: number;
+        total: number;
+        cantidad: number;
+      }
     >();
 
     for (const reserva of reservas) {
@@ -115,6 +146,7 @@ export class ReservasService {
           monedaId: monto.monedaId,
           monedaCodigo: monto.monedaCodigo,
           monedaSimbolo: monto.monedaSimbolo,
+          tasaCambio: monto.tasaCambio,
           total: 0,
           cantidad: 0,
         };
@@ -126,6 +158,7 @@ export class ReservasService {
           monedaId: monto.monedaId,
           monedaCodigo: monto.monedaCodigo,
           monedaSimbolo: monto.monedaSimbolo,
+          tasaCambio: monto.tasaCambio,
           total: 0,
           cantidad: 0,
         };
@@ -135,10 +168,14 @@ export class ReservasService {
       }
     }
 
+    const porMonedaArr = Array.from(porMoneda.values());
+
     return {
       reservas,
-      porMoneda: Array.from(porMoneda.values()),
+      monedaPrincipal,
+      porMoneda: porMonedaArr,
       porVendedor: Array.from(porVendedorMoneda.values()),
+      totalGeneral: convertirAPrincipal(porMonedaArr, monedaPrincipal),
     };
   }
 
@@ -157,7 +194,9 @@ export class ReservasService {
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
-    return { ...reserva, montos: desglosePorMoneda(reserva) };
+    const montos = desglosePorMoneda(reserva);
+    const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+    return { ...reserva, montos, totalPrincipal: convertirAPrincipal(montos, monedaPrincipal) };
   }
 
   private generarCodigoReserva(): string {
@@ -557,7 +596,10 @@ export class ReservasService {
    * En reservas MULTIPLE no hay un total/moneda único, así que monto y monedaId son obligatorios.
    */
   async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
-    const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
+    const reserva = await this.prisma.reserva.findFirst({
+      where: { id, agenciaId },
+      include: { moneda: true, itinerario: { include: INCLUDE_ITINERARIO_MONTOS } },
+    });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
     if (reserva.estado === 'CANCELADA') {
       throw new BadRequestException('No se puede confirmar una reserva cancelada');
@@ -595,6 +637,37 @@ export class ReservasService {
       throw new BadRequestException(
         'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
       );
+    }
+
+    // En reservas MULTIPLE el monto se indica manualmente (no viene ya validado contra
+    // reserva.total como en SERVICIO/PLANTILLA), así que se verifica que cubra el total de
+    // todos los servicios de la reserva. Si el pago está en una moneda distinta a alguno de
+    // los servicios, la comparación se hace convirtiendo ambos a la moneda principal (ver
+    // mantenedor de monedas); si no hay moneda principal configurada, no se puede convertir y
+    // se omite esta validación.
+    if (reserva.tipo === 'MULTIPLE') {
+      const montosReserva = desglosePorMoneda(reserva);
+      const totalDirecto = montosReserva.find((m) => m.monedaId === monedaPagoId);
+      const cubreEnUnaSolaMoneda = montosReserva.length === 1 && totalDirecto;
+      if (cubreEnUnaSolaMoneda) {
+        if (monto < totalDirecto.total - 0.01) {
+          throw new BadRequestException(
+            `El monto del pago (${monto}) no cubre el total de los servicios de la reserva (${totalDirecto.total.toFixed(2)} ${totalDirecto.monedaCodigo})`,
+          );
+        }
+      } else if (montosReserva.length > 0) {
+        const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+        const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
+        if (monedaPrincipal && monedaPago) {
+          const totalReservaPrincipal = convertirAPrincipal(montosReserva, monedaPrincipal)?.total ?? 0;
+          const montoPrincipal = (monto * Number(monedaPago.tasaCambio)) / monedaPrincipal.tasaCambio;
+          if (montoPrincipal < totalReservaPrincipal - 0.01) {
+            throw new BadRequestException(
+              `El monto del pago (equivalente a ${montoPrincipal.toFixed(2)} ${monedaPrincipal.codigo}) no cubre el total de los servicios de la reserva (${totalReservaPrincipal.toFixed(2)} ${monedaPrincipal.codigo})`,
+            );
+          }
+        }
+      }
     }
 
     const tienePrueba = Boolean(dto.referenciaExterna || dto.comprobanteUrl);

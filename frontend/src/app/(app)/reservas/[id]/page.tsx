@@ -9,6 +9,7 @@ interface MontoPorMoneda {
   monedaId: string;
   monedaCodigo: string;
   monedaSimbolo: string;
+  tasaCambio: number;
   total: number;
 }
 
@@ -16,6 +17,8 @@ interface Moneda {
   id: string;
   codigo: string;
   simbolo: string;
+  tasaCambio: string;
+  esPrincipal: boolean;
 }
 
 interface ReservaDetalle {
@@ -26,6 +29,7 @@ interface ReservaDetalle {
   monedaId: string | null;
   moneda?: { codigo: string; simbolo: string } | null;
   montos: MontoPorMoneda[];
+  totalPrincipal: MontoPorMoneda | null;
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string; email?: string };
@@ -56,6 +60,7 @@ interface Pago {
   id: string;
   monto: string;
   formaPago: { nombre: string };
+  moneda: { codigo: string; simbolo: string; tasaCambio: string };
   referenciaExterna?: string | null;
   comprobanteUrl?: string | null;
   fecha: string;
@@ -73,7 +78,21 @@ function fileToDataUrl(file: File): Promise<string> {
 
 function montoTexto(reserva: ReservaDetalle): string {
   if (!reserva.montos || reserva.montos.length === 0) return "-";
-  return reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
+  const base = reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
+  const p = reserva.totalPrincipal;
+  const mostrarEquivalente = p && (reserva.montos.length > 1 || reserva.montos[0]?.monedaId !== p.monedaId);
+  return mostrarEquivalente ? `${base} (≈ ${p!.monedaSimbolo}${p!.total.toFixed(2)} ${p!.monedaCodigo})` : base;
+}
+
+function monedaPrincipalDe(monedas: Moneda[]): Moneda | undefined {
+  return monedas.find((m) => m.esPrincipal);
+}
+
+// tasaCambio de una moneda = cuántas unidades de la moneda principal equivalen a 1 unidad de
+// esa moneda (p. ej. si la principal es GTQ y 1 USD = 7.75 GTQ, tasaCambio del USD es 7.75).
+function tipoCambioTexto(moneda: Moneda | undefined, principal: Moneda | undefined): string | null {
+  if (!moneda || !principal || moneda.id === principal.id) return null;
+  return `Tipo de cambio: 1 ${moneda.codigo} = ${Number(moneda.tasaCambio).toFixed(4)} ${principal.codigo}`;
 }
 
 function itinerarioLineas(reserva: ReservaDetalle): string[] {
@@ -110,6 +129,9 @@ export default function ReservaDetallePage() {
   const requiereReferencia = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereReferencia ?? true);
   const requiereComprobante = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereComprobante ?? false);
   const requiereMontoManual = reserva?.total === null;
+  const principal = monedaPrincipalDe(monedas);
+  const monedaPagoSeleccionada = monedas.find((m) => m.id === monedaPagoId);
+  const tipoCambioPago = tipoCambioTexto(monedaPagoSeleccionada, principal);
 
   const cargar = () => {
     api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
@@ -339,7 +361,15 @@ export default function ReservaDetallePage() {
                   Esta reserva tiene servicios en distintas monedas ({montoTexto(reserva)}). Indica el monto y
                   moneda de este pago en particular.
                 </p>
+                {tipoCambioPago && (
+                  <p className="col-span-2 text-xs font-medium text-amber-800">{tipoCambioPago}</p>
+                )}
               </div>
+            )}
+            {!requiereMontoManual && tipoCambioTexto(monedas.find((m) => m.id === reserva.monedaId), principal) && (
+              <p className="text-xs text-gray-500">
+                {tipoCambioTexto(monedas.find((m) => m.id === reserva.monedaId), principal)}
+              </p>
             )}
 
             <div>
@@ -387,11 +417,20 @@ export default function ReservaDetallePage() {
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Pagos registrados</h2>
           <ul className="space-y-2 text-sm">
-            {pagos.map((p) => (
+            {pagos.map((p) => {
+              const equivalente =
+                principal && p.moneda && p.moneda.codigo !== principal.codigo
+                  ? (Number(p.monto) * Number(p.moneda.tasaCambio)) / Number(principal.tasaCambio)
+                  : null;
+              return (
               <li key={p.id} className="flex items-center justify-between border-b pb-2 last:border-0">
                 <div>
                   <p>
-                    {p.formaPago?.nombre} — {p.monto}
+                    {p.formaPago?.nombre} — {p.moneda?.simbolo}
+                    {p.monto} {p.moneda?.codigo}
+                    {equivalente !== null && (
+                      <span className="text-gray-400"> (≈ {principal!.simbolo}{equivalente.toFixed(2)} {principal!.codigo})</span>
+                    )}
                   </p>
                   {p.referenciaExterna && <p className="text-xs text-gray-400">Ref: {p.referenciaExterna}</p>}
                   <p className="text-xs text-gray-400">{new Date(p.fecha).toLocaleString()}</p>
@@ -402,7 +441,8 @@ export default function ReservaDetallePage() {
                   </a>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
       )}

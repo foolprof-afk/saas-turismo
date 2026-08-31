@@ -19,6 +19,7 @@ interface Reserva {
   total: string | null;
   moneda?: { codigo: string; simbolo: string } | null;
   montos: MontoPorMoneda[];
+  totalPrincipal: MontoPorMoneda | null;
   cliente: { nombre: string };
   vendedor: { nombre: string };
   pasajeros: { nombre: string; telefono?: string | null }[];
@@ -35,6 +36,8 @@ function MontoCelda({ reserva }: { reserva: Reserva }) {
   if (!reserva.montos || reserva.montos.length === 0) {
     return <span className="text-gray-400">-</span>;
   }
+  const p = reserva.totalPrincipal;
+  const mostrarEquivalente = p && (reserva.montos.length > 1 || reserva.montos[0]?.monedaId !== p.monedaId);
   return (
     <div className="space-y-0.5">
       {reserva.montos.map((m) => (
@@ -42,6 +45,12 @@ function MontoCelda({ reserva }: { reserva: Reserva }) {
           {m.monedaSimbolo} {m.total.toFixed(2)} <span className="text-xs text-gray-400">{m.monedaCodigo}</span>
         </div>
       ))}
+      {mostrarEquivalente && (
+        <div className="text-xs text-gray-400">
+          ≈ {p!.monedaSimbolo}
+          {p!.total.toFixed(2)} {p!.monedaCodigo}
+        </div>
+      )}
     </div>
   );
 }

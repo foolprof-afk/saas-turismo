@@ -508,6 +508,7 @@ model Moneda {
   servicios          Servicio[]
   reservas           Reserva[]
   itinerarioServicios ItinerarioServicio[]
+  pagos              Pago[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")
@@ -552,6 +553,7 @@ model Pago {
 
   reserva   Reserva   @relation(fields: [reservaId], references: [id])
   formaPago FormaPago @relation(fields: [formaPagoId], references: [id])
+  moneda    Moneda    @relation(fields: [monedaId], references: [id])
 
   @@map("pagos")
 }
