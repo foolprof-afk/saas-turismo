@@ -29,13 +29,15 @@ export class VouchersService {
     );
 
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
-    const qrDataUrl = await QRCode.toDataURL(`${frontendUrl}/voucher/${token}`);
+    const url = `${frontendUrl}/voucher/${token}`;
+    const qrDataUrl = await QRCode.toDataURL(url);
 
     return this.prisma.voucher.create({
       data: {
         reservaId,
         codigo: codigoReserva,
         qrUrl: qrDataUrl,
+        url,
         validoHasta: new Date(fechaServicioFin.getTime() + VOUCHER_EXPIRA_HORAS_MARGEN * 3600 * 1000),
       },
     });
