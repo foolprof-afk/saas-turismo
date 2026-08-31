@@ -29,7 +29,7 @@ interface ReservaPublica {
       servicios: {
         horaInicio: string;
         estado: string;
-        servicio: { nombre: string };
+        servicio: { nombre: string; descripcion?: string | null };
         precio?: string | null;
         moneda?: { codigo: string; simbolo: string } | null;
       }[];
@@ -145,6 +145,9 @@ export default function VoucherPublicoPage() {
                             ({s.moneda.simbolo}
                             {s.precio} {s.moneda.codigo})
                           </span>
+                        )}
+                        {s.servicio.descripcion && (
+                          <p className="mt-0.5 whitespace-pre-line text-xs text-gray-500">{s.servicio.descripcion}</p>
                         )}
                       </li>
                     ))}
