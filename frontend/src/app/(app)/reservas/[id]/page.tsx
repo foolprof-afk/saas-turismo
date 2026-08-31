@@ -208,7 +208,7 @@ export default function ReservaDetallePage() {
       y += 3;
       doc.addImage(reserva.voucher.qrUrl, "PNG", 25, y, qrSizeMm, qrSizeMm);
     }
-    doc.save(`voucher-${reserva.codigoReserva}.pdf`);
+    doc.save(`${reserva.codigoReserva}.pdf`);
   };
 
   const primerTelefono = reserva.pasajeros.find((p) => p.telefono)?.telefono;
