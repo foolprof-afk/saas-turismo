@@ -8,6 +8,7 @@ export class PagosService {
   findByReserva(agenciaId: string, reservaId: string) {
     return this.prisma.pago.findMany({
       where: { reservaId, reserva: { agenciaId } },
+      include: { formaPago: true, moneda: true },
       orderBy: { fecha: 'desc' },
     });
   }

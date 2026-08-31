@@ -24,6 +24,7 @@ interface TotalPorMoneda {
   monedaId: string;
   monedaCodigo: string;
   monedaSimbolo: string;
+  tasaCambio: number;
   total: number;
   cantidad: number;
 }
@@ -33,10 +34,26 @@ interface TotalPorVendedor extends TotalPorMoneda {
   vendedorNombre: string;
 }
 
+interface MonedaPrincipal {
+  id: string;
+  codigo: string;
+  simbolo: string;
+  tasaCambio: number;
+}
+
+interface TotalGeneral {
+  monedaId: string;
+  monedaCodigo: string;
+  monedaSimbolo: string;
+  total: number;
+}
+
 interface CuadreResponse {
   reservas: ReservaCuadre[];
+  monedaPrincipal: MonedaPrincipal | null;
   porMoneda: TotalPorMoneda[];
   porVendedor: TotalPorVendedor[];
+  totalGeneral: TotalGeneral | null;
 }
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
@@ -156,6 +173,21 @@ export default function CuadreDeCajaPage() {
 
       {!loading && data && (
         <>
+          {data.monedaPrincipal && data.totalGeneral && (
+            <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-5">
+              <h2 className="mb-1 text-sm font-semibold text-emerald-700">
+                Total general (convertido a moneda predeterminada)
+              </h2>
+              <p className="text-2xl font-bold text-emerald-800">
+                {data.totalGeneral.monedaSimbolo} {data.totalGeneral.total.toFixed(2)} {data.totalGeneral.monedaCodigo}
+              </p>
+              <p className="mt-1 text-xs text-emerald-700">
+                Moneda predeterminada: {data.monedaPrincipal.codigo} — tipo de cambio 1 {data.monedaPrincipal.codigo} ={" "}
+                {data.monedaPrincipal.tasaCambio.toFixed(4)} {data.monedaPrincipal.codigo}
+              </p>
+            </div>
+          )}
+
           <div className="rounded-lg border bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold text-gray-500">
               Totales por moneda (dinero real en caja por tipo de moneda)
@@ -164,23 +196,41 @@ export default function CuadreDeCajaPage() {
               <thead className="text-left text-gray-500">
                 <tr>
                   <th className="py-1">Moneda</th>
+                  <th className="py-1">Tipo de cambio</th>
                   <th className="py-1">Cantidad</th>
                   <th className="py-1">Total</th>
+                  {data.monedaPrincipal && <th className="py-1">Equivalente</th>}
                 </tr>
               </thead>
               <tbody>
-                {data.porMoneda.map((m) => (
-                  <tr key={m.monedaId} className="border-t">
-                    <td className="py-1">{m.monedaCodigo}</td>
-                    <td className="py-1">{m.cantidad}</td>
-                    <td className="py-1 font-semibold">
-                      {m.monedaSimbolo} {m.total.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {data.porMoneda.map((m) => {
+                  const equivalente =
+                    data.monedaPrincipal && m.monedaCodigo !== data.monedaPrincipal.codigo
+                      ? (m.total * m.tasaCambio) / data.monedaPrincipal.tasaCambio
+                      : null;
+                  return (
+                    <tr key={m.monedaId} className="border-t">
+                      <td className="py-1">{m.monedaCodigo}</td>
+                      <td className="py-1 text-gray-500">
+                        {m.monedaCodigo === data.monedaPrincipal?.codigo ? "—" : m.tasaCambio.toFixed(4)}
+                      </td>
+                      <td className="py-1">{m.cantidad}</td>
+                      <td className="py-1 font-semibold">
+                        {m.monedaSimbolo} {m.total.toFixed(2)}
+                      </td>
+                      {data.monedaPrincipal && (
+                        <td className="py-1 text-gray-500">
+                          {equivalente !== null
+                            ? `≈ ${data.monedaPrincipal.simbolo}${equivalente.toFixed(2)} ${data.monedaPrincipal.codigo}`
+                            : "—"}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
                 {data.porMoneda.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="py-4 text-center text-gray-400">
+                    <td colSpan={5} className="py-4 text-center text-gray-400">
                       Sin resultados
                     </td>
                   </tr>
@@ -196,6 +246,7 @@ export default function CuadreDeCajaPage() {
                 <tr>
                   <th className="py-1">Vendedor</th>
                   <th className="py-1">Moneda</th>
+                  <th className="py-1">Tipo de cambio</th>
                   <th className="py-1">Cantidad</th>
                   <th className="py-1">Total</th>
                 </tr>
@@ -205,6 +256,9 @@ export default function CuadreDeCajaPage() {
                   <tr key={`${v.vendedorId}-${v.monedaId}`} className="border-t">
                     <td className="py-1">{v.vendedorNombre}</td>
                     <td className="py-1">{v.monedaCodigo}</td>
+                    <td className="py-1 text-gray-500">
+                      {v.monedaCodigo === data.monedaPrincipal?.codigo ? "—" : v.tasaCambio.toFixed(4)}
+                    </td>
                     <td className="py-1">{v.cantidad}</td>
                     <td className="py-1">
                       {v.monedaSimbolo} {v.total.toFixed(2)}
@@ -213,7 +267,7 @@ export default function CuadreDeCajaPage() {
                 ))}
                 {data.porVendedor.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-4 text-center text-gray-400">
+                    <td colSpan={5} className="py-4 text-center text-gray-400">
                       Sin resultados
                     </td>
                   </tr>
