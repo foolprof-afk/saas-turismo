@@ -80,9 +80,10 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
   if (!reserva.itinerario) return [];
   const lineas: string[] = [];
   reserva.itinerario.dias.forEach((dia) => {
+    const fecha = new Date(dia.fecha).toLocaleDateString();
     dia.servicios.forEach((s) => {
       const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${s.precio} ${s.moneda.codigo})` : "";
-      lineas.push(`${s.horaInicio} ${s.servicio.nombre}${precio}`);
+      lineas.push(`${fecha} ${s.horaInicio} — ${s.servicio.nombre}${precio}`);
     });
   });
   return lineas;
