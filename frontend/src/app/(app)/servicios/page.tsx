@@ -169,11 +169,16 @@ export default function ServiciosPage() {
 
         <div>
           <label className="block text-sm font-medium">Descripción (opcional)</label>
-          <input
+          <textarea
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
+            rows={4}
+            placeholder="Escribe aquí todos los detalles del servicio: horarios, qué incluye, recomendaciones, etc. Esta información la vera el cliente en su voucher."
             className="mt-1 w-full rounded border px-3 py-2 text-sm"
           />
+          <p className="mt-1 text-xs text-gray-400">
+            Este texto se muestra al cliente en el visualizador del voucher, dentro del detalle de cada servicio.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
