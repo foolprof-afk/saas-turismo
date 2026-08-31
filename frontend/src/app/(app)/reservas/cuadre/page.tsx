@@ -206,7 +206,7 @@ export default function CuadreDeCajaPage() {
                 {data.porMoneda.map((m) => {
                   const equivalente =
                     data.monedaPrincipal && m.monedaCodigo !== data.monedaPrincipal.codigo
-                      ? (m.total * m.tasaCambio) / data.monedaPrincipal.tasaCambio
+                      ? (m.total * data.monedaPrincipal.tasaCambio) / m.tasaCambio
                       : null;
                   return (
                     <tr key={m.monedaId} className="border-t">

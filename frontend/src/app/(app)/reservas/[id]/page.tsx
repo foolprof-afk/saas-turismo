@@ -88,11 +88,11 @@ function monedaPrincipalDe(monedas: Moneda[]): Moneda | undefined {
   return monedas.find((m) => m.esPrincipal);
 }
 
-// tasaCambio de una moneda = cuántas unidades de la moneda principal equivalen a 1 unidad de
-// esa moneda (p. ej. si la principal es GTQ y 1 USD = 7.75 GTQ, tasaCambio del USD es 7.75).
+// tasaCambio de una moneda = cuántas unidades de esa moneda equivalen a 1 unidad de la moneda
+// principal (p. ej. si la principal es USD y 1 USD = 7.5 GTQ, tasaCambio del GTQ es 7.5).
 function tipoCambioTexto(moneda: Moneda | undefined, principal: Moneda | undefined): string | null {
   if (!moneda || !principal || moneda.id === principal.id) return null;
-  return `Tipo de cambio: 1 ${moneda.codigo} = ${Number(moneda.tasaCambio).toFixed(4)} ${principal.codigo}`;
+  return `Tipo de cambio: 1 ${principal.codigo} = ${Number(moneda.tasaCambio).toFixed(4)} ${moneda.codigo}`;
 }
 
 function itinerarioLineas(reserva: ReservaDetalle): string[] {
@@ -420,7 +420,7 @@ export default function ReservaDetallePage() {
             {pagos.map((p) => {
               const equivalente =
                 principal && p.moneda && p.moneda.codigo !== principal.codigo
-                  ? (Number(p.monto) * Number(p.moneda.tasaCambio)) / Number(principal.tasaCambio)
+                  ? (Number(p.monto) * Number(principal.tasaCambio)) / Number(p.moneda.tasaCambio)
                   : null;
               return (
               <li key={p.id} className="flex items-center justify-between border-b pb-2 last:border-0">
