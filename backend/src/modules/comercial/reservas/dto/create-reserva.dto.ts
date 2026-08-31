@@ -11,13 +11,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-enum TipoPasajeroDto {
+export enum TipoPasajeroDto {
   ADULTO = 'ADULTO',
   NINO = 'NINO',
   INFANTE = 'INFANTE',
 }
 
-class PasajeroDto {
+export class PasajeroDto {
   @IsString()
   nombre: string;
 
@@ -45,7 +45,7 @@ class PasajeroDto {
 
 // Línea de servicio para reservas de tipo "múltiple": cada una puede tener su propia
 // fecha/hora (no necesariamente el mismo día) y su propio precio, en la moneda del servicio.
-class ServicioReservaDto {
+export class ServicioReservaDto {
   @IsString()
   servicioId: string;
 

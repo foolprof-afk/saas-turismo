@@ -3,3 +3,4 @@ dist/
 .env
 *.log
 keys/*.pem
+tsconfig.tsbuildinfo

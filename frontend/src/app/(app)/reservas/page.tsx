@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface MontoPorMoneda {
   monedaId: string;
@@ -50,31 +50,44 @@ export default function ReservasPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   const [codigoReserva, setCodigoReserva] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
 
   const cargar = () => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams();
     if (estado) params.set("estado", estado);
     if (vendedorId) params.set("vendedorId", vendedorId);
     if (codigoReserva) params.set("codigoReserva", codigoReserva);
+    if (fechaInicio) params.set("fechaInicio", fechaInicio);
+    if (fechaFin) params.set("fechaFin", fechaFin);
     const qs = params.toString();
     api
       .get<Reserva[]>(`/reservas${qs ? `?${qs}` : ""}`)
       .then(setReservas)
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar las reservas"))
       .finally(() => setLoading(false));
+  };
+
+  const limpiarFiltros = () => {
+    setEstado("");
+    setVendedorId("");
+    setCodigoReserva("");
+    setFechaInicio("");
+    setFechaFin("");
   };
 
   useEffect(() => {
     api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => null);
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const timeout = setTimeout(cargar, 300);
-    return () => clearTimeout(timeout);
-  }, [estado, vendedorId, codigoReserva]);
 
   return (
     <div className="space-y-4">
@@ -85,7 +98,13 @@ export default function ReservasPage() {
         </Link>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          cargar();
+        }}
+        className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
+      >
         <div>
           <label className="block text-sm font-medium">Código de reserva</label>
           <input
@@ -125,7 +144,46 @@ export default function ReservasPage() {
             ))}
           </select>
         </div>
-      </div>
+        <div>
+          <label className="block text-sm font-medium">Fecha inicial</label>
+          <input
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Fecha final</label>
+          <input
+            type="date"
+            value={fechaFin}
+            onChange={(e) => setFechaFin(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {loading ? "Buscando..." : "Buscar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              limpiarFiltros();
+              setTimeout(cargar, 0);
+            }}
+            className="rounded border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Limpiar
+          </button>
+        </div>
+      </form>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="overflow-hidden rounded-lg border bg-white">
         <table className="w-full text-sm">
@@ -138,19 +196,20 @@ export default function ReservasPage() {
               <th className="px-4 py-2">Fecha</th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2">Monto</th>
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && reservas.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   No hay reservas todavía
                 </td>
               </tr>
@@ -171,6 +230,13 @@ export default function ReservasPage() {
                 </td>
                 <td className="px-4 py-2">
                   <MontoCelda reserva={r} />
+                </td>
+                <td className="px-4 py-2">
+                  {r.estado === "PENDIENTE" && (
+                    <Link href={`/reservas/${r.id}/editar`} className="text-blue-600 hover:underline">
+                      Editar
+                    </Link>
+                  )}
                 </td>
               </tr>
             ))}
