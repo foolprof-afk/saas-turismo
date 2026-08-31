@@ -1,4 +1,4 @@
-import { IsEmail, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsEmail, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 
 export interface PermisoAccion {
   leer?: boolean;
@@ -31,4 +31,10 @@ export class CreateUsuarioDto {
   @IsOptional()
   @IsObject()
   permisos?: Record<string, PermisoAccion>;
+
+  // Usuarios "hijos" cuyas reservas podrá ver este usuario ademas de las propias, sin ser admin.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  usuariosVisiblesIds?: string[];
 }

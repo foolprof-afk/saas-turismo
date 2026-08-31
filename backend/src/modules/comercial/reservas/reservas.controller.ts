@@ -16,17 +16,17 @@ export class ReservasController {
 
   @Get()
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() filtros: FiltrosReservaDto) {
-    return this.reservasService.findAll(user.agenciaId, filtros.skip, filtros.limit, filtros);
+    return this.reservasService.findAll(user.agenciaId, filtros.skip, filtros.limit, filtros, user);
   }
 
   @Get('cuadre')
   cuadre(@CurrentUser() user: AuthenticatedUser, @Query() filtros: FiltrosReservaDto) {
-    return this.reservasService.cuadre(user.agenciaId, filtros);
+    return this.reservasService.cuadre(user.agenciaId, filtros, user);
   }
 
   @Get(':id')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.reservasService.findOne(user.agenciaId, id);
+    return this.reservasService.findOne(user.agenciaId, id, user);
   }
 
   @Post()

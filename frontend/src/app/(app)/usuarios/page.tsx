@@ -30,6 +30,7 @@ interface Usuario {
   clienteId?: string | null;
   cliente?: Cliente | null;
   permisos?: Record<string, PermisoAccion>;
+  usuariosVisibles?: { id: string; nombre: string }[];
 }
 
 const PAGINAS_BASE = [
@@ -77,6 +78,7 @@ export default function UsuariosPage() {
   const [estado, setEstado] = useState("ACTIVO");
   const [clienteId, setClienteId] = useState("");
   const [permisos, setPermisos] = useState<Record<string, PermisoAccion>>(permisosVacios());
+  const [usuariosVisiblesIds, setUsuariosVisiblesIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -105,6 +107,7 @@ export default function UsuariosPage() {
     setEstado("ACTIVO");
     setClienteId("");
     setPermisos(permisosVacios());
+    setUsuariosVisiblesIds([]);
   };
 
   const editar = (u: Usuario) => {
@@ -117,6 +120,11 @@ export default function UsuariosPage() {
     setEstado(u.estado);
     setClienteId(u.clienteId ?? "");
     setPermisos({ ...permisosVacios(), ...(u.permisos ?? {}) });
+    setUsuariosVisiblesIds((u.usuariosVisibles ?? []).map((v) => v.id));
+  };
+
+  const toggleUsuarioVisible = (id: string) => {
+    setUsuariosVisiblesIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const togglePermiso = (pagina: string, accion: keyof PermisoAccion) => {
@@ -149,6 +157,7 @@ export default function UsuariosPage() {
           estado,
           clienteId: clienteId || null,
           permisos,
+          usuariosVisiblesIds,
         };
         if (password) data.password = password;
         await api.put(`/usuarios/${editingId}`, data);
@@ -161,6 +170,7 @@ export default function UsuariosPage() {
           telefono: telefono || undefined,
           clienteId: clienteId || undefined,
           permisos,
+          usuariosVisiblesIds,
         });
       }
       resetForm();
@@ -303,6 +313,31 @@ export default function UsuariosPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium">Usuarios visibles (opcional)</label>
+          <p className="mb-2 text-xs text-gray-400">
+            Además de sus propias reservas, este usuario podrá ver las reservas de los usuarios que marques aquí
+            (usuarios &quot;hijos&quot;), sin necesidad de tener el rol administrador.
+          </p>
+          <div className="max-h-48 overflow-y-auto rounded border">
+            {usuarios.filter((u) => u.id !== editingId).length === 0 && (
+              <p className="px-3 py-2 text-sm text-gray-400">No hay otros usuarios disponibles</p>
+            )}
+            {usuarios
+              .filter((u) => u.id !== editingId)
+              .map((u) => (
+                <label key={u.id} className="flex items-center gap-2 border-t px-3 py-2 text-sm first:border-t-0">
+                  <input
+                    type="checkbox"
+                    checked={usuariosVisiblesIds.includes(u.id)}
+                    onChange={() => toggleUsuarioVisible(u.id)}
+                  />
+                  {u.nombre} <span className="text-gray-400">({u.email})</span>
+                </label>
+              ))}
           </div>
         </div>
 

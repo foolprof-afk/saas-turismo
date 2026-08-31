@@ -18,7 +18,7 @@ export class UsuariosController {
 
   @Get('vendedores')
   findVendedores(@CurrentUser() user: AuthenticatedUser) {
-    return this.usuariosService.findVendedores(user.agenciaId);
+    return this.usuariosService.findVendedores(user.agenciaId, user);
   }
 
   @Get(':id')
