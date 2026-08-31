@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -7,6 +7,8 @@ import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
 import { convertirAPrincipal, desglosePorMoneda, MonedaPrincipalInfo } from '../../../common/utils/reserva-montos.util';
+import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
+import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -33,15 +35,30 @@ export class ReservasService {
    * Si se especifica codigoReserva, se busca por coincidencia parcial y se ignora el rango
    * de fechas (no tiene sentido acotar por fecha una búsqueda por código específico), pero
    * el resto de filtros (estado, vendedor) se siguen aplicando en conjunto.
+   *
+   * vendedorIdsPermitidos: null si el usuario es admin (sin restricción); si no, la lista de
+   * ids de vendedor cuyas reservas puede ver (el mismo + usuarios visibles asignados). Si se
+   * pide un vendedorId puntual fuera de esa lista, se rechaza.
    */
-  private construirWhere(agenciaId: string, filtros: FiltrosReserva = {}): Prisma.ReservaWhereInput {
+  private construirWhere(
+    agenciaId: string,
+    filtros: FiltrosReserva = {},
+    vendedorIdsPermitidos: string[] | null = null,
+  ): Prisma.ReservaWhereInput {
     const where: Prisma.ReservaWhereInput = { agenciaId };
 
     if (filtros.codigoReserva) {
       where.codigoReserva = { contains: filtros.codigoReserva, mode: 'insensitive' };
     }
     if (filtros.estado) where.estado = filtros.estado as Prisma.EnumEstadoReservaFilter['equals'];
-    if (filtros.vendedorId) where.vendedorId = filtros.vendedorId;
+    if (filtros.vendedorId) {
+      if (vendedorIdsPermitidos && !vendedorIdsPermitidos.includes(filtros.vendedorId)) {
+        throw new ForbiddenException('No tienes permiso para ver las reservas de ese vendedor');
+      }
+      where.vendedorId = filtros.vendedorId;
+    } else if (vendedorIdsPermitidos) {
+      where.vendedorId = { in: vendedorIdsPermitidos };
+    }
     if (!filtros.codigoReserva && (filtros.fechaInicio || filtros.fechaFin)) {
       where.fechaServicioInicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
@@ -62,10 +79,11 @@ export class ReservasService {
     return { id: moneda.id, codigo: moneda.codigo, simbolo: moneda.simbolo, tasaCambio: Number(moneda.tasaCambio) };
   }
 
-  async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}) {
+  async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}, user?: AuthenticatedUser) {
+    const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
     const [reservas, monedaPrincipal] = await Promise.all([
       this.prisma.reserva.findMany({
-        where: this.construirWhere(agenciaId, filtros),
+        where: this.construirWhere(agenciaId, filtros, vendedorIdsPermitidos),
         include: {
           cliente: true,
           vendedor: true,
@@ -95,10 +113,11 @@ export class ReservasService {
    * principal en el mantenedor de monedas (usando la tasaCambio de cada moneda), para tener un
    * único número de referencia sin importar en qué moneda se cobró cada reserva.
    */
-  async cuadre(agenciaId: string, filtros: FiltrosReserva = {}) {
+  async cuadre(agenciaId: string, filtros: FiltrosReserva = {}, user?: AuthenticatedUser) {
+    const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
     const [reservas, monedaPrincipal] = await Promise.all([
       this.prisma.reserva.findMany({
-        where: this.construirWhere(agenciaId, filtros),
+        where: this.construirWhere(agenciaId, filtros, vendedorIdsPermitidos),
         include: {
           cliente: true,
           vendedor: true,
@@ -179,9 +198,14 @@ export class ReservasService {
     };
   }
 
-  async findOne(agenciaId: string, id: string) {
+  async findOne(agenciaId: string, id: string, user?: AuthenticatedUser) {
+    const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
     const reserva = await this.prisma.reserva.findFirst({
-      where: { id, agenciaId },
+      where: {
+        id,
+        agenciaId,
+        ...(vendedorIdsPermitidos ? { vendedorId: { in: vendedorIdsPermitidos } } : {}),
+      },
       include: {
         cliente: true,
         vendedor: true,

@@ -136,6 +136,11 @@ model Usuario {
   checkins         CheckIn[]
   clienteVinculado Cliente?
 
+  // Visibilidad: usuarios "hijos" cuyas reservas puede ver este usuario ademas de las propias,
+  // sin necesidad de ser admin (ver reservas.service.ts). Relacion m:n auto-referenciada.
+  usuariosVisibles Usuario[] @relation("VisibilidadUsuarios")
+  visiblePara      Usuario[] @relation("VisibilidadUsuarios")
+
   @@unique([agenciaId, email])
   @@map("usuarios")
 }
