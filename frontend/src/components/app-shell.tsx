@@ -1,9 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", pagina: "dashboard" },
@@ -15,6 +16,7 @@ const NAV = [
 const NAV_ADMIN = [
   { href: "/reservas/cuadre", label: "Cuadre de caja", pagina: "reservas-cuadre" },
   { href: "/usuarios", label: "Usuarios", pagina: "usuarios" },
+  { href: "/logs", label: "Logs del sistema", pagina: "logs" },
   { href: "/tipos-servicio", label: "Tipos de servicio", pagina: "tipos-servicio" },
   { href: "/plantillas-itinerario", label: "Plantillas", pagina: "plantillas-itinerario" },
   { href: "/servicios", label: "Servicios", pagina: "servicios" },
@@ -28,14 +30,30 @@ const NAV_ADMIN = [
   { href: "/formas-pago", label: "Formas de pago", pagina: "formas-pago" },
 ];
 
+const ALL_NAV = [...NAV, ...NAV_ADMIN];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { usuario, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const ultimoPathLogueado = useRef<string | null>(null);
 
   useEffect(() => {
     if (!loading && !usuario) router.replace("/login");
   }, [loading, usuario, router]);
+
+  // Registra en el log de auditoria cada vez que el usuario entra a una pantalla desde el menu.
+  useEffect(() => {
+    if (!usuario) return;
+    if (ultimoPathLogueado.current === pathname) return;
+    ultimoPathLogueado.current = pathname;
+    const item = ALL_NAV.filter((n) => pathname.startsWith(n.href)).sort(
+      (a, b) => b.href.length - a.href.length,
+    )[0];
+    if (item) {
+      api.post("/logs/acceso", { modulo: item.pagina }).catch(() => null);
+    }
+  }, [pathname, usuario]);
 
   if (loading || !usuario) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">Cargando...</div>;
@@ -43,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const items =
     usuario.rol === "admin"
-      ? [...NAV, ...NAV_ADMIN]
+      ? ALL_NAV
       : [
           ...NAV.filter((item) => usuario.permisos?.[item.pagina]?.leer !== false),
           ...NAV_ADMIN.filter((item) => usuario.permisos?.[item.pagina]?.leer === true),

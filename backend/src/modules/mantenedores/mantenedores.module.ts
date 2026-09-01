@@ -13,6 +13,7 @@ import { PuntosRecogidaModule } from './puntos-recogida/puntos-recogida.module';
 import { MonedasModule } from './monedas/monedas.module';
 import { ImpuestosModule } from './impuestos/impuestos.module';
 import { FormasPagoModule } from './formas-pago/formas-pago.module';
+import { LogsModule } from './logs/logs.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { FormasPagoModule } from './formas-pago/formas-pago.module';
     MonedasModule,
     ImpuestosModule,
     FormasPagoModule,
+    LogsModule,
   ],
 })
 export class MantenedoresModule {}

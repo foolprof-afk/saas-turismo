@@ -3,12 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
+import { LogsService } from '../modules/mantenedores/logs/logs.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly logsService: LogsService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -29,6 +31,14 @@ export class AuthService {
     await this.prisma.usuario.update({
       where: { id: usuario.id },
       data: { ultimoLogin: new Date() },
+    });
+
+    this.logsService.registrar({
+      agenciaId: usuario.agenciaId,
+      usuarioId: usuario.id,
+      usuarioEmail: usuario.email,
+      accion: 'LOGIN',
+      modulo: 'auth',
     });
 
     const payload = {
