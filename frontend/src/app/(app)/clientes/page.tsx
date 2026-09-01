@@ -11,6 +11,16 @@ interface Cliente {
   telefono?: string | null;
   pais?: string | null;
   notas?: string | null;
+  logoUrl?: string | null;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function ClientesPage() {
@@ -24,6 +34,7 @@ export default function ClientesPage() {
   const [telefono, setTelefono] = useState("");
   const [pais, setPais] = useState("");
   const [notas, setNotas] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -48,6 +59,7 @@ export default function ClientesPage() {
     setTelefono("");
     setPais("");
     setNotas("");
+    setLogoUrl(undefined);
   };
 
   const editar = (c: Cliente) => {
@@ -58,6 +70,7 @@ export default function ClientesPage() {
     setTelefono(c.telefono ?? "");
     setPais(c.pais ?? "");
     setNotas(c.notas ?? "");
+    setLogoUrl(c.logoUrl ?? undefined);
   };
 
   const eliminar = async (id: string) => {
@@ -82,6 +95,7 @@ export default function ClientesPage() {
         telefono: telefono || undefined,
         pais: pais || undefined,
         notas: notas || undefined,
+        logoUrl: logoUrl || null,
       };
       if (editingId) {
         await api.put(`/clientes/${editingId}`, data);
@@ -164,6 +178,30 @@ export default function ClientesPage() {
           </div>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium">Logo del cliente (opcional)</label>
+          <p className="mt-1 text-xs text-gray-500">
+            Si se define, se muestra en el voucher de sus reservas en vez del logo de la agencia.
+          </p>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              setLogoUrl(file ? await fileToDataUrl(file) : undefined);
+            }}
+            className="mt-2 w-full text-sm"
+          />
+          {logoUrl && (
+            <div className="mt-2 flex items-center gap-3">
+              <img src={logoUrl} alt="Logo del cliente" className="h-12 w-12 rounded border object-contain" />
+              <button type="button" onClick={() => setLogoUrl(undefined)} className="text-xs text-red-600 hover:underline">
+                Quitar logo
+              </button>
+            </div>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -190,6 +228,7 @@ export default function ClientesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
+              <th className="px-4 py-2">Logo</th>
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Correo</th>
               <th className="px-4 py-2">Teléfono</th>
@@ -200,20 +239,27 @@ export default function ClientesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && clientes.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No hay clientes todavía
                 </td>
               </tr>
             )}
             {clientes.map((c) => (
               <tr key={c.id} className="border-t">
+                <td className="px-4 py-2">
+                  {c.logoUrl ? (
+                    <img src={c.logoUrl} alt={c.nombre} className="h-8 w-8 rounded border object-contain" />
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td className="px-4 py-2">{c.nombre}</td>
                 <td className="px-4 py-2">{c.email ?? "-"}</td>
                 <td className="px-4 py-2">{c.telefono ?? "-"}</td>

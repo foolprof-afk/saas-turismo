@@ -208,6 +208,7 @@ export class ReservasService {
       },
       include: {
         cliente: true,
+        agencia: { select: { logoUrl: true } },
         vendedor: true,
         pasajeros: true,
         voucher: true,

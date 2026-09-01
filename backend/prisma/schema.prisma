@@ -159,6 +159,7 @@ model Cliente {
   telefono  String?
   pais      String?
   notas     String?
+  logoUrl   String? // opcional: si se define, se muestra en el voucher en vez del logo de la agencia
   createdAt DateTime @default(now())
 
   agencia            Agencia   @relation(fields: [agenciaId], references: [id])
