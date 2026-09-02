@@ -101,6 +101,7 @@ model Agencia {
   monedas               Moneda[]
   impuestos             Impuesto[]
   formasPago            FormaPago[]
+  logsActividad         LogActividad[]
 
   @@map("agencias")
 }
@@ -141,8 +142,31 @@ model Usuario {
   usuariosVisibles Usuario[] @relation("VisibilidadUsuarios")
   visiblePara      Usuario[] @relation("VisibilidadUsuarios")
 
+  logsActividad LogActividad[]
+
   @@unique([agenciaId, email])
   @@map("usuarios")
+}
+
+// Registro de auditoria: login, acceso a pantallas por menu, y creacion/modificacion/eliminacion
+// de registros. Solo lo consulta un usuario admin (ver LogsController). El registro de logs
+// nunca debe interrumpir la operacion principal (ver LogsService.registrar).
+model LogActividad {
+  id           String   @id @default(cuid())
+  agenciaId    String
+  usuarioId    String?
+  usuarioEmail String?
+  accion       String // LOGIN | ACCESO | CREAR | MODIFICAR | ELIMINAR
+  modulo       String // pantalla/recurso, p. ej. "clientes", "reservas"
+  entidadId    String?
+  descripcion  String?
+  createdAt    DateTime @default(now())
+
+  agencia Agencia  @relation(fields: [agenciaId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([agenciaId, createdAt])
+  @@map("logs_actividad")
 }
 
 // ----------------------------------------------------------------------------
