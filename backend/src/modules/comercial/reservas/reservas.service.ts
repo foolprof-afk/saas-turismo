@@ -9,6 +9,7 @@ import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
 import { convertirAPrincipal, desglosePorMoneda, MonedaPrincipalInfo } from '../../../common/utils/reserva-montos.util';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
+import { firmarEnlaceCliente, verificarEnlaceCliente } from '../../../common/utils/enlace-cliente-token.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -20,6 +21,7 @@ export interface FiltrosReserva {
   estado?: string;
   codigoReserva?: string;
   vendedorId?: string;
+  clienteId?: string;
   fechaInicio?: string;
   fechaFin?: string;
 }
@@ -59,6 +61,7 @@ export class ReservasService {
     } else if (vendedorIdsPermitidos) {
       where.vendedorId = { in: vendedorIdsPermitidos };
     }
+    if (filtros.clienteId) where.clienteId = filtros.clienteId;
     if (!filtros.codigoReserva && (filtros.fechaInicio || filtros.fechaFin)) {
       where.fechaServicioInicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
@@ -715,5 +718,51 @@ export class ReservasService {
     ]);
 
     return this.findOne(agenciaId, id);
+  }
+
+  /**
+   * Genera un enlace público (sin login) al cuadre de un cliente puntual, para que el vendedor
+   * se lo comparta por WhatsApp/correo y el cliente revise su estado de cuenta y pagos
+   * pendientes. El token codifica clienteId + agenciaId + los mismos filtros de estado/fecha
+   * usados en pantalla, así el cliente ve exactamente lo que el vendedor tenía filtrado.
+   */
+  async generarEnlaceCliente(agenciaId: string, clienteId: string, filtros: FiltrosReserva = {}) {
+    const cliente = await this.prisma.cliente.findFirst({ where: { id: clienteId, agenciaId } });
+    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+
+    const token = firmarEnlaceCliente({
+      clienteId,
+      agenciaId,
+      estado: filtros.estado,
+      fechaInicio: filtros.fechaInicio,
+      fechaFin: filtros.fechaFin,
+    });
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
+    const url = `${frontendUrl}/cuadre-cliente/${token}`;
+
+    return {
+      url,
+      cliente: { nombre: cliente.nombre, email: cliente.email, telefono: cliente.telefono },
+    };
+  }
+
+  /**
+   * Cuadre público de un cliente, accedido vía el enlace generado en generarEnlaceCliente. No
+   * recibe `user` (sin restricción por vendedor): el cliente debe ver todas sus reservas sin
+   * importar qué vendedor de la agencia las haya registrado.
+   */
+  async cuadrePublico(token: string) {
+    const payload = verificarEnlaceCliente(token);
+    const [cliente, cuadre] = await Promise.all([
+      this.prisma.cliente.findFirst({ where: { id: payload.clienteId, agenciaId: payload.agenciaId } }),
+      this.cuadre(payload.agenciaId, {
+        clienteId: payload.clienteId,
+        estado: payload.estado,
+        fechaInicio: payload.fechaInicio,
+        fechaFin: payload.fechaFin,
+      }),
+    ]);
+    if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    return { cliente: { nombre: cliente.nombre }, ...cuadre };
   }
 }

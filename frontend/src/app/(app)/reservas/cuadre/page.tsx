@@ -6,6 +6,14 @@ import { api } from "@/lib/api";
 interface Vendedor {
   id: string;
   nombre: string;
+  clienteId?: string | null;
+}
+
+interface Cliente {
+  id: string;
+  nombre: string;
+  email?: string | null;
+  telefono?: string | null;
 }
 
 interface ReservaCuadre {
@@ -60,18 +68,27 @@ const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
 
 export default function CuadreDeCajaPage() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [data, setData] = useState<CuadreResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [codigoReserva, setCodigoReserva] = useState("");
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
+  const [clienteId, setClienteId] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
 
+  const [enviando, setEnviando] = useState(false);
+  const [enlace, setEnlace] = useState<{ url: string; cliente: Cliente } | null>(null);
+  const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
+
   useEffect(() => {
     api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => setVendedores([]));
+    api.get<Cliente[]>("/clientes?limit=500").then(setClientes).catch(() => setClientes([]));
   }, []);
+
+  const vendedoresFiltrados = clienteId ? vendedores.filter((v) => v.clienteId === clienteId) : vendedores;
 
   const cargar = () => {
     setLoading(true);
@@ -79,6 +96,7 @@ export default function CuadreDeCajaPage() {
     if (codigoReserva) params.set("codigoReserva", codigoReserva);
     if (estado) params.set("estado", estado);
     if (vendedorId) params.set("vendedorId", vendedorId);
+    if (clienteId) params.set("clienteId", clienteId);
     if (fechaInicio) params.set("fechaInicio", fechaInicio);
     if (fechaFin) params.set("fechaFin", fechaFin);
     const qs = params.toString();
@@ -91,7 +109,35 @@ export default function CuadreDeCajaPage() {
   useEffect(() => {
     const timeout = setTimeout(cargar, 300);
     return () => clearTimeout(timeout);
-  }, [codigoReserva, estado, vendedorId, fechaInicio, fechaFin]);
+  }, [codigoReserva, estado, vendedorId, clienteId, fechaInicio, fechaFin]);
+
+  useEffect(() => {
+    if (vendedorId && !vendedoresFiltrados.some((v) => v.id === vendedorId)) {
+      setVendedorId("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId]);
+
+  useEffect(() => {
+    setEnlace(null);
+    setErrorEnlace(null);
+  }, [clienteId, estado, fechaInicio, fechaFin]);
+
+  const generarEnlace = () => {
+    if (!clienteId) return;
+    setEnviando(true);
+    setErrorEnlace(null);
+    const params = new URLSearchParams();
+    params.set("clienteId", clienteId);
+    if (estado) params.set("estado", estado);
+    if (fechaInicio) params.set("fechaInicio", fechaInicio);
+    if (fechaFin) params.set("fechaFin", fechaFin);
+    api
+      .get<{ url: string; cliente: Cliente }>(`/reservas/cuadre/enlace?${params.toString()}`)
+      .then(setEnlace)
+      .catch(() => setErrorEnlace("No se pudo generar el enlace"))
+      .finally(() => setEnviando(false));
+  };
 
   const filtrandoPorCodigo = codigoReserva.trim().length > 0;
 
@@ -126,6 +172,22 @@ export default function CuadreDeCajaPage() {
           </select>
         </div>
         <div>
+          <label className="block text-sm font-medium">Cliente</label>
+          <select
+            disabled={filtrandoPorCodigo}
+            value={clienteId}
+            onChange={(e) => setClienteId(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
+          >
+            <option value="">Todos</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="block text-sm font-medium">Vendedor</label>
           <select
             disabled={filtrandoPorCodigo}
@@ -134,7 +196,7 @@ export default function CuadreDeCajaPage() {
             className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
           >
             <option value="">Todos</option>
-            {vendedores.map((v) => (
+            {vendedoresFiltrados.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.nombre}
               </option>
@@ -167,6 +229,57 @@ export default function CuadreDeCajaPage() {
         <p className="text-xs text-gray-500">
           Filtrando solo por código de reserva — se ignoran fecha, estado y vendedor.
         </p>
+      )}
+
+      {clienteId && (
+        <div className="rounded-lg border bg-white p-4">
+          <h2 className="text-sm font-semibold text-gray-500">Enviar cuadre al cliente</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Genera un enlace público (sin login) con el cuadre filtrado, para que el cliente lo revise y realice sus pagos.
+          </p>
+          <button
+            onClick={generarEnlace}
+            disabled={enviando}
+            className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {enviando ? "Generando..." : "Generar enlace"}
+          </button>
+          {errorEnlace && <p className="mt-2 text-xs text-red-600">{errorEnlace}</p>}
+          {enlace && (
+            <div className="mt-3 space-y-2">
+              <input
+                readOnly
+                value={enlace.url}
+                onClick={(e) => e.currentTarget.select()}
+                className="w-full rounded border px-2 py-1 text-xs font-mono"
+              />
+              <div className="flex flex-wrap gap-2">
+                {enlace.cliente.telefono && (
+                  <a
+                    href={`https://wa.me/${enlace.cliente.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
+                      `Hola, aquí está el enlace de tu cuadre de cuenta: ${enlace.url}`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded border px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                  >
+                    Enviar por WhatsApp
+                  </a>
+                )}
+                {enlace.cliente.email && (
+                  <a
+                    href={`mailto:${enlace.cliente.email}?subject=${encodeURIComponent(
+                      "Cuadre de cuenta",
+                    )}&body=${encodeURIComponent(`Hola, aquí está el enlace de tu cuadre de cuenta: ${enlace.url}`)}`}
+                    className="rounded border px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                  >
+                    Enviar por correo
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {loading && <p className="text-sm text-gray-400">Cargando...</p>}
