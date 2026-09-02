@@ -19,7 +19,8 @@ interface ReservaPublica {
   montos: MontoPorMoneda[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
-  cliente: { nombre: string };
+  cliente: { nombre: string; logoUrl?: string | null };
+  agencia?: { logoUrl?: string | null } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
   voucher?: { codigo: string; validoHasta?: string; qrUrl?: string };
   itinerario?: {
@@ -83,6 +84,13 @@ export default function VoucherPublicoPage() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="mx-auto max-w-md space-y-4">
         <div className="rounded-lg border bg-white p-5 text-center">
+          {(reserva.cliente?.logoUrl || reserva.agencia?.logoUrl) && (
+            <img
+              src={reserva.cliente?.logoUrl || reserva.agencia?.logoUrl || undefined}
+              alt="Logo"
+              className="mx-auto mb-2 h-16 w-16 object-contain"
+            />
+          )}
           <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Reserva válida</p>
           <h1 className="mt-1 text-xl font-bold">{reserva.codigoReserva}</h1>
           <span className="mt-2 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>

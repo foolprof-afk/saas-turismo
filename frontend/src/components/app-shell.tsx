@@ -14,6 +14,7 @@ const NAV = [
 
 const NAV_ADMIN = [
   { href: "/reservas/cuadre", label: "Cuadre de caja", pagina: "reservas-cuadre" },
+  { href: "/agencia", label: "Mi agencia", pagina: "agencia" },
   { href: "/usuarios", label: "Usuarios", pagina: "usuarios" },
   { href: "/tipos-servicio", label: "Tipos de servicio", pagina: "tipos-servicio" },
   { href: "/plantillas-itinerario", label: "Plantillas", pagina: "plantillas-itinerario" },

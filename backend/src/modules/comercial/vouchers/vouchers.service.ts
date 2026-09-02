@@ -55,6 +55,7 @@ export class VouchersService {
       where: { id: payload.sub, agenciaId: payload.agenciaId },
       include: {
         cliente: true,
+        agencia: { select: { logoUrl: true } },
         pasajeros: true,
         voucher: true,
         moneda: true,

@@ -32,7 +32,8 @@ interface ReservaDetalle {
   totalPrincipal: MontoPorMoneda | null;
   fechaServicioInicio: string;
   horaServicio?: string | null;
-  cliente: { nombre: string; email?: string };
+  cliente: { nombre: string; email?: string; logoUrl?: string | null };
+  agencia?: { logoUrl?: string | null } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
   voucher?: { qrUrl: string; codigo: string; validoHasta?: string; url?: string };
   itinerario?: {
@@ -74,6 +75,15 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function logoDe(reserva: ReservaDetalle): string | undefined {
+  return reserva.cliente?.logoUrl || reserva.agencia?.logoUrl || undefined;
+}
+
+function formatoImagenDataUrl(dataUrl: string): string {
+  const match = dataUrl.match(/^data:image\/(\w+);/);
+  return match ? match[1].toUpperCase() : "PNG";
 }
 
 function montoTexto(reserva: ReservaDetalle): string {
@@ -211,12 +221,19 @@ export default function ReservaDetallePage() {
       lineasItinerario.forEach((l) => lineas.push(l));
     }
 
+    const logo = logoDe(reserva);
+    const logoSizeMm = 20;
     const qrSizeMm = 30;
     const lineHeightMm = 5;
-    const alturaMm = 30 + lineas.length * lineHeightMm + (reserva.voucher ? qrSizeMm + 10 : 0);
+    const alturaMm =
+      30 + lineas.length * lineHeightMm + (reserva.voucher ? qrSizeMm + 10 : 0) + (logo ? logoSizeMm + 5 : 0);
 
     const doc = new jsPDF({ unit: "mm", format: [80, Math.max(alturaMm, 100)] });
     let y = 10;
+    if (logo) {
+      doc.addImage(logo, formatoImagenDataUrl(logo), (80 - logoSizeMm) / 2, y, logoSizeMm, logoSizeMm);
+      y += logoSizeMm + 5;
+    }
     doc.setFontSize(12);
     doc.text(`Reserva ${reserva.codigoReserva}`, 5, y);
     y += 7;
@@ -452,6 +469,9 @@ export default function ReservaDetallePage() {
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Voucher</h2>
           {reserva.voucher ? (
             <div className="flex flex-col items-center gap-2">
+              {logoDe(reserva) && (
+                <img src={logoDe(reserva)} alt="Logo" className="h-16 w-16 object-contain" />
+              )}
               <img src={reserva.voucher.qrUrl} alt="QR del voucher" className="h-40 w-40" />
               <p className="font-mono text-sm">{reserva.voucher.codigo}</p>
             </div>
@@ -509,6 +529,11 @@ export default function ReservaDetallePage() {
 
       {/* Formato de impresión para impresora térmica (80mm), oculto en pantalla */}
       <div className="hidden w-[80mm] font-mono text-xs print:block">
+        {logoDe(reserva) && (
+          <div className="flex justify-center">
+            <img src={logoDe(reserva)} alt="Logo" className="mb-1 h-14 w-14 object-contain" />
+          </div>
+        )}
         <p className="text-center text-sm font-bold">Reserva {reserva.codigoReserva}</p>
         <p>Cliente: {reserva.cliente?.nombre}</p>
         <p>
