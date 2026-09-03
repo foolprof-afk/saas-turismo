@@ -8,7 +8,7 @@ export class ListarLogsDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['LOGIN', 'ACCESO', 'CREAR', 'MODIFICAR', 'ELIMINAR'])
+  @IsIn(['LOGIN', 'BUSCAR', 'CREAR', 'MODIFICAR', 'ELIMINAR'])
   accion?: string;
 
   @IsOptional()

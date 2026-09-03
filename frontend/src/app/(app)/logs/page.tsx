@@ -16,16 +16,17 @@ interface Log {
   entidadId?: string | null;
   descripcion?: string | null;
   usuarioEmail?: string | null;
+  ip?: string | null;
   createdAt: string;
   usuario?: { nombre: string; email: string } | null;
 }
 
-const ACCIONES = ["LOGIN", "ACCESO", "CREAR", "MODIFICAR", "ELIMINAR"];
+const ACCIONES = ["LOGIN", "BUSCAR", "CREAR", "MODIFICAR", "ELIMINAR"];
 const LIMIT = 50;
 
 const ACCION_LABEL: Record<string, string> = {
   LOGIN: "Ingreso al sistema",
-  ACCESO: "Acceso por menú",
+  BUSCAR: "Búsqueda / consulta",
   CREAR: "Creación",
   MODIFICAR: "Modificación",
   ELIMINAR: "Eliminación",
@@ -33,7 +34,7 @@ const ACCION_LABEL: Record<string, string> = {
 
 const ACCION_COLOR: Record<string, string> = {
   LOGIN: "bg-blue-100 text-blue-700",
-  ACCESO: "bg-gray-100 text-gray-700",
+  BUSCAR: "bg-gray-100 text-gray-700",
   CREAR: "bg-emerald-100 text-emerald-700",
   MODIFICAR: "bg-amber-100 text-amber-700",
   ELIMINAR: "bg-red-100 text-red-700",
@@ -96,7 +97,8 @@ export default function LogsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Logs del sistema</h1>
         <p className="text-sm text-gray-500">
-          Registro de auditoría: ingresos, accesos por menú, creaciones, modificaciones y eliminaciones.
+          Registro de auditoría: ingresos, búsquedas/consultas, creaciones, modificaciones y eliminaciones, con IP de
+          origen.
         </p>
       </div>
 
@@ -174,6 +176,7 @@ export default function LogsPage() {
             <tr>
               <th className="px-4 py-2">Fecha y hora</th>
               <th className="px-4 py-2">Usuario</th>
+              <th className="px-4 py-2">IP</th>
               <th className="px-4 py-2">Acción</th>
               <th className="px-4 py-2">Pantalla</th>
               <th className="px-4 py-2">Registro</th>
@@ -182,14 +185,14 @@ export default function LogsPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && logs.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No hay registros para los filtros seleccionados
                 </td>
               </tr>
@@ -198,6 +201,7 @@ export default function LogsPage() {
               <tr key={l.id} className="border-t">
                 <td className="px-4 py-2 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
                 <td className="px-4 py-2">{l.usuario?.nombre ?? l.usuarioEmail ?? "-"}</td>
+                <td className="px-4 py-2 font-mono text-xs text-gray-500">{l.ip ?? "-"}</td>
                 <td className="px-4 py-2">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${ACCION_COLOR[l.accion] ?? "bg-gray-100"}`}>
                     {ACCION_LABEL[l.accion] ?? l.accion}

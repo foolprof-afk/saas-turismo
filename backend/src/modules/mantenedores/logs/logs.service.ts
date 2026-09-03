@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ListarLogsDto } from './dto/listar-logs.dto';
 
-export type AccionLog = 'LOGIN' | 'ACCESO' | 'CREAR' | 'MODIFICAR' | 'ELIMINAR';
+export type AccionLog = 'LOGIN' | 'BUSCAR' | 'CREAR' | 'MODIFICAR' | 'ELIMINAR';
 
 interface RegistrarLogParams {
   agenciaId: string;
@@ -12,6 +12,7 @@ interface RegistrarLogParams {
   modulo: string;
   entidadId?: string | null;
   descripcion?: string | null;
+  ip?: string | null;
 }
 
 @Injectable()
@@ -30,6 +31,7 @@ export class LogsService {
           modulo: params.modulo,
           entidadId: params.entidadId ?? undefined,
           descripcion: params.descripcion ?? undefined,
+          ip: params.ip ?? undefined,
         },
       })
       .catch(() => null);

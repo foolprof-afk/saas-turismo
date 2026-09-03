@@ -27,4 +27,14 @@ export class AgenciasService {
     await this.findOne(id);
     return this.prisma.agencia.update({ where: { id }, data });
   }
+
+  // Usado por la pantalla de login (sin autenticacion) para mostrar el logo de la agencia.
+  // En Fase 1 solo existe una agencia, por eso se toma la primera creada.
+  async brandingPublico() {
+    const agencia = await this.prisma.agencia.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { nombre: true, logoUrl: true },
+    });
+    return { nombre: agencia?.nombre ?? null, logoUrl: agencia?.logoUrl ?? null };
+  }
 }

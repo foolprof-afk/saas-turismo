@@ -156,10 +156,11 @@ model LogActividad {
   agenciaId    String
   usuarioId    String?
   usuarioEmail String?
-  accion       String // LOGIN | ACCESO | CREAR | MODIFICAR | ELIMINAR
+  accion       String // LOGIN | BUSCAR | CREAR | MODIFICAR | ELIMINAR
   modulo       String // pantalla/recurso, p. ej. "clientes", "reservas"
   entidadId    String?
   descripcion  String?
+  ip           String?
   createdAt    DateTime @default(now())
 
   agencia Agencia  @relation(fields: [agenciaId], references: [id])

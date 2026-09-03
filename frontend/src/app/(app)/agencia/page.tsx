@@ -45,7 +45,7 @@ export default function AgenciaPage() {
     setError(null);
     setGuardado(false);
     try {
-      await api.put(`/agencias/${usuario.agenciaId}`, { logoUrl });
+      await api.put(`/agencias/${usuario.agenciaId}`, { logoUrl: logoUrl || null });
       setGuardado(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar el logo");
