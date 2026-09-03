@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+
+interface Branding {
+  nombre: string | null;
+  logoUrl: string | null;
+}
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -12,6 +17,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState<Branding | null>(null);
+
+  useEffect(() => {
+    api
+      .get<Branding>("/branding/publico")
+      .then(setBranding)
+      .catch(() => setBranding(null));
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,6 +43,15 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-8 shadow-sm">
+        {branding?.logoUrl && (
+          <div className="flex justify-center">
+            <img
+              src={branding.logoUrl}
+              alt={branding.nombre ?? "Logo"}
+              className="h-20 w-20 object-contain"
+            />
+          </div>
+        )}
         <h1 className="text-xl font-semibold">Iniciar sesión</h1>
         <div className="space-y-1">
           <label className="block text-sm font-medium">Email</label>

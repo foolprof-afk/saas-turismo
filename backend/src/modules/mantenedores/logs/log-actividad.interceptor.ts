@@ -1,18 +1,20 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
+import { obtenerIpCliente } from '../../../common/utils/request-ip.util';
 import { AccionLog, LogsService } from './logs.service';
 
 /**
- * Registra automaticamente en LogActividad toda mutacion (POST/PUT/PATCH/DELETE) hecha por un
- * usuario autenticado, en cualquier controlador de la app. El modulo se infiere del nombre del
+ * Registra automaticamente en LogActividad toda operacion (GET/POST/PUT/PATCH/DELETE) hecha por
+ * un usuario autenticado, en cualquier controlador de la app. El modulo se infiere del nombre del
  * controlador (ej. "ClientesController" -> "clientes"). Se excluyen AuthController (login se
  * registra explicitamente en AuthService, antes de emitir el token) y LogsController (para no
- * duplicar el registro de accesos por menu).
+ * generar ruido con la propia consulta del mantenedor de logs).
  */
 const CONTROLLERS_EXCLUIDOS = new Set(['AuthController', 'LogsController']);
 
 const ACCION_POR_METODO: Record<string, AccionLog> = {
+  GET: 'BUSCAR',
   POST: 'CREAR',
   PUT: 'MODIFICAR',
   PATCH: 'MODIFICAR',
@@ -46,6 +48,7 @@ export class LogActividadInterceptor implements NestInterceptor {
 
     const modulo = moduloDeControlador(controllerName);
     const entidadIdParam = request.params?.id as string | undefined;
+    const ip = obtenerIpCliente(request);
 
     return next.handle().pipe(
       tap((respuesta: unknown) => {
@@ -61,6 +64,7 @@ export class LogActividadInterceptor implements NestInterceptor {
           accion,
           modulo,
           entidadId,
+          ip,
         });
       }),
     );

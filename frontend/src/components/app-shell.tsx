@@ -1,10 +1,9 @@
 "use client";
 
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api } from "@/lib/api";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", pagina: "dashboard" },
@@ -37,24 +36,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { usuario, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const ultimoPathLogueado = useRef<string | null>(null);
 
   useEffect(() => {
     if (!loading && !usuario) router.replace("/login");
   }, [loading, usuario, router]);
-
-  // Registra en el log de auditoria cada vez que el usuario entra a una pantalla desde el menu.
-  useEffect(() => {
-    if (!usuario) return;
-    if (ultimoPathLogueado.current === pathname) return;
-    ultimoPathLogueado.current = pathname;
-    const item = ALL_NAV.filter((n) => pathname.startsWith(n.href)).sort(
-      (a, b) => b.href.length - a.href.length,
-    )[0];
-    if (item) {
-      api.post("/logs/acceso", { modulo: item.pagina }).catch(() => null);
-    }
-  }, [pathname, usuario]);
 
   if (loading || !usuario) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">Cargando...</div>;

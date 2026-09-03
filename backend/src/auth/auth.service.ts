@@ -13,7 +13,7 @@ export class AuthService {
     private readonly logsService: LogsService,
   ) {}
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, ip?: string) {
     const usuario = await this.prisma.usuario.findFirst({
       where: { email: dto.email, estado: 'ACTIVO' },
       include: { rol: true },
@@ -39,6 +39,7 @@ export class AuthService {
       usuarioEmail: usuario.email,
       accion: 'LOGIN',
       modulo: 'auth',
+      ip,
     });
 
     const payload = {
