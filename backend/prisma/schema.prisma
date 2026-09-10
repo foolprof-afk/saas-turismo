@@ -216,6 +216,7 @@ model CotizacionItem {
   id             String  @id @default(cuid())
   cotizacionId   String
   servicioId     String
+  dia            Int     @default(1)
   precioUnitario Decimal @db.Decimal(12, 2)
   monedaId       String
 

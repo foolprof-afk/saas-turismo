@@ -9,6 +9,8 @@ import { UpdateCotizacionDto } from './dto/update-cotizacion.dto';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
 export interface FiltrosCotizacion {
   estado?: string;
   codigoCotizacion?: string;
@@ -127,13 +129,18 @@ export class CotizacionesService {
     return lista;
   }
 
-  private async construirItems(agenciaId: string, items: { servicioId: string }[], factor: number) {
-    const itemsData: { servicioId: string; precioUnitario: number; monedaId: string }[] = [];
+  private async construirItems(
+    agenciaId: string,
+    items: { servicioId: string; dia?: number }[],
+    factor: number,
+  ) {
+    const itemsData: { servicioId: string; dia: number; precioUnitario: number; monedaId: string }[] = [];
     for (const item of items) {
       const servicio = await this.prisma.servicio.findFirst({ where: { id: item.servicioId, agenciaId } });
       if (!servicio) throw new NotFoundException(`Servicio no encontrado: ${item.servicioId}`);
       itemsData.push({
         servicioId: servicio.id,
+        dia: item.dia ?? 1,
         precioUnitario: Number(servicio.precioBase) * factor,
         monedaId: servicio.monedaId,
       });
@@ -261,7 +268,7 @@ export class CotizacionesService {
     const reserva = await this.reservasService.create(agenciaId, cotizacion.vendedorId, {
       serviciosMultiples: cotizacion.items.map((item) => ({
         servicioId: item.servicioId,
-        fecha: cotizacion.fechaServicio.toISOString(),
+        fecha: new Date(cotizacion.fechaServicio.getTime() + (item.dia - 1) * MS_POR_DIA).toISOString(),
         precio: Number(item.precioUnitario) * cotizacion.cantidadPersonas,
       })),
       pasajeros: [

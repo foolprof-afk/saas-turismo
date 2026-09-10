@@ -15,6 +15,13 @@ import {
 export class CotizacionItemDto {
   @IsString()
   servicioId: string;
+
+  // Día del itinerario (1 = fechaServicio, 2 = fechaServicio + 1 día, etc.) para poder
+  // organizar cotizaciones de varios días con uno o más servicios por día.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  dia?: number;
 }
 
 export class CreateCotizacionDto {

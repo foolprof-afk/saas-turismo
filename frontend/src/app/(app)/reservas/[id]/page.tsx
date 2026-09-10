@@ -43,7 +43,7 @@ interface ReservaDetalle {
       servicios: {
         horaInicio: string;
         estado: string;
-        servicio: { nombre: string };
+        servicio: { nombre: string; duracionMin?: number | null };
         precio?: string | null;
         moneda?: { codigo: string; simbolo: string } | null;
       }[];
@@ -511,6 +511,9 @@ export default function ReservaDetallePage() {
                   {dia.servicios.map((s, i) => (
                     <li key={i}>
                       {s.horaInicio} — {s.servicio.nombre}{" "}
+                      {s.servicio.duracionMin && (
+                        <span className="text-gray-500">({(s.servicio.duracionMin / 60).toFixed(1)} h)</span>
+                      )}{" "}
                       {s.precio && s.moneda && (
                         <span className="text-gray-500">
                           ({s.moneda.simbolo}

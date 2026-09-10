@@ -7,8 +7,9 @@ import { api, ApiError } from "@/lib/api";
 
 interface CotizacionItem {
   id: string;
+  dia: number;
   precioUnitario: string;
-  servicio: { nombre: string; descripcion?: string | null };
+  servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
   moneda: { codigo: string; simbolo: string };
 }
 
@@ -37,6 +38,20 @@ function logoDe(cotizacion: CotizacionDetalle): string | undefined {
 function formatoImagenDataUrl(dataUrl: string): string {
   const match = dataUrl.match(/^data:image\/(\w+);/);
   return match ? match[1].toUpperCase() : "PNG";
+}
+
+function horasDe(item: CotizacionItem): string | null {
+  return item.servicio.duracionMin ? (item.servicio.duracionMin / 60).toFixed(1) : null;
+}
+
+function agruparPorDia(cotizacion: CotizacionDetalle) {
+  const dias = new Map<number, CotizacionItem[]>();
+  for (const item of cotizacion.items) {
+    const dia = item.dia || 1;
+    if (!dias.has(dia)) dias.set(dia, []);
+    dias.get(dia)!.push(item);
+  }
+  return Array.from(dias.entries()).sort((a, b) => a[0] - b[0]);
 }
 
 function totalesPorMoneda(cotizacion: CotizacionDetalle) {
@@ -106,12 +121,16 @@ export default function CotizacionDetallePage() {
     lineas.push(`Fecha: ${new Date(cotizacion.fechaServicio).toLocaleDateString()}`);
     lineas.push("");
     lineas.push("Servicios:");
-    cotizacion.items.forEach((item) => {
-      const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
-      lineas.push(
-        `- ${item.servicio.nombre} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`,
-      );
-      if (item.servicio.descripcion) lineas.push(`  ${item.servicio.descripcion}`);
+    agruparPorDia(cotizacion).forEach(([dia, itemsDia]) => {
+      lineas.push(`Día ${dia}:`);
+      itemsDia.forEach((item) => {
+        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+        const horas = horasDe(item);
+        lineas.push(
+          `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`,
+        );
+        if (item.servicio.descripcion) lineas.push(`  ${item.servicio.descripcion}`);
+      });
     });
     lineas.push("");
     totales.forEach((t) => lineas.push(`Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`));
@@ -148,10 +167,14 @@ export default function CotizacionDetallePage() {
     `Responsable: ${cotizacion.pasajeroResponsable} (${cotizacion.cantidadPersonas} personas)`,
     `Fecha: ${new Date(cotizacion.fechaServicio).toLocaleDateString()}`,
     "",
-    ...cotizacion.items.map((item) => {
-      const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
-      return `- ${item.servicio.nombre} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`;
-    }),
+    ...agruparPorDia(cotizacion).flatMap(([dia, itemsDia]) => [
+      `Día ${dia}:`,
+      ...itemsDia.map((item) => {
+        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+        const horas = horasDe(item);
+        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`;
+      }),
+    ]),
     "",
     ...totales.map((t) => `Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`),
   ].join("\n");
@@ -263,32 +286,38 @@ export default function CotizacionDetallePage() {
         <table className="w-full text-sm">
           <thead className="text-left text-gray-500">
             <tr>
+              <th className="py-1">Día</th>
               <th className="py-1">Servicio</th>
+              <th className="py-1">Horas</th>
               <th className="py-1">Cantidad</th>
               <th className="py-1">Precio unitario</th>
               <th className="py-1">Subtotal</th>
             </tr>
           </thead>
           <tbody>
-            {cotizacion.items.map((item) => (
-              <tr key={item.id} className="border-t align-top">
-                <td className="py-2">
-                  <p className="font-medium">{item.servicio.nombre}</p>
-                  {item.servicio.descripcion && (
-                    <p className="text-xs text-gray-400">{item.servicio.descripcion}</p>
-                  )}
-                </td>
-                <td className="py-2">{cotizacion.cantidadPersonas}</td>
-                <td className="py-2">
-                  {item.moneda.simbolo}
-                  {Number(item.precioUnitario).toFixed(2)} {item.moneda.codigo}
-                </td>
-                <td className="py-2">
-                  {item.moneda.simbolo}
-                  {(Number(item.precioUnitario) * cotizacion.cantidadPersonas).toFixed(2)} {item.moneda.codigo}
-                </td>
-              </tr>
-            ))}
+            {agruparPorDia(cotizacion).map(([dia, itemsDia]) =>
+              itemsDia.map((item, idx) => (
+                <tr key={item.id} className="border-t align-top">
+                  <td className="py-2">{idx === 0 ? `Día ${dia}` : ""}</td>
+                  <td className="py-2">
+                    <p className="font-medium">{item.servicio.nombre}</p>
+                    {item.servicio.descripcion && (
+                      <p className="text-xs text-gray-400">{item.servicio.descripcion}</p>
+                    )}
+                  </td>
+                  <td className="py-2">{horasDe(item) ?? "-"}</td>
+                  <td className="py-2">{cotizacion.cantidadPersonas}</td>
+                  <td className="py-2">
+                    {item.moneda.simbolo}
+                    {Number(item.precioUnitario).toFixed(2)} {item.moneda.codigo}
+                  </td>
+                  <td className="py-2">
+                    {item.moneda.simbolo}
+                    {(Number(item.precioUnitario) * cotizacion.cantidadPersonas).toFixed(2)} {item.moneda.codigo}
+                  </td>
+                </tr>
+              )),
+            )}
           </tbody>
         </table>
       </div>
