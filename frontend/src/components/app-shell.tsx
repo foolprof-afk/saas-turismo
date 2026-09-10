@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", pagina: "dashboard" },
   { href: "/reservas", label: "Reservas", pagina: "reservas" },
+  { href: "/cotizaciones", label: "Cotizaciones", pagina: "cotizaciones" },
   { href: "/clientes", label: "Clientes", pagina: "clientes" },
   { href: "/operacion", label: "Operación", pagina: "operacion" },
 ];
@@ -28,6 +29,7 @@ const NAV_ADMIN = [
   { href: "/impuestos", label: "Impuestos", pagina: "impuestos" },
   { href: "/monedas", label: "Monedas", pagina: "monedas" },
   { href: "/formas-pago", label: "Formas de pago", pagina: "formas-pago" },
+  { href: "/listas-precio", label: "Listas de precio", pagina: "listas-precio" },
 ];
 
 const ALL_NAV = [...NAV, ...NAV_ADMIN];

@@ -37,4 +37,10 @@ export class CreateUsuarioDto {
   @IsArray()
   @IsString({ each: true })
   usuariosVisiblesIds?: string[];
+
+  // Listas de precio a las que este usuario tendrá acceso al crear cotizaciones/reservas.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  listasPrecioIds?: string[];
 }

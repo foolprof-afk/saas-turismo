@@ -13,7 +13,12 @@ export class UsuariosService {
   findAll(agenciaId: string, skip = 0, take = 20) {
     return this.prisma.usuario.findMany({
       where: { agenciaId },
-      include: { rol: true, cliente: true, usuariosVisibles: { select: { id: true, nombre: true } } },
+      include: {
+        rol: true,
+        cliente: true,
+        usuariosVisibles: { select: { id: true, nombre: true } },
+        listasPrecio: { select: { id: true, nombre: true } },
+      },
       skip,
       take,
       orderBy: { nombre: 'asc' },
@@ -38,7 +43,12 @@ export class UsuariosService {
   async findOne(agenciaId: string, id: string) {
     const usuario = await this.prisma.usuario.findFirst({
       where: { id, agenciaId },
-      include: { rol: true, cliente: true, usuariosVisibles: { select: { id: true, nombre: true } } },
+      include: {
+        rol: true,
+        cliente: true,
+        usuariosVisibles: { select: { id: true, nombre: true } },
+        listasPrecio: { select: { id: true, nombre: true } },
+      },
     });
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
     return usuario;
@@ -46,7 +56,7 @@ export class UsuariosService {
 
   async create(agenciaId: string, dto: CreateUsuarioDto) {
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const { password, permisos, usuariosVisiblesIds, ...rest } = dto;
+    const { password, permisos, usuariosVisiblesIds, listasPrecioIds, ...rest } = dto;
     return this.prisma.usuario.create({
       data: {
         ...rest,
@@ -55,6 +65,9 @@ export class UsuariosService {
         permisos: (permisos ?? {}) as Prisma.InputJsonValue,
         ...(usuariosVisiblesIds?.length
           ? { usuariosVisibles: { connect: usuariosVisiblesIds.map((id) => ({ id })) } }
+          : {}),
+        ...(listasPrecioIds?.length
+          ? { listasPrecio: { connect: listasPrecioIds.map((id) => ({ id })) } }
           : {}),
       },
     });
@@ -68,12 +81,17 @@ export class UsuariosService {
     }
     const usuariosVisiblesIds = data.usuariosVisiblesIds as string[] | undefined;
     delete data.usuariosVisiblesIds;
+    const listasPrecioIds = data.listasPrecioIds as string[] | undefined;
+    delete data.listasPrecioIds;
     return this.prisma.usuario.update({
       where: { id },
       data: {
         ...data,
         ...(usuariosVisiblesIds
           ? { usuariosVisibles: { set: usuariosVisiblesIds.map((uid) => ({ id: uid })) } }
+          : {}),
+        ...(listasPrecioIds
+          ? { listasPrecio: { set: listasPrecioIds.map((id) => ({ id })) } }
           : {}),
       },
     });
