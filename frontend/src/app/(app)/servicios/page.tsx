@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface Opcion {
   id: string;
@@ -29,6 +30,8 @@ interface Servicio {
 }
 
 export default function ServiciosPage() {
+  const { usuario } = useAuth();
+  const verCostos = usuario?.rol === "admin";
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [proveedores, setProveedores] = useState<Opcion[]>([]);
   const [tiposServicio, setTiposServicio] = useState<Opcion[]>([]);
@@ -216,36 +219,38 @@ export default function ServiciosPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium">Precio base</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={precioBase}
-              onChange={(e) => setPrecioBase(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
+        {verCostos && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium">Precio base</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={precioBase}
+                onChange={(e) => setPrecioBase(e.target.value)}
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Moneda</label>
+              <select
+                required
+                value={monedaId}
+                onChange={(e) => setMonedaId(e.target.value)}
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              >
+                <option value="">Seleccionar...</option>
+                {monedas.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.codigo}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Moneda</label>
-            <select
-              required
-              value={monedaId}
-              onChange={(e) => setMonedaId(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            >
-              <option value="">Seleccionar...</option>
-              {monedas.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.codigo}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -355,21 +360,21 @@ export default function ServiciosPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Proveedor</th>
               <th className="px-4 py-2">Tipo</th>
-              <th className="px-4 py-2">Precio</th>
+              {verCostos && <th className="px-4 py-2">Precio</th>}
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verCostos ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && serviciosFiltrados.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verCostos ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
                   {servicios.length === 0 ? "No hay servicios todavía" : "Sin resultados para la búsqueda"}
                 </td>
               </tr>
@@ -386,7 +391,7 @@ export default function ServiciosPage() {
                 </td>
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "-"}</td>
-                <td className="px-4 py-2">{s.precioBase}</td>
+                {verCostos && <td className="px-4 py-2">{s.precioBase}</td>}
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(s)} className="text-blue-600 hover:underline">
                     Editar

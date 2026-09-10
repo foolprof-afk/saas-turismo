@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
+import { useAuth } from "@/lib/auth-context";
 
 interface ServicioOpcion {
   id: string;
@@ -28,6 +29,8 @@ interface ListaPrecio {
 
 export default function NuevaCotizacionPage() {
   const router = useRouter();
+  const { usuario } = useAuth();
+  const verPorcentajes = usuario?.rol === "admin";
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
 
@@ -166,7 +169,8 @@ export default function NuevaCotizacionPage() {
               <option value="">Precio base (sin lista)</option>
               {listasPrecio.map((l) => (
                 <option key={l.id} value={l.id}>
-                  {l.nombre} (+{l.porcentajeAdicional}%)
+                  {l.nombre}
+                  {verPorcentajes ? ` (+${l.porcentajeAdicional}%)` : ""}
                 </option>
               ))}
             </select>
@@ -219,7 +223,8 @@ export default function NuevaCotizacionPage() {
                   {s && (
                     <p className="text-xs text-gray-400">
                       {s.descripcion ?? "Sin descripción"} · precio con lista:{" "}
-                      {(Number(s.precioBase) * factor).toFixed(2)} x {cantidadPersonas || 0} personas
+                      {(Number(s.precioBase) * factor).toFixed(2)} x {cantidadPersonas || 0} personas = total{" "}
+                      {(Number(s.precioBase) * factor * (Number(cantidadPersonas) || 0)).toFixed(2)}
                       {horas ? ` · ${horas} h` : ""}
                     </p>
                   )}

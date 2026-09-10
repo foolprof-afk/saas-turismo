@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface CotizacionItem {
   id: string;
@@ -66,6 +67,8 @@ function totalesPorMoneda(cotizacion: CotizacionDetalle) {
 
 export default function CotizacionDetallePage() {
   const params = useParams<{ id: string }>();
+  const { usuario } = useAuth();
+  const verPorcentajes = usuario?.rol === "admin";
   const [cotizacion, setCotizacion] = useState<CotizacionDetalle | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
@@ -115,50 +118,165 @@ export default function CotizacionDetallePage() {
   const descargarPDF = async () => {
     const { jsPDF } = await import("jspdf");
 
-    const lineas: string[] = [];
-    lineas.push(`Responsable: ${cotizacion.pasajeroResponsable}`);
-    lineas.push(`Cantidad de personas: ${cotizacion.cantidadPersonas}`);
-    lineas.push(`Fecha: ${new Date(cotizacion.fechaServicio).toLocaleDateString()}`);
-    lineas.push("");
-    lineas.push("Servicios:");
-    agruparPorDia(cotizacion).forEach(([dia, itemsDia]) => {
-      lineas.push(`Día ${dia}:`);
-      itemsDia.forEach((item) => {
-        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
-        const horas = horasDe(item);
-        lineas.push(
-          `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`,
-        );
-        if (item.servicio.descripcion) lineas.push(`  ${item.servicio.descripcion}`);
-      });
-    });
-    lineas.push("");
-    totales.forEach((t) => lineas.push(`Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`));
-    if (cotizacion.notas) {
-      lineas.push("");
-      lineas.push(`Notas: ${cotizacion.notas}`);
-    }
+    const doc = new jsPDF({ unit: "mm", format: "letter" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 15;
+    const marginBottom = 15;
+    const anchoUtil = pageWidth - marginX * 2;
+    let y = 15;
+
+    const saltoDePaginaSiNecesario = (alturaNecesaria: number) => {
+      if (y + alturaNecesaria > pageHeight - marginBottom) {
+        doc.addPage();
+        y = 15;
+      }
+    };
 
     const logo = logoDe(cotizacion);
-    const logoSizeMm = 20;
-    const lineHeightMm = 5;
-    const alturaMm = 30 + lineas.length * lineHeightMm + (logo ? logoSizeMm + 5 : 0);
-
-    const doc = new jsPDF({ unit: "mm", format: [80, Math.max(alturaMm, 100)] });
-    let y = 10;
     if (logo) {
-      doc.addImage(logo, formatoImagenDataUrl(logo), (80 - logoSizeMm) / 2, y, logoSizeMm, logoSizeMm);
-      y += logoSizeMm + 5;
+      const logoSizeMm = 18;
+      doc.addImage(logo, formatoImagenDataUrl(logo), marginX, y, logoSizeMm, logoSizeMm);
     }
-    doc.setFontSize(12);
-    doc.text(`Cotización ${cotizacion.codigoCotizacion}`, 5, y);
+    doc.setFontSize(16);
+    doc.text(`Cotización ${cotizacion.codigoCotizacion}`, pageWidth - marginX, y + 5, { align: "right" });
+    doc.setFontSize(10);
+    doc.text(`Estado: ${cotizacion.estado}`, pageWidth - marginX, y + 11, { align: "right" });
+    if (cotizacion.agencia?.nombre) {
+      doc.text(cotizacion.agencia.nombre, pageWidth - marginX, y + 17, { align: "right" });
+    }
+    y += 26;
+
+    doc.setDrawColor(200);
+    doc.line(marginX, y, pageWidth - marginX, y);
     y += 7;
-    doc.setFontSize(9);
-    lineas.forEach((linea) => {
-      const wrapped = doc.splitTextToSize(linea, 70);
-      doc.text(wrapped, 5, y);
-      y += wrapped.length * lineHeightMm;
+
+    doc.setFontSize(10);
+    const datos: [string, string][] = [
+      ["Responsable", cotizacion.pasajeroResponsable],
+      ["Cantidad de personas", String(cotizacion.cantidadPersonas)],
+      ["Fecha", new Date(cotizacion.fechaServicio).toLocaleDateString()],
+      ["Vendedor", cotizacion.vendedor?.nombre ?? "-"],
+    ];
+    if (cotizacion.documentoResponsable) datos.push(["Documento", cotizacion.documentoResponsable]);
+    if (cotizacion.telefonoResponsable) datos.push(["Teléfono", cotizacion.telefonoResponsable]);
+    if (cotizacion.listaPrecio) {
+      datos.push([
+        "Lista de precio",
+        verPorcentajes
+          ? `${cotizacion.listaPrecio.nombre} (+${cotizacion.listaPrecio.porcentajeAdicional}%)`
+          : cotizacion.listaPrecio.nombre,
+      ]);
+    }
+    const colAncho = anchoUtil / 2;
+    datos.forEach(([label, valor], i) => {
+      const col = i % 2;
+      const fila = Math.floor(i / 2);
+      const x = marginX + col * colAncho;
+      const filaY = y + fila * 6;
+      doc.setFont("helvetica", "bold");
+      doc.text(`${label}:`, x, filaY);
+      doc.setFont("helvetica", "normal");
+      doc.text(valor, x + 38, filaY);
     });
+    y += Math.ceil(datos.length / 2) * 6 + 6;
+
+    doc.setDrawColor(200);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 8;
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Servicios cotizados", marginX, y);
+    doc.setFont("helvetica", "normal");
+    y += 7;
+
+    const colX = {
+      dia: marginX,
+      servicio: marginX + 15,
+      horas: marginX + 100,
+      cantidad: marginX + 118,
+      unitario: marginX + 138,
+      subtotal: marginX + 165,
+    };
+
+    const dibujarEncabezadoTabla = () => {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Día", colX.dia, y);
+      doc.text("Servicio", colX.servicio, y);
+      doc.text("Horas", colX.horas, y);
+      doc.text("Cant.", colX.cantidad, y);
+      doc.text("P. unit.", colX.unitario, y);
+      doc.text("Subtotal", colX.subtotal, y);
+      doc.setFont("helvetica", "normal");
+      y += 2;
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 5;
+    };
+
+    saltoDePaginaSiNecesario(15);
+    dibujarEncabezadoTabla();
+
+    agruparPorDia(cotizacion).forEach(([dia, itemsDia]) => {
+      itemsDia.forEach((item, idx) => {
+        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+        const horas = horasDe(item);
+        const nombreLineas = doc.splitTextToSize(item.servicio.nombre, colX.horas - colX.servicio - 3);
+        const descLineas = item.servicio.descripcion
+          ? doc.splitTextToSize(item.servicio.descripcion, colX.horas - colX.servicio - 3)
+          : [];
+        const alturaFila = (nombreLineas.length + descLineas.length) * 4.5 + 2;
+
+        saltoDePaginaSiNecesario(alturaFila + 5);
+        if (idx === 0) {
+          doc.setFont("helvetica", "bold");
+          doc.text(`Día ${dia}`, colX.dia, y);
+          doc.setFont("helvetica", "normal");
+        }
+        doc.setFontSize(9);
+        doc.text(nombreLineas, colX.servicio, y);
+        doc.text(horas ? `${horas} h` : "-", colX.horas, y);
+        doc.text(String(cotizacion.cantidadPersonas), colX.cantidad, y);
+        doc.text(`${item.moneda.simbolo}${Number(item.precioUnitario).toFixed(2)}`, colX.unitario, y);
+        doc.text(`${item.moneda.simbolo}${subtotal.toFixed(2)}`, colX.subtotal, y);
+        y += nombreLineas.length * 4.5;
+        if (descLineas.length) {
+          doc.setFontSize(8);
+          doc.setTextColor(120);
+          doc.text(descLineas, colX.servicio, y);
+          doc.setTextColor(0);
+          y += descLineas.length * 4.5;
+        }
+        y += 2;
+      });
+    });
+
+    y += 4;
+    saltoDePaginaSiNecesario(6 * totales.length + 10);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 7;
+    doc.setFontSize(11);
+    totales.forEach((t) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`, pageWidth - marginX, y, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      y += 6;
+    });
+
+    if (cotizacion.notas) {
+      y += 4;
+      saltoDePaginaSiNecesario(15);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Notas", marginX, y);
+      doc.setFont("helvetica", "normal");
+      y += 5;
+      doc.setFontSize(9);
+      const notasLineas = doc.splitTextToSize(cotizacion.notas, anchoUtil);
+      doc.text(notasLineas, marginX, y);
+    }
+
     doc.save(`${cotizacion.codigoCotizacion}.pdf`);
   };
 
@@ -274,8 +392,8 @@ export default function CotizacionDetallePage() {
           </p>
           {cotizacion.listaPrecio && (
             <p>
-              <span className="text-gray-400">Lista de precio:</span> {cotizacion.listaPrecio.nombre} (+
-              {cotizacion.listaPrecio.porcentajeAdicional}%)
+              <span className="text-gray-400">Lista de precio:</span> {cotizacion.listaPrecio.nombre}
+              {verPorcentajes ? ` (+${cotizacion.listaPrecio.porcentajeAdicional}%)` : ""}
             </p>
           )}
         </div>

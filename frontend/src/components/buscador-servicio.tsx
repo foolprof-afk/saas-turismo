@@ -29,7 +29,7 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
 
   useEffect(() => {
     const seleccionado = servicios.find((s) => s.id === value);
-    setQuery(seleccionado ? `${seleccionado.nombre} — ${seleccionado.precioBase}` : "");
+    setQuery(seleccionado ? seleccionado.nombre : "");
   }, [value, servicios]);
 
   useEffect(() => {
@@ -75,12 +75,12 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
               key={s.id}
               onClick={() => {
                 onChange(s.id);
-                setQuery(`${s.nombre} — ${s.precioBase}`);
+                setQuery(s.nombre);
                 setOpen(false);
               }}
               className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
             >
-              {s.nombre} <span className="text-gray-400">— {s.precioBase}</span>
+              {s.nombre}
               {s.palabrasClave && s.palabrasClave.length > 0 && (
                 <span className="ml-1 text-xs text-gray-400">
                   {s.palabrasClave.map((p) => `#${p}`).join(" ")}
