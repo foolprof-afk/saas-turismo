@@ -13,6 +13,11 @@ interface Cliente {
   nombre: string;
 }
 
+interface ListaPrecio {
+  id: string;
+  nombre: string;
+}
+
 interface PermisoAccion {
   leer?: boolean;
   escribir?: boolean;
@@ -31,11 +36,13 @@ interface Usuario {
   cliente?: Cliente | null;
   permisos?: Record<string, PermisoAccion>;
   usuariosVisibles?: { id: string; nombre: string }[];
+  listasPrecio?: { id: string; nombre: string }[];
 }
 
 const PAGINAS_BASE = [
   { key: "dashboard", label: "Dashboard" },
   { key: "reservas", label: "Reservas" },
+  { key: "cotizaciones", label: "Cotizaciones" },
   { key: "clientes", label: "Clientes" },
   { key: "operacion", label: "Operación" },
 ];
@@ -54,6 +61,7 @@ const PAGINAS_ADMIN = [
   { key: "impuestos", label: "Impuestos" },
   { key: "monedas", label: "Monedas" },
   { key: "formas-pago", label: "Formas de pago" },
+  { key: "listas-precio", label: "Listas de precio" },
 ];
 
 const PAGINAS = [...PAGINAS_BASE, ...PAGINAS_ADMIN];
@@ -67,6 +75,7 @@ export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -79,6 +88,7 @@ export default function UsuariosPage() {
   const [clienteId, setClienteId] = useState("");
   const [permisos, setPermisos] = useState<Record<string, PermisoAccion>>(permisosVacios());
   const [usuariosVisiblesIds, setUsuariosVisiblesIds] = useState<string[]>([]);
+  const [listasPrecioIds, setListasPrecioIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -95,6 +105,7 @@ export default function UsuariosPage() {
     cargar();
     api.get<Rol[]>("/roles").then(setRoles).catch(() => null);
     api.get<Cliente[]>("/clientes?limit=500").then(setClientes).catch(() => null);
+    api.get<ListaPrecio[]>("/listas-precio?limit=500").then(setListasPrecio).catch(() => null);
   }, []);
 
   const resetForm = () => {
@@ -108,6 +119,7 @@ export default function UsuariosPage() {
     setClienteId("");
     setPermisos(permisosVacios());
     setUsuariosVisiblesIds([]);
+    setListasPrecioIds([]);
   };
 
   const editar = (u: Usuario) => {
@@ -121,10 +133,15 @@ export default function UsuariosPage() {
     setClienteId(u.clienteId ?? "");
     setPermisos({ ...permisosVacios(), ...(u.permisos ?? {}) });
     setUsuariosVisiblesIds((u.usuariosVisibles ?? []).map((v) => v.id));
+    setListasPrecioIds((u.listasPrecio ?? []).map((v) => v.id));
   };
 
   const toggleUsuarioVisible = (id: string) => {
     setUsuariosVisiblesIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleListaPrecio = (id: string) => {
+    setListasPrecioIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   const togglePermiso = (pagina: string, accion: keyof PermisoAccion) => {
@@ -158,6 +175,7 @@ export default function UsuariosPage() {
           clienteId: clienteId || null,
           permisos,
           usuariosVisiblesIds,
+          listasPrecioIds,
         };
         if (password) data.password = password;
         await api.put(`/usuarios/${editingId}`, data);
@@ -171,6 +189,7 @@ export default function UsuariosPage() {
           clienteId: clienteId || undefined,
           permisos,
           usuariosVisiblesIds,
+          listasPrecioIds,
         });
       }
       resetForm();
@@ -338,6 +357,29 @@ export default function UsuariosPage() {
                   {u.nombre} <span className="text-gray-400">({u.email})</span>
                 </label>
               ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium">Listas de precio (opcional)</label>
+          <p className="mb-2 text-xs text-gray-400">
+            Listas de precio a las que este usuario tendrá acceso al crear cotizaciones o reservas.
+            Si solo marcas una, esa será la única que podrá usar.
+          </p>
+          <div className="max-h-48 overflow-y-auto rounded border">
+            {listasPrecio.length === 0 && (
+              <p className="px-3 py-2 text-sm text-gray-400">No hay listas de precio creadas</p>
+            )}
+            {listasPrecio.map((l) => (
+              <label key={l.id} className="flex items-center gap-2 border-t px-3 py-2 text-sm first:border-t-0">
+                <input
+                  type="checkbox"
+                  checked={listasPrecioIds.includes(l.id)}
+                  onChange={() => toggleListaPrecio(l.id)}
+                />
+                {l.nombre}
+              </label>
+            ))}
           </div>
         </div>
 

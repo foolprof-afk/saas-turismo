@@ -14,6 +14,7 @@ import { MonedasModule } from './monedas/monedas.module';
 import { ImpuestosModule } from './impuestos/impuestos.module';
 import { FormasPagoModule } from './formas-pago/formas-pago.module';
 import { LogsModule } from './logs/logs.module';
+import { ListasPrecioModule } from './listas-precio/listas-precio.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { LogsModule } from './logs/logs.module';
     ImpuestosModule,
     FormasPagoModule,
     LogsModule,
+    ListasPrecioModule,
   ],
 })
 export class MantenedoresModule {}

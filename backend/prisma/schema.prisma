@@ -102,6 +102,8 @@ model Agencia {
   impuestos             Impuesto[]
   formasPago            FormaPago[]
   logsActividad         LogActividad[]
+  listasPrecio          ListaPrecio[]
+  cotizaciones          Cotizacion[]
 
   @@map("agencias")
 }
@@ -144,8 +146,84 @@ model Usuario {
 
   logsActividad LogActividad[]
 
+  // Listas de precio a las que este usuario tiene acceso al crear cotizaciones/reservas
+  // (ver ListaPrecio). Si solo tiene una, es la unica que puede usar.
+  listasPrecio        ListaPrecio[] @relation("UsuarioListaPrecio")
+  cotizacionesVendidas Cotizacion[] @relation("VendedorCotizacion")
+
   @@unique([agenciaId, email])
   @@map("usuarios")
+}
+
+// Lista de precios: define un porcentaje adicional sobre el precio base de los servicios,
+// usado al crear cotizaciones (y reservas). Cada usuario solo puede usar las listas a las
+// que se le dio acceso explicitamente (Usuario.listasPrecio).
+model ListaPrecio {
+  id                  String        @id @default(cuid())
+  agenciaId           String
+  nombre              String
+  porcentajeAdicional Decimal       @default(0) @db.Decimal(5, 2)
+  estado              EstadoGeneral @default(ACTIVO)
+
+  agencia      Agencia          @relation(fields: [agenciaId], references: [id])
+  usuarios     Usuario[]        @relation("UsuarioListaPrecio")
+  cotizaciones Cotizacion[]
+
+  @@map("listas_precio")
+}
+
+enum EstadoCotizacion {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+}
+
+// Cotizacion: igual que una reserva pero sin comprometer el servicio todavia. Se puede
+// transformar en una Reserva real con "confirmar" (ver CotizacionesService.confirmar), que
+// reutiliza ReservasService.create con tipo MULTIPLE a partir de los items de la cotizacion.
+model Cotizacion {
+  id                    String           @id @default(cuid())
+  agenciaId             String
+  clienteId             String
+  vendedorId            String
+  listaPrecioId         String?
+  reservaId             String?          @unique
+  codigoCotizacion      String           @unique
+  estado                EstadoCotizacion @default(PENDIENTE)
+  cantidadPersonas      Int
+  pasajeroResponsable   String
+  documentoResponsable  String?
+  telefonoResponsable   String?
+  fechaServicio         DateTime
+  notas                 String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  agencia     Agencia          @relation(fields: [agenciaId], references: [id])
+  cliente     Cliente          @relation(fields: [clienteId], references: [id])
+  vendedor    Usuario          @relation("VendedorCotizacion", fields: [vendedorId], references: [id])
+  listaPrecio ListaPrecio?     @relation(fields: [listaPrecioId], references: [id])
+  reserva     Reserva?         @relation(fields: [reservaId], references: [id])
+  items       CotizacionItem[]
+
+  @@map("cotizaciones")
+}
+
+// Linea de servicio de una cotizacion. precioUnitario queda congelado al crear la cotizacion
+// (precioBase del servicio + el factor de la lista de precios en ese momento), para que el
+// documento de salida no cambie si luego se edita el servicio o la lista de precios.
+model CotizacionItem {
+  id             String  @id @default(cuid())
+  cotizacionId   String
+  servicioId     String
+  precioUnitario Decimal @db.Decimal(12, 2)
+  monedaId       String
+
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  servicio   Servicio   @relation(fields: [servicioId], references: [id])
+  moneda     Moneda     @relation(fields: [monedaId], references: [id])
+
+  @@map("cotizacion_items")
 }
 
 // Registro de auditoria: login, acceso a pantallas por menu, y creacion/modificacion/eliminacion
@@ -187,10 +265,11 @@ model Cliente {
   logoUrl   String? // opcional: si se define, se muestra en el voucher en vez del logo de la agencia
   createdAt DateTime @default(now())
 
-  agencia            Agencia   @relation(fields: [agenciaId], references: [id])
-  usuario            Usuario?  @relation(fields: [usuarioId], references: [id])
-  usuariosDelCliente Usuario[] @relation("ClienteUsuarios")
+  agencia            Agencia      @relation(fields: [agenciaId], references: [id])
+  usuario            Usuario?     @relation(fields: [usuarioId], references: [id])
+  usuariosDelCliente Usuario[]    @relation("ClienteUsuarios")
   reservas           Reserva[]
+  cotizaciones       Cotizacion[]
 
   @@map("clientes")
 }
@@ -232,6 +311,7 @@ model Reserva {
   voucher    Voucher?
   itinerario Itinerario?
   pagos      Pago[]
+  cotizacion Cotizacion?
 
   @@map("reservas")
 }
@@ -332,6 +412,7 @@ model Servicio {
   plantillaItems           PlantillaItinerarioServicio[]
   itinerarioItems          ItinerarioServicio[]
   reservas                 Reserva[]
+  cotizacionItems          CotizacionItem[]
 
   @@map("servicios")
 }
@@ -540,6 +621,7 @@ model Moneda {
   reservas           Reserva[]
   itinerarioServicios ItinerarioServicio[]
   pagos              Pago[]
+  cotizacionItems    CotizacionItem[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")
