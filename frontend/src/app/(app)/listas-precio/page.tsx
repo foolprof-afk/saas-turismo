@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 interface ListaPrecio {
   id: string;
@@ -11,6 +12,8 @@ interface ListaPrecio {
 }
 
 export default function ListasPrecioPage() {
+  const { usuario } = useAuth();
+  const verPorcentajes = usuario?.rol === "admin";
   const [listas, setListas] = useState<ListaPrecio[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -102,19 +105,21 @@ export default function ListasPrecioPage() {
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium">Porcentaje adicional</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={porcentajeAdicional}
-              onChange={(e) => setPorcentajeAdicional(e.target.value)}
-              placeholder="Ej: 10"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
-          </div>
+          {verPorcentajes && (
+            <div>
+              <label className="block text-sm font-medium">Porcentaje adicional</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={porcentajeAdicional}
+                onChange={(e) => setPorcentajeAdicional(e.target.value)}
+                placeholder="Ej: 10"
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              />
+            </div>
+          )}
         </div>
 
         <div>
@@ -156,7 +161,7 @@ export default function ListasPrecioPage() {
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Nombre</th>
-              <th className="px-4 py-2">% adicional</th>
+              {verPorcentajes && <th className="px-4 py-2">% adicional</th>}
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -164,14 +169,14 @@ export default function ListasPrecioPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verPorcentajes ? 4 : 3} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && listas.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verPorcentajes ? 4 : 3} className="px-4 py-6 text-center text-gray-400">
                   No hay listas de precio todavía
                 </td>
               </tr>
@@ -179,7 +184,7 @@ export default function ListasPrecioPage() {
             {listas.map((l) => (
               <tr key={l.id} className="border-t">
                 <td className="px-4 py-2">{l.nombre}</td>
-                <td className="px-4 py-2">{l.porcentajeAdicional}%</td>
+                {verPorcentajes && <td className="px-4 py-2">{l.porcentajeAdicional}%</td>}
                 <td className="px-4 py-2">{l.estado}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(l)} className="mr-3 text-blue-600 hover:underline">
