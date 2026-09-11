@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
 
 interface CotizacionItem {
   id: string;
@@ -67,8 +66,6 @@ function totalesPorMoneda(cotizacion: CotizacionDetalle) {
 
 export default function CotizacionDetallePage() {
   const params = useParams<{ id: string }>();
-  const { usuario } = useAuth();
-  const verPorcentajes = usuario?.rol === "admin";
   const [cotizacion, setCotizacion] = useState<CotizacionDetalle | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
@@ -161,12 +158,7 @@ export default function CotizacionDetallePage() {
     if (cotizacion.documentoResponsable) datos.push(["Documento", cotizacion.documentoResponsable]);
     if (cotizacion.telefonoResponsable) datos.push(["Teléfono", cotizacion.telefonoResponsable]);
     if (cotizacion.listaPrecio) {
-      datos.push([
-        "Lista de precio",
-        verPorcentajes
-          ? `${cotizacion.listaPrecio.nombre} (+${cotizacion.listaPrecio.porcentajeAdicional}%)`
-          : cotizacion.listaPrecio.nombre,
-      ]);
+      datos.push(["Lista de precio", cotizacion.listaPrecio.nombre]);
     }
     const colAncho = anchoUtil / 2;
     datos.forEach(([label, valor], i) => {
@@ -393,7 +385,6 @@ export default function CotizacionDetallePage() {
           {cotizacion.listaPrecio && (
             <p>
               <span className="text-gray-400">Lista de precio:</span> {cotizacion.listaPrecio.nombre}
-              {verPorcentajes ? ` (+${cotizacion.listaPrecio.porcentajeAdicional}%)` : ""}
             </p>
           )}
         </div>
