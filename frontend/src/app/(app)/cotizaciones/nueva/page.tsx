@@ -4,7 +4,6 @@ import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
-import { useAuth } from "@/lib/auth-context";
 
 interface ServicioOpcion {
   id: string;
@@ -29,8 +28,6 @@ interface ListaPrecio {
 
 export default function NuevaCotizacionPage() {
   const router = useRouter();
-  const { usuario } = useAuth();
-  const verPorcentajes = usuario?.rol === "admin";
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
 
@@ -170,7 +167,6 @@ export default function NuevaCotizacionPage() {
               {listasPrecio.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.nombre}
-                  {verPorcentajes ? ` (+${l.porcentajeAdicional}%)` : ""}
                 </option>
               ))}
             </select>
