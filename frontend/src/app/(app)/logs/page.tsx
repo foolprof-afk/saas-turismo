@@ -102,7 +102,7 @@ export default function LogsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 rounded-lg border bg-white p-5 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 rounded-lg border bg-white p-5 sm:grid-cols-3 md:grid-cols-5">
         <div>
           <label className="block text-sm font-medium">Usuario</label>
           <select
@@ -170,8 +170,8 @@ export default function LogsPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border bg-white">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Fecha y hora</th>

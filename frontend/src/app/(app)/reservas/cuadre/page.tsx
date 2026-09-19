@@ -305,7 +305,7 @@ export default function CuadreDeCajaPage() {
             <h2 className="mb-3 text-sm font-semibold text-gray-500">
               Totales por moneda (dinero real en caja por tipo de moneda)
             </h2>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="text-left text-gray-500">
                 <tr>
                   <th className="py-1">Moneda</th>
@@ -354,7 +354,7 @@ export default function CuadreDeCajaPage() {
 
           <div className="rounded-lg border bg-white p-5">
             <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por vendedor y moneda</h2>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="text-left text-gray-500">
                 <tr>
                   <th className="py-1">Vendedor</th>
@@ -389,8 +389,8 @@ export default function CuadreDeCajaPage() {
             </table>
           </div>
 
-          <div className="overflow-hidden rounded-lg border bg-white">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border bg-white">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-gray-50 text-left text-gray-500">
                 <tr>
                   <th className="px-4 py-2">Código</th>

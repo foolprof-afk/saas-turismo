@@ -362,7 +362,7 @@ export default function CotizacionDetallePage() {
 
       <div className="rounded-lg border bg-white p-5">
         <h2 className="mb-3 text-sm font-semibold text-gray-500">Datos del responsable</h2>
-        <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           <p>
             <span className="text-gray-400">Nombre:</span> {cotizacion.pasajeroResponsable}
           </p>
@@ -392,7 +392,7 @@ export default function CotizacionDetallePage() {
 
       <div className="rounded-lg border bg-white p-5">
         <h2 className="mb-3 text-sm font-semibold text-gray-500">Servicios cotizados</h2>
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="text-left text-gray-500">
             <tr>
               <th className="py-1">Día</th>
