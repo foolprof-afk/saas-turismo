@@ -47,13 +47,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">Cargando...</div>;
   }
 
-  const items =
-    usuario.rol === "admin"
+  const items = [
+    ...(usuario.rol === "admin"
       ? ALL_NAV
       : [
           ...NAV.filter((item) => usuario.permisos?.[item.pagina]?.leer !== false),
           ...NAV_ADMIN.filter((item) => usuario.permisos?.[item.pagina]?.leer === true),
-        ];
+        ]),
+    ...(usuario.agenciaEsPlataforma ? [{ href: "/agencias", label: "Agencias", pagina: "agencias" }] : []),
+  ];
 
   return (
     <div className="flex min-h-screen">

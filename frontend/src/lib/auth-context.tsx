@@ -18,12 +18,13 @@ interface Usuario {
   agenciaId: string;
   clienteId?: string | null;
   permisos?: Record<string, PermisoAccion>;
+  agenciaEsPlataforma?: boolean;
 }
 
 interface AuthContextValue {
   usuario: Usuario | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, agenciaSlug?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -40,10 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, agenciaSlug?: string) => {
     const data = await api.post<{ accessToken: string; usuario: Usuario }>("/auth/login", {
       email,
       password,
+      agenciaSlug,
     });
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("usuario", JSON.stringify(data.usuario));

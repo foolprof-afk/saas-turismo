@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   email: string;
   clienteId: string | null;
   permisos: PermisosUsuario;
+  agenciaEsPlataforma: boolean;
 }
 
 export const CurrentUser = createParamDecorator(

@@ -14,9 +14,22 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, ip?: string) {
+    let agenciaId: string | undefined;
+    if (dto.agenciaSlug) {
+      const agencia = await this.prisma.agencia.findUnique({
+        where: { subdominio: dto.agenciaSlug },
+      });
+      if (!agencia || agencia.estado !== 'ACTIVO') {
+        throw new UnauthorizedException('Credenciales inválidas');
+      }
+      agenciaId = agencia.id;
+    }
+
     const usuario = await this.prisma.usuario.findFirst({
-      where: { email: dto.email, estado: 'ACTIVO' },
-      include: { rol: true },
+      where: agenciaId
+        ? { email: dto.email, estado: 'ACTIVO', agenciaId }
+        : { email: dto.email, estado: 'ACTIVO', agencia: { esPlataforma: true } },
+      include: { rol: true, agencia: { select: { esPlataforma: true } } },
     });
 
     if (!usuario) {
@@ -59,6 +72,7 @@ export class AuthService {
         agenciaId: usuario.agenciaId,
         clienteId: usuario.clienteId,
         permisos: usuario.permisos,
+        agenciaEsPlataforma: usuario.agencia.esPlataforma,
       },
     };
   }

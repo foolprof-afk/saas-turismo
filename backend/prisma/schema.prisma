@@ -83,6 +83,7 @@ model Agencia {
   logoUrl       String?
   subdominio    String        @unique
   plan          String        @default("fase1") // fase1 | fase2 | fase3
+  esPlataforma  Boolean       @default(false)
   estado        EstadoGeneral @default(ACTIVO)
   timezone      String        @default("America/Lima")
   createdAt     DateTime      @default(now())
