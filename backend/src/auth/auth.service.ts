@@ -29,7 +29,7 @@ export class AuthService {
       where: agenciaId
         ? { email: dto.email, estado: 'ACTIVO', agenciaId }
         : { email: dto.email, estado: 'ACTIVO', agencia: { esPlataforma: true } },
-      include: { rol: true, agencia: { select: { esPlataforma: true } } },
+      include: { rol: true, agencia: { select: { esPlataforma: true, subdominio: true } } },
     });
 
     if (!usuario) {
@@ -73,6 +73,7 @@ export class AuthService {
         clienteId: usuario.clienteId,
         permisos: usuario.permisos,
         agenciaEsPlataforma: usuario.agencia.esPlataforma,
+        agenciaSlug: usuario.agencia.subdominio,
       },
     };
   }

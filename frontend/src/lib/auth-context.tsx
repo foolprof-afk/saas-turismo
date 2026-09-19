@@ -19,6 +19,7 @@ interface Usuario {
   clienteId?: string | null;
   permisos?: Record<string, PermisoAccion>;
   agenciaEsPlataforma?: boolean;
+  agenciaSlug?: string | null;
 }
 
 interface AuthContextValue {
@@ -53,10 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    const destino =
+      usuario && !usuario.agenciaEsPlataforma && usuario.agenciaSlug
+        ? `/a/${usuario.agenciaSlug}`
+        : "/login";
     localStorage.removeItem("accessToken");
     localStorage.removeItem("usuario");
     setUsuario(null);
-    router.push("/login");
+    router.push(destino);
   };
 
   return (
