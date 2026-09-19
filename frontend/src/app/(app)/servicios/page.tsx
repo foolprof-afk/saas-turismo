@@ -184,7 +184,7 @@ export default function ServiciosPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Proveedor</label>
             <select
@@ -220,7 +220,7 @@ export default function ServiciosPage() {
         </div>
 
         {verCostos && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium">Precio base</label>
               <input
@@ -252,7 +252,7 @@ export default function ServiciosPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Capacidad máxima (opcional)</label>
             <input
@@ -275,7 +275,7 @@ export default function ServiciosPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Ruta (opcional)</label>
             <select
@@ -353,8 +353,8 @@ export default function ServiciosPage() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border bg-white">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Nombre</th>

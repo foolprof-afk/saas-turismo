@@ -141,7 +141,7 @@ export default function OperacionPage() {
       {mensaje && <p className="text-sm">{mensaje}</p>}
 
       <div className="overflow-x-auto rounded-lg border bg-white">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Hora</th>

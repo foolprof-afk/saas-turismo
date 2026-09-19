@@ -102,7 +102,7 @@ export default function NuevaCotizacionPage() {
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold">Nueva cotización</h1>
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Pasajero responsable</label>
             <input
@@ -126,7 +126,7 @@ export default function NuevaCotizacionPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Documento (opcional)</label>
             <input
@@ -145,7 +145,7 @@ export default function NuevaCotizacionPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Fecha del servicio</label>
             <input

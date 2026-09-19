@@ -346,7 +346,7 @@ export default function ReservaDetallePage() {
             )}
 
             {requiereMontoManual && (
-              <div className="grid grid-cols-2 gap-3 rounded border border-amber-200 bg-amber-50 p-3">
+              <div className="grid grid-cols-1 gap-3 rounded border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium">Monto de este pago</label>
                   <input
