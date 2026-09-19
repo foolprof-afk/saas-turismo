@@ -8,6 +8,7 @@ import { CreateCotizacionDto } from './dto/create-cotizacion.dto';
 import { UpdateCotizacionDto } from './dto/update-cotizacion.dto';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
+import { convertirMonto } from '../../../common/utils/reserva-montos.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -24,6 +25,7 @@ const INCLUDE_COTIZACION = {
   cliente: true,
   vendedor: true,
   listaPrecio: true,
+  moneda: true,
   reserva: { select: { id: true, codigoReserva: true } },
   items: { include: { servicio: true, moneda: true } },
 } as const;
@@ -129,9 +131,21 @@ export class CotizacionesService {
     return lista;
   }
 
+  /**
+   * Valida que la moneda exista y pertenezca a la agencia. Es la moneda en la que se le
+   * presenta el total al cliente; cada línea conserva su propia moneda de origen y se
+   * convierte al vuelo con convertirMonto (ver totalConvertido en findOne).
+   */
+  private async resolverMoneda(agenciaId: string, monedaId?: string) {
+    if (!monedaId) return null;
+    const moneda = await this.prisma.moneda.findFirst({ where: { id: monedaId, agenciaId } });
+    if (!moneda) throw new NotFoundException('Moneda no encontrada');
+    return moneda;
+  }
+
   private async construirItems(
     agenciaId: string,
-    items: { servicioId: string; dia?: number }[],
+    items: { servicioId: string; dia?: number; precioUnitario?: number }[],
     factor: number,
   ) {
     const itemsData: { servicioId: string; dia: number; precioUnitario: number; monedaId: string }[] = [];
@@ -141,7 +155,7 @@ export class CotizacionesService {
       itemsData.push({
         servicioId: servicio.id,
         dia: item.dia ?? 1,
-        precioUnitario: Number(servicio.precioBase) * factor,
+        precioUnitario: item.precioUnitario ?? Number(servicio.precioBase) * factor,
         monedaId: servicio.monedaId,
       });
     }
@@ -150,6 +164,7 @@ export class CotizacionesService {
 
   async create(agenciaId: string, vendedorId: string, user: AuthenticatedUser, dto: CreateCotizacionDto) {
     const listaPrecio = await this.resolverListaPrecio(agenciaId, user, dto.listaPrecioId);
+    const moneda = await this.resolverMoneda(agenciaId, dto.monedaId);
     const factor = 1 + (listaPrecio ? Number(listaPrecio.porcentajeAdicional) : 0) / 100;
     const itemsData = await this.construirItems(agenciaId, dto.items, factor);
     const cliente = await this.resolverClientePropio(agenciaId, vendedorId);
@@ -160,6 +175,7 @@ export class CotizacionesService {
         clienteId: cliente.id,
         vendedorId,
         listaPrecioId: listaPrecio?.id,
+        monedaId: moneda?.id,
         codigoCotizacion: this.generarCodigoCotizacion(),
         cantidadPersonas: dto.cantidadPersonas,
         pasajeroResponsable: dto.pasajeroResponsable,
@@ -202,6 +218,11 @@ export class CotizacionesService {
       data.listaPrecioId = listaPrecio ? dto.listaPrecioId : null;
     }
 
+    if (dto.monedaId !== undefined) {
+      const moneda = await this.resolverMoneda(agenciaId, dto.monedaId);
+      data.monedaId = moneda?.id ?? null;
+    }
+
     if (dto.items?.length) {
       const factor =
         1 +
@@ -240,6 +261,20 @@ export class CotizacionesService {
     const cotizacion = await this.prisma.cotizacion.findFirst({ where: { id, agenciaId } });
     if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
     return this.prisma.cotizacion.update({ where: { id }, data: { estado: 'CANCELADA' } });
+  }
+
+  /**
+   * Elimina definitivamente la cotización (cascada a sus items, ver schema.prisma). Solo se
+   * permite si nunca se confirmó como reserva (reservaId null); una vez que existe una reserva
+   * real vinculada, la cotización debe conservarse como respaldo histórico de esa reserva.
+   */
+  async eliminar(agenciaId: string, id: string) {
+    const cotizacion = await this.prisma.cotizacion.findFirst({ where: { id, agenciaId } });
+    if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
+    if (cotizacion.reservaId) {
+      throw new BadRequestException('No se puede eliminar una cotización que ya se convirtió en reserva');
+    }
+    return this.prisma.cotizacion.delete({ where: { id } });
   }
 
   /**

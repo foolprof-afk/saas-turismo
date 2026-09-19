@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
 
@@ -13,12 +14,6 @@ interface ServicioOpcion {
   monedaId: string;
   duracionMin?: number | null;
   palabrasClave?: string[];
-}
-
-interface LineaServicio {
-  servicioId: string;
-  dia: number;
-  precioUnitario: string;
 }
 
 interface ListaPrecio {
@@ -34,12 +29,34 @@ interface Moneda {
   tasaCambio: string;
 }
 
+interface LineaServicio {
+  servicioId: string;
+  dia: number;
+  precioUnitario: string;
+}
+
+interface CotizacionEditable {
+  id: string;
+  estado: string;
+  cantidadPersonas: number;
+  pasajeroResponsable: string;
+  documentoResponsable?: string | null;
+  telefonoResponsable?: string | null;
+  fechaServicio: string;
+  notas?: string | null;
+  listaPrecioId?: string | null;
+  monedaId?: string | null;
+  items: { servicioId: string; dia: number; precioUnitario: string }[];
+}
+
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
   return (monto * tasaDestino) / tasaOrigen;
 }
 
-export default function NuevaCotizacionPage() {
+export default function EditarCotizacionPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
+
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
@@ -52,20 +69,41 @@ export default function NuevaCotizacionPage() {
   const [listaPrecioId, setListaPrecioId] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<LineaServicio[]>([{ servicioId: "", dia: 1, precioUnitario: "" }]);
+  const [lineas, setLineas] = useState<LineaServicio[]>([]);
+  const [estado, setEstado] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
     api.get<ListaPrecio[]>("/listas-precio/mias").then(setListasPrecio).catch(() => null);
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
-  }, []);
-
-  useEffect(() => {
-    if (listasPrecio.length === 1) setListaPrecioId(listasPrecio[0].id);
-  }, [listasPrecio]);
+    api
+      .get<CotizacionEditable>(`/cotizaciones/${params.id}`)
+      .then((c) => {
+        setEstado(c.estado);
+        setCantidadPersonas(String(c.cantidadPersonas));
+        setPasajeroResponsable(c.pasajeroResponsable);
+        setDocumentoResponsable(c.documentoResponsable ?? "");
+        setTelefonoResponsable(c.telefonoResponsable ?? "");
+        setFechaServicio(c.fechaServicio.slice(0, 10));
+        setListaPrecioId(c.listaPrecioId ?? "");
+        setMonedaId(c.monedaId ?? "");
+        setNotas(c.notas ?? "");
+        setLineas(
+          c.items.map((item) => ({
+            servicioId: item.servicioId,
+            dia: item.dia,
+            precioUnitario: item.precioUnitario,
+          })),
+        );
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la cotización"))
+      .finally(() => setCargando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
 
   const factor = 1 + (Number(listasPrecio.find((l) => l.id === listaPrecioId)?.porcentajeAdicional) || 0) / 100;
   const monedaCotizacion = monedas.find((m) => m.id === monedaId);
@@ -79,6 +117,7 @@ export default function NuevaCotizacionPage() {
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, dia } : x)));
   const actualizarPrecio = (i: number, precioUnitario: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, precioUnitario } : x)));
+  const recalcularConLista = () => setLineas((s) => s.map((x) => ({ ...x, precioUnitario: "" })));
 
   const precioLinea = (l: LineaServicio, s: ServicioOpcion | undefined) => {
     if (!s) return 0;
@@ -108,14 +147,14 @@ export default function NuevaCotizacionPage() {
 
     setLoading(true);
     try {
-      const cotizacion = await api.post<{ id: string }>("/cotizaciones", {
+      await api.patch(`/cotizaciones/${params.id}`, {
         cantidadPersonas: Number(cantidadPersonas),
         pasajeroResponsable,
         documentoResponsable: documentoResponsable || undefined,
         telefonoResponsable: telefonoResponsable || undefined,
         fechaServicio,
-        listaPrecioId: listaPrecioId || undefined,
-        monedaId: monedaId || undefined,
+        listaPrecioId: listaPrecioId || "",
+        monedaId: monedaId || "",
         notas: notas || undefined,
         items: items.map((l) => ({
           servicioId: l.servicioId,
@@ -123,17 +162,30 @@ export default function NuevaCotizacionPage() {
           precioUnitario: l.precioUnitario !== "" ? Number(l.precioUnitario) : undefined,
         })),
       });
-      router.push(`/cotizaciones/${cotizacion.id}`);
+      router.push(`/cotizaciones/${params.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear la cotización");
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar la cotización");
     } finally {
       setLoading(false);
     }
   };
 
+  if (cargando) return <p className="text-sm text-gray-400">Cargando...</p>;
+
+  if (estado !== "PENDIENTE") {
+    return (
+      <div className="max-w-2xl space-y-3">
+        <p className="text-sm text-red-600">Solo se pueden modificar cotizaciones pendientes.</p>
+        <Link href={`/cotizaciones/${params.id}`} className="text-sm text-blue-600 hover:underline">
+          Volver a la cotización
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-semibold">Nueva cotización</h1>
+      <h1 className="text-2xl font-semibold">Editar cotización</h1>
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -224,9 +276,14 @@ export default function NuevaCotizacionPage() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-sm font-medium">Servicios</label>
-            <button type="button" onClick={agregarServicio} className="text-sm text-blue-600 hover:underline">
-              + Agregar servicio
-            </button>
+            <div className="flex gap-3">
+              <button type="button" onClick={recalcularConLista} className="text-sm text-gray-600 hover:underline">
+                Recalcular con lista de precio
+              </button>
+              <button type="button" onClick={agregarServicio} className="text-sm text-blue-600 hover:underline">
+                + Agregar servicio
+              </button>
+            </div>
           </div>
           <div className="space-y-3">
             {lineas.map((linea, i) => {
@@ -308,13 +365,21 @@ export default function NuevaCotizacionPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {loading ? "Creando..." : "Crear cotización"}
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 rounded bg-gray-900 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {loading ? "Guardando..." : "Guardar cambios"}
+          </button>
+          <Link
+            href={`/cotizaciones/${params.id}`}
+            className="rounded border px-4 py-2 text-sm font-medium hover:bg-gray-50"
+          >
+            Cancelar
+          </Link>
+        </div>
       </form>
     </div>
   );

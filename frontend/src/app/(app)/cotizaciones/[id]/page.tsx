@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 
@@ -10,7 +10,7 @@ interface CotizacionItem {
   dia: number;
   precioUnitario: string;
   servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
-  moneda: { codigo: string; simbolo: string };
+  moneda: { codigo: string; simbolo: string; tasaCambio: string };
 }
 
 interface CotizacionDetalle {
@@ -26,9 +26,24 @@ interface CotizacionDetalle {
   cliente: { nombre: string };
   vendedor: { nombre: string };
   listaPrecio?: { nombre: string; porcentajeAdicional: string } | null;
+  moneda?: { id: string; codigo: string; simbolo: string; tasaCambio: string } | null;
   reserva?: { id: string; codigoReserva: string } | null;
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   items: CotizacionItem[];
+}
+
+function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
+  return (monto * tasaDestino) / tasaOrigen;
+}
+
+function totalConvertido(cotizacion: CotizacionDetalle): { total: number; simbolo: string; codigo: string } | null {
+  if (!cotizacion.moneda) return null;
+  const tasaDestino = Number(cotizacion.moneda.tasaCambio);
+  const total = cotizacion.items.reduce((acc, item) => {
+    const monto = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+    return acc + convertirMonto(monto, Number(item.moneda.tasaCambio), tasaDestino);
+  }, 0);
+  return { total, simbolo: cotizacion.moneda.simbolo, codigo: cotizacion.moneda.codigo };
 }
 
 function logoDe(cotizacion: CotizacionDetalle): string | undefined {
@@ -66,9 +81,11 @@ function totalesPorMoneda(cotizacion: CotizacionDetalle) {
 
 export default function CotizacionDetallePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [cotizacion, setCotizacion] = useState<CotizacionDetalle | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cargar = () => {
@@ -83,6 +100,7 @@ export default function CotizacionDetallePage() {
   if (!cotizacion) return <p className="text-sm text-gray-400">Cargando...</p>;
 
   const totales = totalesPorMoneda(cotizacion);
+  const totalUnificado = totalConvertido(cotizacion);
 
   const handleConfirmar = async () => {
     if (!confirm("¿Confirmar esta cotización y transformarla en una reserva?")) return;
@@ -109,6 +127,19 @@ export default function CotizacionDetallePage() {
       setError(err instanceof ApiError ? err.message : "No se pudo cancelar la cotización");
     } finally {
       setCancelando(false);
+    }
+  };
+
+  const handleEliminar = async () => {
+    if (!confirm("¿Eliminar esta cotización de forma permanente?")) return;
+    setEliminando(true);
+    setError(null);
+    try {
+      await api.delete(`/cotizaciones/${cotizacion.id}`);
+      router.push("/cotizaciones");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar la cotización");
+      setEliminando(false);
     }
   };
 
@@ -306,11 +337,17 @@ export default function CotizacionDetallePage() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{cotizacion.estado}</span>
-          {totales.map((t) => (
-            <p key={t.codigo} className="text-lg font-semibold">
-              {t.simbolo} {t.total.toFixed(2)} {t.codigo}
+          {totalUnificado ? (
+            <p className="text-lg font-semibold">
+              {totalUnificado.simbolo} {totalUnificado.total.toFixed(2)} {totalUnificado.codigo}
             </p>
-          ))}
+          ) : (
+            totales.map((t) => (
+              <p key={t.codigo} className="text-lg font-semibold">
+                {t.simbolo} {t.total.toFixed(2)} {t.codigo}
+              </p>
+            ))
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <button onClick={descargarPDF} className="rounded border px-3 py-1 text-xs font-medium hover:bg-gray-50">
               Descargar PDF
@@ -333,7 +370,10 @@ export default function CotizacionDetallePage() {
             )}
           </div>
           {cotizacion.estado === "PENDIENTE" && (
-            <div className="flex gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Link href={`/cotizaciones/${cotizacion.id}/editar`} className="text-sm text-blue-600 hover:underline">
+                Editar
+              </Link>
               <button
                 onClick={handleConfirmar}
                 disabled={confirmando}
@@ -349,6 +389,15 @@ export default function CotizacionDetallePage() {
                 {cancelando ? "Cancelando..." : "Cancelar"}
               </button>
             </div>
+          )}
+          {!cotizacion.reserva && (
+            <button
+              onClick={handleEliminar}
+              disabled={eliminando}
+              className="text-sm text-red-600 hover:underline disabled:opacity-50"
+            >
+              {eliminando ? "Eliminando..." : "Eliminar cotización"}
+            </button>
           )}
           {cotizacion.reserva && (
             <Link href={`/reservas/${cotizacion.reserva.id}`} className="text-sm text-blue-600 hover:underline">
@@ -385,6 +434,11 @@ export default function CotizacionDetallePage() {
           {cotizacion.listaPrecio && (
             <p>
               <span className="text-gray-400">Lista de precio:</span> {cotizacion.listaPrecio.nombre}
+            </p>
+          )}
+          {cotizacion.moneda && (
+            <p>
+              <span className="text-gray-400">Moneda de la cotización:</span> {cotizacion.moneda.codigo}
             </p>
           )}
         </div>

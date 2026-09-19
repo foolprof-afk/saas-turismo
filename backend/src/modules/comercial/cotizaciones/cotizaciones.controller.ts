@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -49,5 +49,11 @@ export class CotizacionesController {
   @Roles('admin', 'vendedor')
   confirmar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.cotizacionesService.confirmar(user.agenciaId, id, user);
+  }
+
+  @Delete(':id')
+  @Roles('admin', 'vendedor')
+  eliminar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.cotizacionesService.eliminar(user.agenciaId, id);
   }
 }

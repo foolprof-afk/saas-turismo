@@ -188,6 +188,7 @@ model Cotizacion {
   clienteId             String
   vendedorId            String
   listaPrecioId         String?
+  monedaId              String?
   reservaId             String?          @unique
   codigoCotizacion      String           @unique
   estado                EstadoCotizacion @default(PENDIENTE)
@@ -204,6 +205,7 @@ model Cotizacion {
   cliente     Cliente          @relation(fields: [clienteId], references: [id])
   vendedor    Usuario          @relation("VendedorCotizacion", fields: [vendedorId], references: [id])
   listaPrecio ListaPrecio?     @relation(fields: [listaPrecioId], references: [id])
+  moneda      Moneda?          @relation(fields: [monedaId], references: [id])
   reserva     Reserva?         @relation(fields: [reservaId], references: [id])
   items       CotizacionItem[]
 
@@ -624,6 +626,7 @@ model Moneda {
   itinerarioServicios ItinerarioServicio[]
   pagos              Pago[]
   cotizacionItems    CotizacionItem[]
+  cotizaciones       Cotizacion[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")
