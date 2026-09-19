@@ -37,6 +37,12 @@ export class UpdateCotizacionDto {
   @IsString()
   listaPrecioId?: string;
 
+  // Enviar cadena vacía o null para quitar la moneda asignada (vuelve a mostrar cada línea
+  // en su propia moneda).
+  @IsOptional()
+  @IsString()
+  monedaId?: string;
+
   // Si se envía, reemplaza por completo los servicios de la cotización.
   @IsOptional()
   @IsArray()

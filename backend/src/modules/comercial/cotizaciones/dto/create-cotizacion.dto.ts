@@ -4,6 +4,7 @@ import {
   IsArray,
   IsDateString,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -22,6 +23,13 @@ export class CotizacionItemDto {
   @IsInt()
   @Min(1)
   dia?: number;
+
+  // Precio manual para esta línea, en la moneda del servicio. Si se envía, sobreescribe el
+  // precioBase * factor de lista de precios calculado por defecto (ver construirItems).
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  precioUnitario?: number;
 }
 
 export class CreateCotizacionDto {
@@ -54,6 +62,13 @@ export class CreateCotizacionDto {
   @IsOptional()
   @IsString()
   listaPrecioId?: string;
+
+  // Moneda en la que se presenta la cotización al cliente. Si difiere de la moneda de un
+  // servicio, se convierte automáticamente usando la tasaCambio de ambas monedas (ver
+  // CotizacionesService.convertirMonto).
+  @IsOptional()
+  @IsString()
+  monedaId?: string;
 
   @IsArray()
   @ArrayMinSize(1)

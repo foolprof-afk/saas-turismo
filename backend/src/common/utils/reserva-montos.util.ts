@@ -96,3 +96,14 @@ export function convertirAPrincipal(
     total,
   };
 }
+
+/**
+ * Convierte un monto entre dos monedas cualquiera de la misma agencia usando su tasaCambio
+ * respecto a la moneda principal (ver convertirAPrincipal para la explicación de la
+ * convención). Generaliza esa fórmula a un par origen/destino arbitrario: se pasa primero a
+ * la principal (dividiendo por tasaOrigen) y de ahí a la destino (multiplicando por
+ * tasaDestino), lo cual es equivalente a monto * tasaDestino / tasaOrigen.
+ */
+export function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number): number {
+  return (monto * tasaDestino) / tasaOrigen;
+}
