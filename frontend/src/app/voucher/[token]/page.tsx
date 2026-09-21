@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { formatFecha } from "@/lib/fecha";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -110,7 +111,7 @@ export default function VoucherPublicoPage() {
           </p>
           <p className="text-sm">
             <span className="text-gray-500">Fecha:</span>{" "}
-            {new Date(reserva.fechaServicioInicio).toLocaleDateString()}
+            {formatFecha(reserva.fechaServicioInicio)}
             {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
           </p>
           <p className="text-sm">
@@ -142,7 +143,7 @@ export default function VoucherPublicoPage() {
               {reserva.itinerario.dias.map((dia) => (
                 <div key={dia.numeroDia}>
                   <p className="text-sm font-medium">
-                    Día {dia.numeroDia} — {new Date(dia.fecha).toLocaleDateString()}
+                    Día {dia.numeroDia} — {formatFecha(dia.fecha)}
                   </p>
                   <ul className="ml-4 list-disc text-sm text-gray-600">
                     {dia.servicios.map((s, i) => (

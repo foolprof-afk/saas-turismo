@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { formatFecha } from "@/lib/fecha";
 
 interface Cotizacion {
   id: string;
@@ -167,7 +168,7 @@ export default function CotizacionesPage() {
                 <td className="px-4 py-2">{c.pasajeroResponsable}</td>
                 <td className="px-4 py-2">{c.cantidadPersonas}</td>
                 <td className="px-4 py-2">{c.vendedor?.nombre}</td>
-                <td className="px-4 py-2">{new Date(c.fechaServicio).toLocaleDateString()}</td>
+                <td className="px-4 py-2">{formatFecha(c.fechaServicio)}</td>
                 <td className="px-4 py-2">
                   <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{c.estado}</span>
                 </td>

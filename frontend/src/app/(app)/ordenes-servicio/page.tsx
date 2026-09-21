@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { formatFecha } from "@/lib/fecha";
 
 interface Opcion {
   id: string;
@@ -38,9 +39,9 @@ function totalOrden(orden: OrdenServicio) {
 // Una orden puede agrupar servicios en fechas distintas; se muestra el rango completo.
 function rangoFechas(orden: OrdenServicio) {
   if (orden.items.length === 0) return "-";
-  const fechas = orden.items.map((i) => new Date(i.fechaServicio).getTime()).sort((a, b) => a - b);
-  const min = new Date(fechas[0]).toLocaleDateString();
-  const max = new Date(fechas[fechas.length - 1]).toLocaleDateString();
+  const fechas = orden.items.map((i) => i.fechaServicio).sort();
+  const min = formatFecha(fechas[0]);
+  const max = formatFecha(fechas[fechas.length - 1]);
   return min === max ? min : `${min} – ${max}`;
 }
 

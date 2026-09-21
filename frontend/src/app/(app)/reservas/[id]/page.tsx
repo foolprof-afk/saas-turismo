@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { formatFecha } from "@/lib/fecha";
 
 interface MontoPorMoneda {
   monedaId: string;
@@ -109,7 +110,7 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
   if (!reserva.itinerario) return [];
   const lineas: string[] = [];
   reserva.itinerario.dias.forEach((dia) => {
-    const fecha = new Date(dia.fecha).toLocaleDateString();
+    const fecha = formatFecha(dia.fecha);
     dia.servicios.forEach((s) => {
       const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${s.precio} ${s.moneda.codigo})` : "";
       lineas.push(`${fecha} ${s.horaInicio} — ${s.servicio.nombre}${precio}`);
@@ -204,7 +205,7 @@ export default function ReservaDetallePage() {
     const lineas: string[] = [];
     lineas.push(`Cliente: ${reserva.cliente?.nombre ?? ""}`);
     lineas.push(
-      `Fecha: ${new Date(reserva.fechaServicioInicio).toLocaleDateString()}${
+      `Fecha: ${formatFecha(reserva.fechaServicioInicio)}${
         reserva.horaServicio ? " " + reserva.horaServicio : ""
       }`,
     );
@@ -265,7 +266,7 @@ export default function ReservaDetallePage() {
           <h1 className="text-2xl font-semibold">Reserva {reserva.codigoReserva}</h1>
           <p className="text-sm text-gray-500">{reserva.cliente?.nombre}</p>
           <p className="text-sm text-gray-500">
-            {new Date(reserva.fechaServicioInicio).toLocaleDateString()}
+            {formatFecha(reserva.fechaServicioInicio)}
             {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
           </p>
         </div>
@@ -505,7 +506,7 @@ export default function ReservaDetallePage() {
             {reserva.itinerario.dias.map((dia) => (
               <div key={dia.numeroDia}>
                 <p className="text-sm font-medium">
-                  Día {dia.numeroDia} — {new Date(dia.fecha).toLocaleDateString()}
+                  Día {dia.numeroDia} — {formatFecha(dia.fecha)}
                 </p>
                 <ul className="ml-4 list-disc text-sm text-gray-600">
                   {dia.servicios.map((s, i) => (
@@ -540,7 +541,7 @@ export default function ReservaDetallePage() {
         <p className="text-center text-sm font-bold">Reserva {reserva.codigoReserva}</p>
         <p>Cliente: {reserva.cliente?.nombre}</p>
         <p>
-          Fecha: {new Date(reserva.fechaServicioInicio).toLocaleDateString()}
+          Fecha: {formatFecha(reserva.fechaServicioInicio)}
           {reserva.horaServicio ? ` ${reserva.horaServicio}` : ""}
         </p>
         <p>Total: {montoTexto(reserva)}</p>

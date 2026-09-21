@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { formatFecha } from "@/lib/fecha";
 
 interface CotizacionItem {
   id: string;
@@ -183,7 +184,7 @@ export default function CotizacionDetallePage() {
     const datos: [string, string][] = [
       ["Responsable", cotizacion.pasajeroResponsable],
       ["Cantidad de personas", String(cotizacion.cantidadPersonas)],
-      ["Fecha", new Date(cotizacion.fechaServicio).toLocaleDateString()],
+      ["Fecha", formatFecha(cotizacion.fechaServicio)],
       ["Vendedor", cotizacion.vendedor?.nombre ?? "-"],
     ];
     if (cotizacion.documentoResponsable) datos.push(["Documento", cotizacion.documentoResponsable]);
@@ -306,7 +307,7 @@ export default function CotizacionDetallePage() {
   const textoResumen = [
     `Cotización ${cotizacion.codigoCotizacion}`,
     `Responsable: ${cotizacion.pasajeroResponsable} (${cotizacion.cantidadPersonas} personas)`,
-    `Fecha: ${new Date(cotizacion.fechaServicio).toLocaleDateString()}`,
+    `Fecha: ${formatFecha(cotizacion.fechaServicio)}`,
     "",
     ...agruparPorDia(cotizacion).flatMap(([dia, itemsDia]) => [
       `Día ${dia}:`,
@@ -333,7 +334,7 @@ export default function CotizacionDetallePage() {
         <div>
           <h1 className="text-2xl font-semibold">Cotización {cotizacion.codigoCotizacion}</h1>
           <p className="text-sm text-gray-500">{cotizacion.pasajeroResponsable}</p>
-          <p className="text-sm text-gray-500">{new Date(cotizacion.fechaServicio).toLocaleDateString()}</p>
+          <p className="text-sm text-gray-500">{formatFecha(cotizacion.fechaServicio)}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{cotizacion.estado}</span>

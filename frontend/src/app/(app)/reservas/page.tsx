@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
+import { formatFecha } from "@/lib/fecha";
 
 interface MontoPorMoneda {
   monedaId: string;
@@ -233,7 +234,7 @@ export default function ReservasPage() {
                 <td className="px-4 py-2">{r.pasajeros?.[0]?.nombre ?? r.cliente?.nombre}</td>
                 <td className="px-4 py-2">{r.pasajeros?.[0]?.telefono ?? "-"}</td>
                 <td className="px-4 py-2">{r.vendedor?.nombre}</td>
-                <td className="px-4 py-2">{new Date(r.fechaServicioInicio).toLocaleDateString()}</td>
+                <td className="px-4 py-2">{formatFecha(r.fechaServicioInicio)}</td>
                 <td className="px-4 py-2">
                   <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{r.estado}</span>
                 </td>

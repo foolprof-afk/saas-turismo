@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
+import { hoyLocal } from "@/lib/fecha";
 
 interface UsuarioOpcion {
   id: string;
@@ -29,7 +30,7 @@ interface ItemAgenda {
 }
 
 export default function OperacionPage() {
-  const [fecha, setFecha] = useState(() => new Date().toISOString().slice(0, 10));
+  const [fecha, setFecha] = useState(hoyLocal);
   const [agenda, setAgenda] = useState<ItemAgenda[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcion[]>([]);
   const [usuariosSeleccionados, setUsuariosSeleccionados] = useState<Set<string>>(new Set());

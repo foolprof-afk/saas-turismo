@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { formatFecha } from "@/lib/fecha";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -154,7 +155,7 @@ export default function CuadreClientePublicoPage() {
               {data.reservas.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="px-4 py-2 font-mono">{r.codigoReserva}</td>
-                  <td className="px-4 py-2">{new Date(r.fechaServicioInicio).toLocaleDateString()}</td>
+                  <td className="px-4 py-2">{formatFecha(r.fechaServicioInicio)}</td>
                   <td className="px-4 py-2">
                     <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{r.estado}</span>
                   </td>

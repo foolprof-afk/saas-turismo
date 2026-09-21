@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { imprimirElemento } from "@/lib/imprimir";
+import { formatFecha } from "@/lib/fecha";
 
 interface OrdenServicioItem {
   id: string;
@@ -184,7 +185,7 @@ export default function OrdenServicioDetallePage() {
                     <p className="text-xs text-gray-500">{item.servicio.descripcion}</p>
                   )}
                 </td>
-                <td className="py-2">{new Date(item.fechaServicio).toLocaleDateString()}</td>
+                <td className="py-2">{formatFecha(item.fechaServicio)}</td>
                 <td className="py-2 text-right">{item.cantidad}</td>
                 <td className="py-2 text-right">
                   {item.moneda.simbolo} {Number(item.precioCosto).toFixed(2)}
