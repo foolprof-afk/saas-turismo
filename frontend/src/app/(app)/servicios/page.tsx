@@ -125,6 +125,25 @@ export default function ServiciosPage() {
     setPalabrasClaveInput((s.palabrasClave ?? []).map((p) => `#${p}`).join(" "));
   };
 
+  // Precarga el formulario con los datos del servicio seleccionado, pero sin editingId, para
+  // que al guardar se cree un servicio nuevo (POST) en vez de modificar el original.
+  const duplicar = (s: Servicio) => {
+    setEditingId(null);
+    setProveedorId(s.proveedorId);
+    setTipoServicioId(s.tipoServicioId);
+    setNombre(`${s.nombre} copia 1`);
+    setDescripcion(s.descripcion ?? "");
+    setCapacidadMax(s.capacidadMax ? String(s.capacidadMax) : "");
+    setDuracionMin(s.duracionMin ? String(s.duracionMin) : "");
+    setPrecioBase(String(s.precioBase));
+    setPrecioCosto(s.precioCosto ? String(s.precioCosto) : "");
+    setMonedaId(s.monedaId);
+    setRutaId(s.rutaId ?? "");
+    setPuntoRecogidaId(s.puntoRecogidaId ?? "");
+    setPalabrasClaveInput((s.palabrasClave ?? []).map((p) => `#${p}`).join(" "));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -410,9 +429,12 @@ export default function ServiciosPage() {
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "-"}</td>
                 {verCostos && <td className="px-4 py-2">{s.precioBase}</td>}
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right space-x-3">
                   <button onClick={() => editar(s)} className="text-blue-600 hover:underline">
                     Editar
+                  </button>
+                  <button onClick={() => duplicar(s)} className="text-gray-600 hover:underline">
+                    Duplicar
                   </button>
                 </td>
               </tr>
