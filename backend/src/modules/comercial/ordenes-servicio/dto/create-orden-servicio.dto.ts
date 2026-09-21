@@ -19,6 +19,11 @@ export class OrdenServicioItemDto {
   @Min(1)
   cantidad: number;
 
+  // Fecha en la que el proveedor debe ejecutar este servicio en particular (cada línea puede
+  // tener su propia fecha dentro de la misma orden).
+  @IsDateString()
+  fechaServicio: string;
+
   // Sobreescribe el precioCosto del servicio para esta orden puntual. Si no se envía, se usa
   // Servicio.precioCosto (ver OrdenesServicioService.construirItems); si el servicio tampoco
   // tiene uno definido, la creación falla pidiendo que se indique a mano.
@@ -35,10 +40,6 @@ export class OrdenServicioItemDto {
 export class CreateOrdenServicioDto {
   @IsString()
   proveedorId: string;
-
-  // Fecha en la que el proveedor debe ejecutar el/los servicio(s).
-  @IsDateString()
-  fechaServicio: string;
 
   @IsOptional()
   @IsString()

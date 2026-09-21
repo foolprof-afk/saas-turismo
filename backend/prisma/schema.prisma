@@ -726,18 +726,19 @@ enum EstadoOrdenServicio {
 // Documento que la agencia envía a un proveedor pidiéndole que ejecute uno o más servicios a
 // un precio costo pactado (ver OrdenServicioItem). Es independiente de Reserva/Cotizacion:
 // no reserva capacidad ni compromete al cliente, solo documenta la orden de compra hacia el
-// proveedor (ver diseño en OrdenesServicioService).
+// proveedor (ver diseño en OrdenesServicioService). La fecha de ejecución vive en cada item
+// (OrdenServicioItem.fechaServicio), no aquí, porque una misma orden puede agrupar servicios
+// del mismo proveedor en fechas distintas.
 model OrdenServicio {
-  id            String              @id @default(cuid())
-  agenciaId     String
-  proveedorId   String
-  usuarioId     String
-  codigoOrden   String              @unique
-  estado        EstadoOrdenServicio @default(EMITIDA)
-  fechaEmision  DateTime            @default(now())
-  fechaServicio DateTime
-  notas         String?
-  createdAt     DateTime            @default(now())
+  id           String              @id @default(cuid())
+  agenciaId    String
+  proveedorId  String
+  usuarioId    String
+  codigoOrden  String              @unique
+  estado       EstadoOrdenServicio @default(EMITIDA)
+  fechaEmision DateTime            @default(now())
+  notas        String?
+  createdAt    DateTime            @default(now())
 
   agencia   Agencia             @relation(fields: [agenciaId], references: [id])
   proveedor Proveedor           @relation(fields: [proveedorId], references: [id])
@@ -750,13 +751,15 @@ model OrdenServicio {
 // Linea de una orden de servicio. precioCosto queda congelado al crear la orden (tomado de
 // Servicio.precioCosto o sobreescrito a mano), igual que CotizacionItem.precioUnitario, para
 // que el documento enviado al proveedor no cambie si luego se edita el costo del servicio.
+// fechaServicio es la fecha en que el proveedor debe ejecutar ESTE servicio en particular.
 model OrdenServicioItem {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   ordenServicioId String
   servicioId      String
   cantidad        Int
-  precioCosto     Decimal @db.Decimal(12, 2)
+  precioCosto     Decimal  @db.Decimal(12, 2)
   monedaId        String
+  fechaServicio   DateTime
 
   ordenServicio OrdenServicio @relation(fields: [ordenServicioId], references: [id], onDelete: Cascade)
   servicio      Servicio      @relation(fields: [servicioId], references: [id])

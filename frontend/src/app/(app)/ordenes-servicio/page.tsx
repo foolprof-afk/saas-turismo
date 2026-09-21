@@ -12,6 +12,7 @@ interface Opcion {
 interface OrdenServicioItem {
   cantidad: number;
   precioCosto: string;
+  fechaServicio: string;
   moneda: { codigo: string; simbolo: string };
 }
 
@@ -20,7 +21,6 @@ interface OrdenServicio {
   codigoOrden: string;
   estado: string;
   fechaEmision: string;
-  fechaServicio: string;
   proveedor: { nombre: string };
   items: OrdenServicioItem[];
 }
@@ -33,6 +33,15 @@ function totalOrden(orden: OrdenServicio) {
     porMoneda.set(item.moneda.codigo, entry);
   }
   return Array.from(porMoneda.entries()).map(([codigo, v]) => ({ codigo, ...v }));
+}
+
+// Una orden puede agrupar servicios en fechas distintas; se muestra el rango completo.
+function rangoFechas(orden: OrdenServicio) {
+  if (orden.items.length === 0) return "-";
+  const fechas = orden.items.map((i) => new Date(i.fechaServicio).getTime()).sort((a, b) => a - b);
+  const min = new Date(fechas[0]).toLocaleDateString();
+  const max = new Date(fechas[fechas.length - 1]).toLocaleDateString();
+  return min === max ? min : `${min} – ${max}`;
 }
 
 export default function OrdenesServicioPage() {
@@ -175,7 +184,7 @@ export default function OrdenesServicioPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-2">{o.proveedor?.nombre}</td>
-                <td className="px-4 py-2">{new Date(o.fechaServicio).toLocaleDateString()}</td>
+                <td className="px-4 py-2">{rangoFechas(o)}</td>
                 <td className="px-4 py-2">{new Date(o.fechaEmision).toLocaleDateString()}</td>
                 <td className="px-4 py-2">
                   <span

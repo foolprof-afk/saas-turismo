@@ -3,7 +3,9 @@ import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator'
 
 /**
  * Filtros de búsqueda de órdenes de servicio (GET /ordenes-servicio): por proveedor y por
- * rango de fecha de ejecución del servicio, como pide el listado.
+ * rango de fecha de ejecución del servicio. Como la fecha vive en cada item, una orden
+ * coincide con el rango si AL MENOS uno de sus items cae dentro de él (ver
+ * OrdenesServicioService.findAll).
  */
 export class FiltrosOrdenServicioDto {
   @IsOptional()

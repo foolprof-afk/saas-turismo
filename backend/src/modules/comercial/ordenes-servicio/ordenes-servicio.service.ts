@@ -27,9 +27,13 @@ export class OrdenesServicioService {
     if (filtros.proveedorId) where.proveedorId = filtros.proveedorId;
     if (filtros.codigoOrden) where.codigoOrden = { contains: filtros.codigoOrden, mode: 'insensitive' };
     if (filtros.fechaDesde || filtros.fechaHasta) {
-      where.fechaServicio = {
-        ...(filtros.fechaDesde ? { gte: new Date(filtros.fechaDesde) } : {}),
-        ...(filtros.fechaHasta ? { lte: new Date(filtros.fechaHasta) } : {}),
+      where.items = {
+        some: {
+          fechaServicio: {
+            ...(filtros.fechaDesde ? { gte: new Date(filtros.fechaDesde) } : {}),
+            ...(filtros.fechaHasta ? { lte: new Date(filtros.fechaHasta) } : {}),
+          },
+        },
       };
     }
     return this.prisma.ordenServicio.findMany({
@@ -37,7 +41,7 @@ export class OrdenesServicioService {
       include: INCLUDE_ORDEN,
       skip: filtros.skip,
       take: filtros.limit,
-      orderBy: { fechaServicio: 'desc' },
+      orderBy: { fechaEmision: 'desc' },
     });
   }
 
@@ -78,6 +82,7 @@ export class OrdenesServicioService {
         cantidad: item.cantidad,
         precioCosto,
         monedaId: servicio.monedaId,
+        fechaServicio: new Date(item.fechaServicio),
       };
     });
   }
@@ -94,7 +99,6 @@ export class OrdenesServicioService {
         proveedorId: proveedor.id,
         usuarioId,
         codigoOrden: this.generarCodigoOrden(),
-        fechaServicio: new Date(dto.fechaServicio),
         notas: dto.notas,
         items: { create: items },
       },

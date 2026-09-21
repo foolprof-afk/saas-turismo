@@ -21,6 +21,7 @@ interface LineaOrden {
   servicioId: string;
   cantidad: string;
   precioCosto: string;
+  fechaServicio: string;
 }
 
 export default function NuevaOrdenServicioPage() {
@@ -29,7 +30,6 @@ export default function NuevaOrdenServicioPage() {
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
 
   const [proveedorId, setProveedorId] = useState("");
-  const [fechaServicio, setFechaServicio] = useState("");
   const [notas, setNotas] = useState("");
   const [items, setItems] = useState<LineaOrden[]>([]);
 
@@ -51,7 +51,10 @@ export default function NuevaOrdenServicioPage() {
   const agregarLinea = () => {
     const primero = serviciosDelProveedor[0];
     if (!primero) return;
-    setItems([...items, { servicioId: primero.id, cantidad: "1", precioCosto: primero.precioCosto ?? "" }]);
+    setItems([
+      ...items,
+      { servicioId: primero.id, cantidad: "1", precioCosto: primero.precioCosto ?? "", fechaServicio: "" },
+    ]);
   };
 
   const actualizarLinea = (index: number, cambios: Partial<LineaOrden>) => {
@@ -90,11 +93,11 @@ export default function NuevaOrdenServicioPage() {
     try {
       const orden = await api.post<{ id: string }>("/ordenes-servicio", {
         proveedorId,
-        fechaServicio,
         notas: notas || undefined,
         items: items.map((l) => ({
           servicioId: l.servicioId,
           cantidad: Number(l.cantidad),
+          fechaServicio: l.fechaServicio,
           precioCosto: l.precioCosto !== "" ? Number(l.precioCosto) : undefined,
         })),
       });
@@ -111,43 +114,21 @@ export default function NuevaOrdenServicioPage() {
       <h1 className="text-2xl font-semibold">Nueva orden de servicio</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium">Proveedor</label>
-            <select
-              required
-              value={proveedorId}
-              onChange={(e) => cambiarProveedor(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            >
-              <option value="">Seleccionar...</option>
-              {proveedores.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Fecha de ejecución del servicio</label>
-            <input
-              type="date"
-              required
-              value={fechaServicio}
-              onChange={(e) => setFechaServicio(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-
         <div>
-          <label className="block text-sm font-medium">Notas (opcional)</label>
-          <textarea
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-          />
+          <label className="block text-sm font-medium">Proveedor</label>
+          <select
+            required
+            value={proveedorId}
+            onChange={(e) => cambiarProveedor(e.target.value)}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm sm:w-1/2"
+          >
+            <option value="">Seleccionar...</option>
+            {proveedores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-3">
@@ -172,7 +153,7 @@ export default function NuevaOrdenServicioPage() {
             return (
               <div
                 key={index}
-                className="grid grid-cols-1 gap-3 rounded border p-3 sm:grid-cols-[1fr_100px_140px_auto]"
+                className="grid grid-cols-1 gap-3 rounded border p-3 sm:grid-cols-[1fr_140px_100px_140px_auto]"
               >
                 <select
                   value={linea.servicioId}
@@ -185,6 +166,13 @@ export default function NuevaOrdenServicioPage() {
                     </option>
                   ))}
                 </select>
+                <input
+                  type="date"
+                  required
+                  value={linea.fechaServicio}
+                  onChange={(e) => actualizarLinea(index, { fechaServicio: e.target.value })}
+                  className="rounded border px-2 py-1.5 text-sm"
+                />
                 <input
                   type="number"
                   min="1"
@@ -221,6 +209,17 @@ export default function NuevaOrdenServicioPage() {
             ))}
           </div>
         )}
+
+        <div>
+          <label className="block text-sm font-medium">Observaciones (opcional)</label>
+          <textarea
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            rows={3}
+            placeholder="Ej. nombres de los pasajeros, indicaciones especiales, etc."
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
+        </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

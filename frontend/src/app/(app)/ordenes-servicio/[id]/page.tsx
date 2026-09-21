@@ -10,6 +10,7 @@ interface OrdenServicioItem {
   id: string;
   cantidad: number;
   precioCosto: string;
+  fechaServicio: string;
   servicio: { nombre: string; descripcion?: string | null };
   moneda: { codigo: string; simbolo: string };
 }
@@ -19,7 +20,6 @@ interface OrdenServicioDetalle {
   codigoOrden: string;
   estado: string;
   fechaEmision: string;
-  fechaServicio: string;
   notas?: string | null;
   proveedor: { nombre: string; contacto?: string | null };
   usuario: { nombre: string };
@@ -161,10 +161,6 @@ export default function OrdenServicioDetallePage() {
             <p>
               <span className="text-gray-500">Fecha de emisión:</span> {new Date(orden.fechaEmision).toLocaleDateString()}
             </p>
-            <p>
-              <span className="text-gray-500">Fecha de ejecución:</span>{" "}
-              {new Date(orden.fechaServicio).toLocaleDateString()}
-            </p>
             <p className="text-gray-500">Emitida por: {orden.usuario?.nombre}</p>
           </div>
         </div>
@@ -173,6 +169,7 @@ export default function OrdenServicioDetallePage() {
           <thead className="border-b text-left text-gray-500">
             <tr>
               <th className="py-2">Servicio</th>
+              <th className="py-2">Fecha</th>
               <th className="py-2 text-right">Cantidad</th>
               <th className="py-2 text-right">Precio costo</th>
               <th className="py-2 text-right">Subtotal</th>
@@ -187,6 +184,7 @@ export default function OrdenServicioDetallePage() {
                     <p className="text-xs text-gray-500">{item.servicio.descripcion}</p>
                   )}
                 </td>
+                <td className="py-2">{new Date(item.fechaServicio).toLocaleDateString()}</td>
                 <td className="py-2 text-right">{item.cantidad}</td>
                 <td className="py-2 text-right">
                   {item.moneda.simbolo} {Number(item.precioCosto).toFixed(2)}
