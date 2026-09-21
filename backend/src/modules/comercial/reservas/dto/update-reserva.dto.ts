@@ -3,11 +3,12 @@ import { ArrayMinSize, IsArray, IsDateString, IsNumber, IsOptional, IsString, Va
 import { PasajeroDto, ServicioReservaDto } from './create-reserva.dto';
 
 /**
- * Actualiza los datos de una reserva ya creada. Solo se permite mientras la reserva está
- * PENDIENTE (ver ReservasService.actualizar): una vez confirmada, ya tiene un pago registrado
- * y cambiar fechas/precios dejaría el pago desalineado con el total. No permite cambiar el
- * "tipo" de reserva (servicio/plantilla/múltiple) ni el servicio o plantilla elegidos: eso es
- * una decisión de creación, no de edición.
+ * Actualiza los datos de una reserva ya creada. Permitido mientras la reserva está PENDIENTE o
+ * CONFIRMADA (ver ReservasService.actualizar): una vez confirmada, ya tiene un pago registrado,
+ * así que en ese estado no se puede cambiar precio/moneda/líneas del itinerario (dejaría el
+ * pago desalineado), solo fecha, hora y pasajeros. No permite cambiar el "tipo" de reserva
+ * (servicio/plantilla/múltiple) ni el servicio o plantilla elegidos: eso es una decisión de
+ * creación, no de edición.
  */
 export class UpdateReservaDto {
   @IsOptional()

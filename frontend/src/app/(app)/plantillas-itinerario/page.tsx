@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import { formatMonto } from "@/lib/moneda";
 
 interface Servicio {
   id: string;
@@ -251,7 +252,7 @@ export default function PlantillasItinerarioPage() {
                     <option value="">Seleccionar servicio...</option>
                     {servicios.map((sv) => (
                       <option key={sv.id} value={sv.id}>
-                        {sv.nombre} — {Number(sv.precioBase).toFixed(2)}
+                        {sv.nombre} — {formatMonto(sv.precioBase)}
                       </option>
                     ))}
                   </select>
@@ -280,14 +281,14 @@ export default function PlantillasItinerarioPage() {
                 >
                   + Agregar servicio al día {dia.numeroDia}
                 </button>
-                <p className="text-xs font-medium text-gray-600">Subtotal día: {totalDia(dia).toFixed(2)}</p>
+                <p className="text-xs font-medium text-gray-600">Subtotal día: {formatMonto(totalDia(dia))}</p>
               </div>
             </div>
           ))}
         </div>
 
         <div className="rounded border bg-gray-50 px-3 py-2 text-right">
-          <span className="text-sm font-semibold text-gray-700">Total plantilla: {totalGeneral.toFixed(2)}</span>
+          <span className="text-sm font-semibold text-gray-700">Total plantilla: {formatMonto(totalGeneral)}</span>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -343,7 +344,7 @@ export default function PlantillasItinerarioPage() {
                 <td className="px-4 py-2">{p.nombre}</td>
                 <td className="px-4 py-2">{p.descripcion ?? "-"}</td>
                 <td className="px-4 py-2">{p.diasTotales}</td>
-                <td className="px-4 py-2">{(totales[p.id] ?? 0).toFixed(2)}</td>
+                <td className="px-4 py-2">{formatMonto(totales[p.id] ?? 0)}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(p)} className="mr-3 text-blue-600 hover:underline">
                     Editar

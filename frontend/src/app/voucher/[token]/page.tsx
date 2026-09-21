@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -41,7 +42,7 @@ interface ReservaPublica {
 
 function montoTexto(reserva: ReservaPublica): string {
   if (!reserva.montos || reserva.montos.length === 0) return "-";
-  return reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
+  return reserva.montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
 }
 
 export default function VoucherPublicoPage() {
@@ -152,7 +153,7 @@ export default function VoucherPublicoPage() {
                         {s.precio && s.moneda && (
                           <span className="text-gray-500">
                             ({s.moneda.simbolo}
-                            {s.precio} {s.moneda.codigo})
+                            {formatMonto(s.precio)} {s.moneda.codigo})
                           </span>
                         )}
                         {s.servicio.descripcion && (

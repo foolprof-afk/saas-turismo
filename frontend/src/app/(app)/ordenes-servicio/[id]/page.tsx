@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { imprimirElemento } from "@/lib/imprimir";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, formatFechaCorta } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface OrdenServicioItem {
   id: string;
@@ -23,7 +24,7 @@ interface OrdenServicioDetalle {
   fechaEmision: string;
   notas?: string | null;
   proveedor: { nombre: string; contacto?: string | null };
-  usuario: { nombre: string };
+  usuario: { nombre: string; cliente?: { logoUrl?: string | null } | null };
   agencia?: { nombre: string; razonSocial?: string | null; rutONit?: string | null; logoUrl?: string | null } | null;
   items: OrdenServicioItem[];
 }
@@ -133,8 +134,12 @@ export default function OrdenServicioDetallePage() {
       <div id="documento-orden" className="space-y-6 rounded-lg border bg-white p-8">
         <div className="flex items-start justify-between border-b pb-4">
           <div>
-            {orden.agencia?.logoUrl && (
-              <img src={orden.agencia.logoUrl} alt="Logo" className="mb-2 h-14 object-contain" />
+            {(orden.usuario?.cliente?.logoUrl || orden.agencia?.logoUrl) && (
+              <img
+                src={orden.usuario?.cliente?.logoUrl || orden.agencia?.logoUrl || undefined}
+                alt="Logo"
+                className="mb-2 h-14 object-contain"
+              />
             )}
             <p className="font-semibold">{orden.agencia?.razonSocial || orden.agencia?.nombre}</p>
             {orden.agencia?.rutONit && <p className="text-xs text-gray-500">RUT/NIT: {orden.agencia.rutONit}</p>}
@@ -160,7 +165,7 @@ export default function OrdenServicioDetallePage() {
           </div>
           <div className="text-right">
             <p>
-              <span className="text-gray-500">Fecha de emisión:</span> {new Date(orden.fechaEmision).toLocaleDateString()}
+              <span className="text-gray-500">Fecha de emisión:</span> {formatFechaCorta(orden.fechaEmision)}
             </p>
             <p className="text-gray-500">Emitida por: {orden.usuario?.nombre}</p>
           </div>
@@ -188,10 +193,10 @@ export default function OrdenServicioDetallePage() {
                 <td className="py-2">{formatFecha(item.fechaServicio)}</td>
                 <td className="py-2 text-right">{item.cantidad}</td>
                 <td className="py-2 text-right">
-                  {item.moneda.simbolo} {Number(item.precioCosto).toFixed(2)}
+                  {item.moneda.simbolo} {formatMonto(item.precioCosto)}
                 </td>
                 <td className="py-2 text-right">
-                  {item.moneda.simbolo} {(Number(item.precioCosto) * item.cantidad).toFixed(2)}
+                  {item.moneda.simbolo} {formatMonto(Number(item.precioCosto) * item.cantidad)}
                 </td>
               </tr>
             ))}
@@ -202,7 +207,7 @@ export default function OrdenServicioDetallePage() {
           <div className="text-right text-sm font-semibold">
             {totales.map((t) => (
               <p key={t.codigo}>
-                Total {t.codigo}: {t.simbolo} {t.total.toFixed(2)}
+                Total {t.codigo}: {t.simbolo} {formatMonto(t.total)}
               </p>
             ))}
           </div>

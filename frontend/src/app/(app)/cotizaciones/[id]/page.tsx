@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface CotizacionItem {
   id: string;
@@ -262,8 +263,8 @@ export default function CotizacionDetallePage() {
         doc.text(nombreLineas, colX.servicio, y);
         doc.text(horas ? `${horas} h` : "-", colX.horas, y);
         doc.text(String(cotizacion.cantidadPersonas), colX.cantidad, y);
-        doc.text(`${item.moneda.simbolo}${Number(item.precioUnitario).toFixed(2)}`, colX.unitario, y);
-        doc.text(`${item.moneda.simbolo}${subtotal.toFixed(2)}`, colX.subtotal, y);
+        doc.text(`${item.moneda.simbolo}${formatMonto(item.precioUnitario)}`, colX.unitario, y);
+        doc.text(`${item.moneda.simbolo}${formatMonto(subtotal)}`, colX.subtotal, y);
         y += nombreLineas.length * 4.5;
         if (descLineas.length) {
           doc.setFontSize(8);
@@ -283,7 +284,7 @@ export default function CotizacionDetallePage() {
     doc.setFontSize(11);
     totales.forEach((t) => {
       doc.setFont("helvetica", "bold");
-      doc.text(`Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`, pageWidth - marginX, y, { align: "right" });
+      doc.text(`Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`, pageWidth - marginX, y, { align: "right" });
       doc.setFont("helvetica", "normal");
       y += 6;
     });
@@ -314,11 +315,11 @@ export default function CotizacionDetallePage() {
       ...itemsDia.map((item) => {
         const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
         const horas = horasDe(item);
-        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${subtotal.toFixed(2)} ${item.moneda.codigo}`;
+        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${formatMonto(subtotal)} ${item.moneda.codigo}`;
       }),
     ]),
     "",
-    ...totales.map((t) => `Total ${t.codigo}: ${t.simbolo}${t.total.toFixed(2)}`),
+    ...totales.map((t) => `Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`),
   ].join("\n");
 
   const linkWhatsapp = cotizacion.telefonoResponsable
@@ -340,12 +341,12 @@ export default function CotizacionDetallePage() {
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{cotizacion.estado}</span>
           {totalUnificado ? (
             <p className="text-lg font-semibold">
-              {totalUnificado.simbolo} {totalUnificado.total.toFixed(2)} {totalUnificado.codigo}
+              {totalUnificado.simbolo} {formatMonto(totalUnificado.total)} {totalUnificado.codigo}
             </p>
           ) : (
             totales.map((t) => (
               <p key={t.codigo} className="text-lg font-semibold">
-                {t.simbolo} {t.total.toFixed(2)} {t.codigo}
+                {t.simbolo} {formatMonto(t.total)} {t.codigo}
               </p>
             ))
           )}
@@ -473,11 +474,11 @@ export default function CotizacionDetallePage() {
                   <td className="py-2">{cotizacion.cantidadPersonas}</td>
                   <td className="py-2">
                     {item.moneda.simbolo}
-                    {Number(item.precioUnitario).toFixed(2)} {item.moneda.codigo}
+                    {formatMonto(item.precioUnitario)} {item.moneda.codigo}
                   </td>
                   <td className="py-2">
                     {item.moneda.simbolo}
-                    {(Number(item.precioUnitario) * cotizacion.cantidadPersonas).toFixed(2)} {item.moneda.codigo}
+                    {formatMonto(Number(item.precioUnitario) * cotizacion.cantidadPersonas)} {item.moneda.codigo}
                   </td>
                 </tr>
               )),

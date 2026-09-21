@@ -453,17 +453,29 @@ export class ReservasService {
 
   /**
    * Actualiza fecha, hora, precio, moneda, pasajeros y (en reservas MULTIPLE) las líneas del
-   * itinerario. Solo se permite mientras la reserva está PENDIENTE: al confirmar ya queda un
-   * Pago asociado a un monto/fecha concretos, así que editar esos datos después dejaría el
-   * pago desalineado con la reserva. No permite cambiar el tipo de reserva ni el servicio o
-   * plantilla elegidos (eso es una decisión de creación, no de edición).
+   * itinerario. Permitido mientras la reserva está PENDIENTE o CONFIRMADA; no se permite en
+   * CANCELADA ni OPERADA. Una vez CONFIRMADA ya existe un Pago con un monto/moneda concretos,
+   * así que en ese estado no se permite cambiar precio, moneda ni las líneas de un itinerario
+   * MULTIPLE (eso dejaría el pago desalineado); solo fecha, hora y pasajeros. No permite cambiar
+   * el tipo de reserva ni el servicio o plantilla elegidos (eso es una decisión de creación, no
+   * de edición).
    */
   async actualizar(agenciaId: string, id: string, dto: UpdateReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
-    if (reserva.estado !== 'PENDIENTE') {
+    if (reserva.estado === 'CANCELADA' || reserva.estado === 'OPERADA') {
+      throw new BadRequestException('No se pueden modificar reservas canceladas u operadas');
+    }
+
+    const pagoRegistrado = reserva.estado === 'CONFIRMADA';
+    if (pagoRegistrado && (dto.precioLiquidado !== undefined || dto.monedaId)) {
       throw new BadRequestException(
-        'Solo se pueden modificar reservas pendientes, sin pago registrado todavía',
+        'Esta reserva ya tiene un pago registrado: no se puede cambiar el precio ni la moneda',
+      );
+    }
+    if (pagoRegistrado && reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
+      throw new BadRequestException(
+        'Esta reserva ya tiene un pago registrado: no se pueden modificar los servicios del itinerario',
       );
     }
 
@@ -610,6 +622,32 @@ export class ReservasService {
   async cancelar(agenciaId: string, id: string) {
     await this.findOne(agenciaId, id);
     return this.prisma.reserva.update({ where: { id }, data: { estado: 'CANCELADA' } });
+  }
+
+  /**
+   * Elimina una reserva de forma permanente. Solo permitido si la fecha de servicio es HOY
+   * (según el día calendario del cliente, recibido en `hoy` como "YYYY-MM-DD"); para cualquier
+   * otro día (pasado o futuro) solo se permite cancelar (ver `cancelar`). fechaServicioInicio se
+   * guarda como medianoche UTC del día seleccionado, así que comparar su parte de fecha en UTC
+   * siempre refleja el día calendario real elegido, sin importar la hora actual del servidor.
+   */
+  async eliminar(agenciaId: string, id: string, hoy: string) {
+    const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
+    if (!reserva) throw new NotFoundException('Reserva no encontrada');
+
+    const fechaReserva = reserva.fechaServicioInicio.toISOString().slice(0, 10);
+    if (fechaReserva !== hoy) {
+      throw new BadRequestException(
+        'Solo se pueden eliminar reservas cuya fecha de servicio sea hoy. Para otras fechas, use Cancelar.',
+      );
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.pago.deleteMany({ where: { reservaId: id } }),
+      this.prisma.cotizacion.updateMany({ where: { reservaId: id }, data: { reservaId: null } }),
+      this.prisma.reserva.delete({ where: { id } }),
+    ]);
+    return { success: true };
   }
 
   /**

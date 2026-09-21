@@ -7,7 +7,7 @@ import { FiltrosOrdenServicioDto } from './dto/filtros-orden-servicio.dto';
 
 const INCLUDE_ORDEN = {
   proveedor: true,
-  usuario: { select: { nombre: true } },
+  usuario: { select: { nombre: true, cliente: { select: { logoUrl: true } } } },
   agencia: { select: { nombre: true, razonSocial: true, rutONit: true, logoUrl: true } },
   items: { include: { servicio: true, moneda: true } },
 } satisfies Prisma.OrdenServicioInclude;

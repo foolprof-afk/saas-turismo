@@ -3,6 +3,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
+import { formatMonto } from "@/lib/moneda";
 
 interface Opcion {
   id: string;
@@ -204,7 +205,7 @@ export default function NuevaOrdenServicioPage() {
           <div className="text-right text-sm font-semibold">
             {totalPorMoneda().map((t) => (
               <div key={t.codigo}>
-                Total {t.codigo}: {t.simbolo} {t.total.toFixed(2)}
+                Total {t.codigo}: {t.simbolo} {formatMonto(t.total)}
               </div>
             ))}
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface MontoPorMoneda {
   monedaId: string;
@@ -43,13 +44,13 @@ function MontoCelda({ reserva }: { reserva: Reserva }) {
     <div className="space-y-0.5">
       {reserva.montos.map((m) => (
         <div key={m.monedaId}>
-          {m.monedaSimbolo} {m.total.toFixed(2)} <span className="text-xs text-gray-400">{m.monedaCodigo}</span>
+          {m.monedaSimbolo} {formatMonto(m.total)} <span className="text-xs text-gray-400">{m.monedaCodigo}</span>
         </div>
       ))}
       {mostrarEquivalente && (
         <div className="text-xs text-gray-400">
           ≈ {p!.monedaSimbolo}
-          {p!.total.toFixed(2)} {p!.monedaCodigo}
+          {formatMonto(p!.total)} {p!.monedaCodigo}
         </div>
       )}
     </div>

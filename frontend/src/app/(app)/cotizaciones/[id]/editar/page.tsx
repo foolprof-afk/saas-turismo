@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
+import { formatMonto } from "@/lib/moneda";
 
 interface ServicioOpcion {
   id: string;
@@ -65,7 +66,6 @@ export default function EditarCotizacionPage() {
   const [pasajeroResponsable, setPasajeroResponsable] = useState("");
   const [documentoResponsable, setDocumentoResponsable] = useState("");
   const [telefonoResponsable, setTelefonoResponsable] = useState("");
-  const [fechaServicio, setFechaServicio] = useState("");
   const [listaPrecioId, setListaPrecioId] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [notas, setNotas] = useState("");
@@ -88,7 +88,6 @@ export default function EditarCotizacionPage() {
         setPasajeroResponsable(c.pasajeroResponsable);
         setDocumentoResponsable(c.documentoResponsable ?? "");
         setTelefonoResponsable(c.telefonoResponsable ?? "");
-        setFechaServicio(c.fechaServicio.slice(0, 10));
         setListaPrecioId(c.listaPrecioId ?? "");
         setMonedaId(c.monedaId ?? "");
         setNotas(c.notas ?? "");
@@ -152,7 +151,6 @@ export default function EditarCotizacionPage() {
         pasajeroResponsable,
         documentoResponsable: documentoResponsable || undefined,
         telefonoResponsable: telefonoResponsable || undefined,
-        fechaServicio,
         listaPrecioId: listaPrecioId || "",
         monedaId: monedaId || "",
         notas: notas || undefined,
@@ -230,17 +228,7 @@ export default function EditarCotizacionPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="block text-sm font-medium">Fecha del servicio</label>
-            <input
-              type="date"
-              required
-              value={fechaServicio}
-              onChange={(e) => setFechaServicio(e.target.value)}
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Lista de precio</label>
             <select
@@ -338,8 +326,8 @@ export default function EditarCotizacionPage() {
                   {s && (
                     <p className="text-xs text-gray-400">
                       {s.descripcion ?? "Sin descripción"} · precio unitario:{" "}
-                      {precioLinea(linea, s).toFixed(2)} x {cantidadPersonas || 0} personas = total{" "}
-                      {(precioLinea(linea, s) * (Number(cantidadPersonas) || 0)).toFixed(2)}
+                      {formatMonto(precioLinea(linea, s))} x {cantidadPersonas || 0} personas = total{" "}
+                      {formatMonto(precioLinea(linea, s) * (Number(cantidadPersonas) || 0))}
                       {horas ? ` · ${horas} h` : ""}
                     </p>
                   )}
@@ -360,7 +348,7 @@ export default function EditarCotizacionPage() {
         </div>
 
         <p className="text-sm font-medium">
-          Total estimado: {monedaCotizacion?.simbolo ?? ""} {totalEstimado.toFixed(2)} {monedaCotizacion?.codigo ?? ""}
+          Total estimado: {monedaCotizacion?.simbolo ?? ""} {formatMonto(totalEstimado)} {monedaCotizacion?.codigo ?? ""}
         </p>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

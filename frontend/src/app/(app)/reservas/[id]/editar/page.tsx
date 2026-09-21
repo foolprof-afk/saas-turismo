@@ -121,7 +121,9 @@ export default function EditarReservaPage() {
     if (!reserva) return;
     setError(null);
 
-    if (reserva.tipo === "MULTIPLE") {
+    const pagoRegistrado = reserva.estado === "CONFIRMADA";
+
+    if (reserva.tipo === "MULTIPLE" && !pagoRegistrado) {
       for (const l of lineas) {
         if (!l.servicioId || !l.fecha) {
           setError("Completa servicio y fecha en cada línea del itinerario");
@@ -142,10 +144,11 @@ export default function EditarReservaPage() {
       await api.patch(`/reservas/${reserva.id}`, {
         fechaServicioInicio: reserva.tipo !== "MULTIPLE" ? fechaServicioInicio : undefined,
         horaServicio: reserva.tipo !== "MULTIPLE" ? horaServicio || undefined : undefined,
-        monedaId: reserva.tipo !== "MULTIPLE" ? monedaId : undefined,
-        precioLiquidado: reserva.tipo !== "MULTIPLE" && precioLiquidado ? Number(precioLiquidado) : undefined,
+        monedaId: reserva.tipo !== "MULTIPLE" && !pagoRegistrado ? monedaId : undefined,
+        precioLiquidado:
+          reserva.tipo !== "MULTIPLE" && !pagoRegistrado && precioLiquidado ? Number(precioLiquidado) : undefined,
         serviciosMultiples:
-          reserva.tipo === "MULTIPLE"
+          reserva.tipo === "MULTIPLE" && !pagoRegistrado
             ? lineas.map((l) => ({
                 servicioId: l.servicioId,
                 fecha: l.fecha,
@@ -165,12 +168,11 @@ export default function EditarReservaPage() {
 
   if (cargando) return <p className="text-sm text-gray-400">Cargando...</p>;
 
-  if (reserva && reserva.estado !== "PENDIENTE") {
+  if (reserva && (reserva.estado === "CANCELADA" || reserva.estado === "OPERADA")) {
     return (
       <div className="max-w-2xl space-y-4">
         <p className="text-sm text-red-600">
-          Esta reserva ya no se puede modificar (estado: {reserva.estado}). Solo se pueden editar reservas
-          pendientes, sin pago registrado.
+          Esta reserva ya no se puede modificar (estado: {reserva.estado}).
         </p>
         <Link href={`/reservas/${reserva.id}`} className="text-sm text-blue-600 hover:underline">
           Volver a la reserva
@@ -183,17 +185,28 @@ export default function EditarReservaPage() {
     return <p className="text-sm text-red-600">{error ?? "Reserva no encontrada"}</p>;
   }
 
+  const pagoRegistrado = reserva.estado === "CONFIRMADA";
+
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold">Editar reserva {reserva.codigoReserva}</h1>
+      {pagoRegistrado && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {reserva.tipo === "MULTIPLE"
+            ? "Esta reserva ya tiene un pago registrado: solo se pueden modificar los pasajeros. Para cambiar el itinerario, cancela la reserva y crea una nueva."
+            : "Esta reserva ya tiene un pago registrado: solo se pueden modificar la fecha, la hora y los pasajeros. Para cambiar el precio o la moneda, cancela la reserva y crea una nueva."}
+        </p>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
         {reserva.tipo === "MULTIPLE" ? (
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="block text-sm font-medium">Servicios del itinerario</label>
-              <button type="button" onClick={agregarLinea} className="text-sm text-blue-600 hover:underline">
-                + Agregar servicio
-              </button>
+              {!pagoRegistrado && (
+                <button type="button" onClick={agregarLinea} className="text-sm text-blue-600 hover:underline">
+                  + Agregar servicio
+                </button>
+              )}
             </div>
             <div className="space-y-3">
               {lineas.map((l, i) => {
@@ -204,12 +217,13 @@ export default function EditarReservaPage() {
                       <div className="flex-1">
                         <BuscadorServicio
                           required
+                          disabled={pagoRegistrado}
                           servicios={servicios}
                           value={l.servicioId}
                           onChange={(id) => seleccionarServicioLinea(i, id)}
                         />
                       </div>
-                      {lineas.length > 1 && (
+                      {!pagoRegistrado && lineas.length > 1 && (
                         <button
                           type="button"
                           onClick={() => quitarLinea(i)}
@@ -223,24 +237,27 @@ export default function EditarReservaPage() {
                       <input
                         type="date"
                         required
+                        disabled={pagoRegistrado}
                         value={l.fecha}
                         onChange={(e) => actualizarLinea(i, { fecha: e.target.value })}
-                        className="rounded border px-3 py-2 text-sm"
+                        className="rounded border px-3 py-2 text-sm disabled:bg-gray-100"
                       />
                       <input
                         type="time"
+                        disabled={pagoRegistrado}
                         value={l.horaInicio}
                         onChange={(e) => actualizarLinea(i, { horaInicio: e.target.value })}
-                        className="rounded border px-3 py-2 text-sm"
+                        className="rounded border px-3 py-2 text-sm disabled:bg-gray-100"
                       />
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
                           step="0.01"
+                          disabled={pagoRegistrado}
                           min={s ? Number(s.precioBase) : undefined}
                           value={l.precio}
                           onChange={(e) => actualizarLinea(i, { precio: e.target.value })}
-                          className="w-full rounded border px-3 py-2 text-sm"
+                          className="w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100"
                         />
                         {s && <span className="text-xs text-gray-400">{monedaCodigo(s.monedaId)}</span>}
                       </div>
@@ -278,9 +295,10 @@ export default function EditarReservaPage() {
               <label className="block text-sm font-medium">Moneda</label>
               <select
                 required
+                disabled={pagoRegistrado}
                 value={monedaId}
                 onChange={(e) => setMonedaId(e.target.value)}
-                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100"
               >
                 <option value="">Seleccionar...</option>
                 {monedas.map((m) => (
@@ -296,9 +314,10 @@ export default function EditarReservaPage() {
               <input
                 type="number"
                 step="0.01"
+                disabled={pagoRegistrado}
                 value={precioLiquidado}
                 onChange={(e) => setPrecioLiquidado(e.target.value)}
-                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100"
               />
               <p className="mt-1 text-xs text-gray-400">
                 No puede ser menor al precio establecido por la agencia para el servicio/plantilla original.

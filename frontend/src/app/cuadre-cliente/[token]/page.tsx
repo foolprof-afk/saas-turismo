@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -97,7 +98,7 @@ export default function CuadreClientePublicoPage() {
               Total general (convertido a moneda predeterminada)
             </h2>
             <p className="text-2xl font-bold text-emerald-800">
-              {data.totalGeneral.monedaSimbolo} {data.totalGeneral.total.toFixed(2)} {data.totalGeneral.monedaCodigo}
+              {data.totalGeneral.monedaSimbolo} {formatMonto(data.totalGeneral.total)} {data.totalGeneral.monedaCodigo}
             </p>
           </div>
         )}
@@ -118,7 +119,7 @@ export default function CuadreClientePublicoPage() {
                   <td className="py-1">{m.monedaCodigo}</td>
                   <td className="py-1">{m.cantidad}</td>
                   <td className="py-1 font-semibold">
-                    {m.monedaSimbolo} {m.total.toFixed(2)}
+                    {m.monedaSimbolo} {formatMonto(m.total)}
                   </td>
                 </tr>
               ))}
@@ -161,7 +162,7 @@ export default function CuadreClientePublicoPage() {
                   </td>
                   <td className="px-4 py-2">{r.moneda?.codigo}</td>
                   <td className="px-4 py-2">
-                    {r.moneda?.simbolo} {r.total}
+                    {r.moneda?.simbolo} {r.total !== null ? formatMonto(r.total) : "-"}
                   </td>
                 </tr>
               ))}

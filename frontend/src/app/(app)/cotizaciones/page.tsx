@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface Cotizacion {
   id: string;
@@ -175,7 +176,7 @@ export default function CotizacionesPage() {
                 <td className="px-4 py-2">
                   {totalCotizacion(c).map((t) => (
                     <div key={t.codigo}>
-                      {t.simbolo} {t.total.toFixed(2)} <span className="text-xs text-gray-400">{t.codigo}</span>
+                      {t.simbolo} {formatMonto(t.total)} <span className="text-xs text-gray-400">{t.codigo}</span>
                     </div>
                   ))}
                 </td>

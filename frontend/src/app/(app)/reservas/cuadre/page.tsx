@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface Vendedor {
   id: string;
@@ -293,7 +294,7 @@ export default function CuadreDeCajaPage() {
                 Total general (convertido a moneda predeterminada)
               </h2>
               <p className="text-2xl font-bold text-emerald-800">
-                {data.totalGeneral.monedaSimbolo} {data.totalGeneral.total.toFixed(2)} {data.totalGeneral.monedaCodigo}
+                {data.totalGeneral.monedaSimbolo} {formatMonto(data.totalGeneral.total)} {data.totalGeneral.monedaCodigo}
               </p>
               <p className="mt-1 text-xs text-emerald-700">
                 Moneda predeterminada: {data.monedaPrincipal.codigo} — tipo de cambio 1 {data.monedaPrincipal.codigo} ={" "}
@@ -330,12 +331,12 @@ export default function CuadreDeCajaPage() {
                       </td>
                       <td className="py-1">{m.cantidad}</td>
                       <td className="py-1 font-semibold">
-                        {m.monedaSimbolo} {m.total.toFixed(2)}
+                        {m.monedaSimbolo} {formatMonto(m.total)}
                       </td>
                       {data.monedaPrincipal && (
                         <td className="py-1 text-gray-500">
                           {equivalente !== null
-                            ? `≈ ${data.monedaPrincipal.simbolo}${equivalente.toFixed(2)} ${data.monedaPrincipal.codigo}`
+                            ? `≈ ${data.monedaPrincipal.simbolo}${formatMonto(equivalente)} ${data.monedaPrincipal.codigo}`
                             : "—"}
                         </td>
                       )}
@@ -375,7 +376,7 @@ export default function CuadreDeCajaPage() {
                     </td>
                     <td className="py-1">{v.cantidad}</td>
                     <td className="py-1">
-                      {v.monedaSimbolo} {v.total.toFixed(2)}
+                      {v.monedaSimbolo} {formatMonto(v.total)}
                     </td>
                   </tr>
                 ))}
@@ -424,7 +425,7 @@ export default function CuadreDeCajaPage() {
                     </td>
                     <td className="px-4 py-2">{r.moneda?.codigo}</td>
                     <td className="px-4 py-2">
-                      {r.moneda?.simbolo} {r.total}
+                      {r.moneda?.simbolo} {r.total !== null ? formatMonto(r.total) : "-"}
                     </td>
                   </tr>
                 ))}

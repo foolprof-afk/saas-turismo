@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { formatFechaHora } from "@/lib/fecha";
 
 interface Usuario {
   id: string;
@@ -199,7 +200,7 @@ export default function LogsPage() {
             )}
             {logs.map((l) => (
               <tr key={l.id} className="border-t">
-                <td className="px-4 py-2 whitespace-nowrap">{new Date(l.createdAt).toLocaleString()}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{formatFechaHora(l.createdAt)}</td>
                 <td className="px-4 py-2">{l.usuario?.nombre ?? l.usuarioEmail ?? "-"}</td>
                 <td className="px-4 py-2 font-mono text-xs text-gray-500">{l.ip ?? "-"}</td>
                 <td className="px-4 py-2">

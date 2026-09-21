@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, formatFechaCorta } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface Opcion {
   id: string;
@@ -186,7 +187,7 @@ export default function OrdenesServicioPage() {
                 </td>
                 <td className="px-4 py-2">{o.proveedor?.nombre}</td>
                 <td className="px-4 py-2">{rangoFechas(o)}</td>
-                <td className="px-4 py-2">{new Date(o.fechaEmision).toLocaleDateString()}</td>
+                <td className="px-4 py-2">{formatFechaCorta(o.fechaEmision)}</td>
                 <td className="px-4 py-2">
                   <span
                     className={`rounded-full px-2 py-1 text-xs ${
@@ -199,7 +200,7 @@ export default function OrdenesServicioPage() {
                 <td className="px-4 py-2">
                   {totalOrden(o).map((t) => (
                     <div key={t.codigo}>
-                      {t.simbolo} {t.total.toFixed(2)} <span className="text-xs text-gray-400">{t.codigo}</span>
+                      {t.simbolo} {formatMonto(t.total)} <span className="text-xs text-gray-400">{t.codigo}</span>
                     </div>
                   ))}
                 </td>

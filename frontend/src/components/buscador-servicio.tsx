@@ -15,6 +15,7 @@ interface BuscadorServicioProps {
   onChange: (id: string) => void;
   className?: string;
   required?: boolean;
+  disabled?: boolean;
 }
 
 /**
@@ -22,7 +23,7 @@ interface BuscadorServicioProps {
  * puede tener 50-100 servicios), el vendedor escribe parte del nombre y elige de una lista
  * filtrada. Sin librerías externas para mantener el bundle liviano.
  */
-export function BuscadorServicio({ servicios, value, onChange, className, required }: BuscadorServicioProps) {
+export function BuscadorServicio({ servicios, value, onChange, className, required, disabled }: BuscadorServicioProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const contenedorRef = useRef<HTMLDivElement>(null);
@@ -56,6 +57,7 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
       <input
         type="text"
         required={required}
+        disabled={disabled}
         value={query}
         placeholder="Escribe para buscar un servicio..."
         onFocus={() => setOpen(true)}
@@ -64,9 +66,9 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
           setOpen(true);
           if (value) onChange("");
         }}
-        className={className ?? "w-full rounded border px-3 py-2 text-sm"}
+        className={className ?? "w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100"}
       />
-      {open && (
+      {!disabled && open && (
         <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow-lg">
           {filtrados.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">Sin resultados</p>}
           {filtrados.map((s) => (

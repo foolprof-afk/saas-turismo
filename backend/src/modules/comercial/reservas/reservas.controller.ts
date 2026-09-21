@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -56,6 +56,13 @@ export class ReservasController {
   @Roles('admin', 'vendedor')
   cancelar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.reservasService.cancelar(user.agenciaId, id);
+  }
+
+  @Delete(':id')
+  @Roles('admin', 'vendedor')
+  eliminar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string, @Query('hoy') hoy: string) {
+    if (!hoy) throw new BadRequestException('hoy es obligatorio');
+    return this.reservasService.eliminar(user.agenciaId, id, hoy);
   }
 
   @Patch(':id/confirmar')

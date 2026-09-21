@@ -181,7 +181,7 @@ export class CotizacionesService {
         pasajeroResponsable: dto.pasajeroResponsable,
         documentoResponsable: dto.documentoResponsable,
         telefonoResponsable: dto.telefonoResponsable,
-        fechaServicio: new Date(dto.fechaServicio),
+        fechaServicio: new Date(),
         notas: dto.notas,
         items: { create: itemsData },
       },

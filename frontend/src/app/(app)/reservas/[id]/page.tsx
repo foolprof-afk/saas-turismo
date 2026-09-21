@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, formatFechaHora, hoyLocal } from "@/lib/fecha";
+import { formatMonto } from "@/lib/moneda";
 
 interface MontoPorMoneda {
   monedaId: string;
@@ -89,10 +90,10 @@ function formatoImagenDataUrl(dataUrl: string): string {
 
 function montoTexto(reserva: ReservaDetalle): string {
   if (!reserva.montos || reserva.montos.length === 0) return "-";
-  const base = reserva.montos.map((m) => `${m.monedaSimbolo} ${m.total.toFixed(2)} ${m.monedaCodigo}`).join(", ");
+  const base = reserva.montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
   const p = reserva.totalPrincipal;
   const mostrarEquivalente = p && (reserva.montos.length > 1 || reserva.montos[0]?.monedaId !== p.monedaId);
-  return mostrarEquivalente ? `${base} (≈ ${p!.monedaSimbolo}${p!.total.toFixed(2)} ${p!.monedaCodigo})` : base;
+  return mostrarEquivalente ? `${base} (≈ ${p!.monedaSimbolo}${formatMonto(p!.total)} ${p!.monedaCodigo})` : base;
 }
 
 function monedaPrincipalDe(monedas: Moneda[]): Moneda | undefined {
@@ -112,7 +113,7 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
   reserva.itinerario.dias.forEach((dia) => {
     const fecha = formatFecha(dia.fecha);
     dia.servicios.forEach((s) => {
-      const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${s.precio} ${s.moneda.codigo})` : "";
+      const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${formatMonto(s.precio)} ${s.moneda.codigo})` : "";
       lineas.push(`${fecha} ${s.horaInicio} — ${s.servicio.nombre}${precio}`);
     });
   });
@@ -121,6 +122,7 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
 
 export default function ReservaDetallePage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const [reserva, setReserva] = useState<ReservaDetalle | null>(null);
   const [formasPago, setFormasPago] = useState<FormaPago[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
@@ -133,6 +135,7 @@ export default function ReservaDetallePage() {
   const [monedaPagoId, setMonedaPagoId] = useState("");
   const [confirmando, setConfirmando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const formaPagoSeleccionada = formasPago.find((f) => f.id === formaPagoId);
@@ -194,6 +197,18 @@ export default function ReservaDetallePage() {
       setError(err instanceof ApiError ? err.message : "No se pudo cancelar la reserva");
     } finally {
       setCancelando(false);
+    }
+  };
+
+  const handleEliminar = async () => {
+    if (!confirm("¿Eliminar esta reserva de forma permanente? Esta acción no se puede deshacer.")) return;
+    setEliminando(true);
+    try {
+      await api.delete(`/reservas/${params.id}?hoy=${hoyLocal()}`);
+      router.push("/reservas");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo eliminar la reserva");
+      setEliminando(false);
     }
   };
 
@@ -296,7 +311,7 @@ export default function ReservaDetallePage() {
                 Enviar por WhatsApp
               </a>
             )}
-            {reserva.estado === "PENDIENTE" && (
+            {(reserva.estado === "PENDIENTE" || reserva.estado === "CONFIRMADA") && (
               <Link
                 href={`/reservas/${reserva.id}/editar`}
                 className="rounded border px-3 py-1 text-xs font-medium hover:bg-gray-50"
@@ -305,15 +320,27 @@ export default function ReservaDetallePage() {
               </Link>
             )}
           </div>
-          {reserva.estado !== "CANCELADA" && (
-            <button
-              onClick={handleCancelar}
-              disabled={cancelando}
-              className="text-sm text-red-600 hover:underline disabled:opacity-50"
-            >
-              {cancelando ? "Cancelando..." : "Cancelar reserva"}
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {reserva.estado !== "CANCELADA" && (
+              <button
+                onClick={handleCancelar}
+                disabled={cancelando}
+                className="text-sm text-red-600 hover:underline disabled:opacity-50"
+              >
+                {cancelando ? "Cancelando..." : "Cancelar reserva"}
+              </button>
+            )}
+            {reserva.fechaServicioInicio.slice(0, 10) === hoyLocal() && (
+              <button
+                onClick={handleEliminar}
+                disabled={eliminando}
+                title="Solo se puede eliminar el mismo día de la fecha de servicio"
+                className="text-sm text-red-600 hover:underline disabled:opacity-50"
+              >
+                {eliminando ? "Eliminando..." : "Eliminar reserva"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -445,13 +472,13 @@ export default function ReservaDetallePage() {
                 <div>
                   <p>
                     {p.formaPago?.nombre} — {p.moneda?.simbolo}
-                    {p.monto} {p.moneda?.codigo}
+                    {formatMonto(p.monto)} {p.moneda?.codigo}
                     {equivalente !== null && (
-                      <span className="text-gray-400"> (≈ {principal!.simbolo}{equivalente.toFixed(2)} {principal!.codigo})</span>
+                      <span className="text-gray-400"> (≈ {principal!.simbolo}{formatMonto(equivalente)} {principal!.codigo})</span>
                     )}
                   </p>
                   {p.referenciaExterna && <p className="text-xs text-gray-400">Ref: {p.referenciaExterna}</p>}
-                  <p className="text-xs text-gray-400">{new Date(p.fecha).toLocaleString()}</p>
+                  <p className="text-xs text-gray-400">{formatFechaHora(p.fecha)}</p>
                 </div>
                 {p.comprobanteUrl && (
                   <a href={p.comprobanteUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
@@ -518,7 +545,7 @@ export default function ReservaDetallePage() {
                       {s.precio && s.moneda && (
                         <span className="text-gray-500">
                           ({s.moneda.simbolo}
-                          {s.precio} {s.moneda.codigo})
+                          {formatMonto(s.precio)} {s.moneda.codigo})
                         </span>
                       )}{" "}
                       <span className="text-xs text-gray-400">({s.estado})</span>

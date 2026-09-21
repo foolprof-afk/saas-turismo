@@ -2,7 +2,6 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsDateString,
   IsInt,
   IsNumber,
   IsOptional,
@@ -49,9 +48,6 @@ export class CreateCotizacionDto {
   @IsOptional()
   @IsString()
   telefonoResponsable?: string;
-
-  @IsDateString()
-  fechaServicio: string;
 
   @IsOptional()
   @IsString()

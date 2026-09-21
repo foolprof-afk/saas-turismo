@@ -3,6 +3,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { formatMonto } from "@/lib/moneda";
 
 interface Opcion {
   id: string;
@@ -428,7 +429,7 @@ export default function ServiciosPage() {
                 </td>
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "-"}</td>
-                {verCostos && <td className="px-4 py-2">{s.precioBase}</td>}
+                {verCostos && <td className="px-4 py-2">{formatMonto(s.precioBase)}</td>}
                 <td className="px-4 py-2 text-right space-x-3">
                   <button onClick={() => editar(s)} className="text-blue-600 hover:underline">
                     Editar
