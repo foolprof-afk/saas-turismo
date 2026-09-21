@@ -22,6 +22,7 @@ interface Servicio {
   capacidadMax?: number | null;
   duracionMin?: number | null;
   precioBase: string;
+  precioCosto?: string | null;
   monedaId: string;
   rutaId?: string | null;
   puntoRecogidaId?: string | null;
@@ -48,6 +49,7 @@ export default function ServiciosPage() {
   const [capacidadMax, setCapacidadMax] = useState("");
   const [duracionMin, setDuracionMin] = useState("");
   const [precioBase, setPrecioBase] = useState("");
+  const [precioCosto, setPrecioCosto] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [rutaId, setRutaId] = useState("");
   const [puntoRecogidaId, setPuntoRecogidaId] = useState("");
@@ -100,6 +102,7 @@ export default function ServiciosPage() {
     setCapacidadMax("");
     setDuracionMin("");
     setPrecioBase("");
+    setPrecioCosto("");
     setMonedaId("");
     setRutaId("");
     setPuntoRecogidaId("");
@@ -115,6 +118,7 @@ export default function ServiciosPage() {
     setCapacidadMax(s.capacidadMax ? String(s.capacidadMax) : "");
     setDuracionMin(s.duracionMin ? String(s.duracionMin) : "");
     setPrecioBase(String(s.precioBase));
+    setPrecioCosto(s.precioCosto ? String(s.precioCosto) : "");
     setMonedaId(s.monedaId);
     setRutaId(s.rutaId ?? "");
     setPuntoRecogidaId(s.puntoRecogidaId ?? "");
@@ -134,6 +138,7 @@ export default function ServiciosPage() {
         capacidadMax: capacidadMax ? Number(capacidadMax) : undefined,
         duracionMin: duracionMin ? Number(duracionMin) : undefined,
         precioBase: Number(precioBase),
+        precioCosto: precioCosto ? Number(precioCosto) : undefined,
         monedaId,
         rutaId: rutaId || undefined,
         puntoRecogidaId: puntoRecogidaId || undefined,
@@ -220,7 +225,7 @@ export default function ServiciosPage() {
         </div>
 
         {verCostos && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="block text-sm font-medium">Precio base</label>
               <input
@@ -232,6 +237,19 @@ export default function ServiciosPage() {
                 onChange={(e) => setPrecioBase(e.target.value)}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Precio costo (opcional)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={precioCosto}
+                onChange={(e) => setPrecioCosto(e.target.value)}
+                placeholder="Lo que se paga al proveedor"
+                className="mt-1 w-full rounded border px-3 py-2 text-sm"
+              />
+              <p className="mt-1 text-xs text-gray-400">Se usa como valor por defecto al generar una orden de servicio.</p>
             </div>
             <div>
               <label className="block text-sm font-medium">Moneda</label>

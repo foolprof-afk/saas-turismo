@@ -27,6 +27,13 @@ export class CreateServicioDto {
   @IsNumber()
   precioBase: number;
 
+  // Precio que se le paga al proveedor por este servicio (opcional). Se usa como valor por
+  // defecto al generar una orden de servicio para ese proveedor.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  precioCosto?: number;
+
   @IsString()
   monedaId: string;
 

@@ -22,6 +22,7 @@ const NAV_ADMIN = [
   { href: "/plantillas-itinerario", label: "Plantillas", pagina: "plantillas-itinerario" },
   { href: "/servicios", label: "Servicios", pagina: "servicios" },
   { href: "/proveedores", label: "Proveedores", pagina: "proveedores" },
+  { href: "/ordenes-servicio", label: "Órdenes de servicio", pagina: "ordenes-servicio" },
   { href: "/vehiculos", label: "Vehículos", pagina: "vehiculos" },
   { href: "/guias", label: "Guías", pagina: "guias" },
   { href: "/rutas", label: "Rutas", pagina: "rutas" },

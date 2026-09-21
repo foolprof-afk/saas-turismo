@@ -76,44 +76,45 @@ enum AplicaImpuesto {
 // ----------------------------------------------------------------------------
 
 model Agencia {
-  id            String        @id @default(cuid())
-  nombre        String
-  razonSocial   String?
-  rutONit       String?
-  logoUrl       String?
-  subdominio    String        @unique
-  plan          String        @default("fase1") // fase1 | fase2 | fase3
-  esPlataforma  Boolean       @default(false)
-  estado        EstadoGeneral @default(ACTIVO)
-  timezone      String        @default("America/Lima")
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id           String        @id @default(cuid())
+  nombre       String
+  razonSocial  String?
+  rutONit      String?
+  logoUrl      String?
+  subdominio   String        @unique
+  plan         String        @default("fase1") // fase1 | fase2 | fase3
+  esPlataforma Boolean       @default(false)
+  estado       EstadoGeneral @default(ACTIVO)
+  timezone     String        @default("America/Lima")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  usuarios              Usuario[]
-  clientes              Cliente[]
-  proveedores           Proveedor[]
-  servicios             Servicio[]
-  plantillasItinerario  PlantillaItinerario[]
-  reservas              Reserva[]
-  vehiculos             Vehiculo[]
-  guias                 Guia[]
-  rutas                 Ruta[]
-  puntosRecogida        PuntoRecogida[]
-  monedas               Moneda[]
-  impuestos             Impuesto[]
-  formasPago            FormaPago[]
-  logsActividad         LogActividad[]
-  listasPrecio          ListaPrecio[]
-  cotizaciones          Cotizacion[]
+  usuarios             Usuario[]
+  clientes             Cliente[]
+  proveedores          Proveedor[]
+  servicios            Servicio[]
+  plantillasItinerario PlantillaItinerario[]
+  reservas             Reserva[]
+  vehiculos            Vehiculo[]
+  guias                Guia[]
+  rutas                Ruta[]
+  puntosRecogida       PuntoRecogida[]
+  monedas              Moneda[]
+  impuestos            Impuesto[]
+  formasPago           FormaPago[]
+  logsActividad        LogActividad[]
+  listasPrecio         ListaPrecio[]
+  cotizaciones         Cotizacion[]
+  ordenesServicio      OrdenServicio[]
 
   @@map("agencias")
 }
 
 model Rol {
-  id        String    @id @default(cuid())
-  nombre    String    @unique // admin | vendedor | operacion | finanzas
-  permisos  Json      @default("{}")
-  usuarios  Usuario[]
+  id       String    @id @default(cuid())
+  nombre   String    @unique // admin | vendedor | operacion | finanzas
+  permisos Json      @default("{}")
+  usuarios Usuario[]
 
   @@map("roles")
 }
@@ -133,10 +134,10 @@ model Usuario {
   ultimoLogin  DateTime?
   createdAt    DateTime      @default(now())
 
-  agencia          Agencia            @relation(fields: [agenciaId], references: [id])
-  rol              Rol                @relation(fields: [rolId], references: [id])
-  cliente          Cliente?           @relation("ClienteUsuarios", fields: [clienteId], references: [id])
-  reservasVendidas Reserva[]          @relation("VendedorReserva")
+  agencia          Agencia   @relation(fields: [agenciaId], references: [id])
+  rol              Rol       @relation(fields: [rolId], references: [id])
+  cliente          Cliente?  @relation("ClienteUsuarios", fields: [clienteId], references: [id])
+  reservasVendidas Reserva[] @relation("VendedorReserva")
   checkins         CheckIn[]
   clienteVinculado Cliente?
 
@@ -149,8 +150,9 @@ model Usuario {
 
   // Listas de precio a las que este usuario tiene acceso al crear cotizaciones/reservas
   // (ver ListaPrecio). Si solo tiene una, es la unica que puede usar.
-  listasPrecio        ListaPrecio[] @relation("UsuarioListaPrecio")
-  cotizacionesVendidas Cotizacion[] @relation("VendedorCotizacion")
+  listasPrecio            ListaPrecio[]   @relation("UsuarioListaPrecio")
+  cotizacionesVendidas    Cotizacion[]    @relation("VendedorCotizacion")
+  ordenesServicioEmitidas OrdenServicio[]
 
   @@unique([agenciaId, email])
   @@map("usuarios")
@@ -166,8 +168,8 @@ model ListaPrecio {
   porcentajeAdicional Decimal       @default(0) @db.Decimal(5, 2)
   estado              EstadoGeneral @default(ACTIVO)
 
-  agencia      Agencia          @relation(fields: [agenciaId], references: [id])
-  usuarios     Usuario[]        @relation("UsuarioListaPrecio")
+  agencia      Agencia      @relation(fields: [agenciaId], references: [id])
+  usuarios     Usuario[]    @relation("UsuarioListaPrecio")
   cotizaciones Cotizacion[]
 
   @@map("listas_precio")
@@ -183,23 +185,23 @@ enum EstadoCotizacion {
 // transformar en una Reserva real con "confirmar" (ver CotizacionesService.confirmar), que
 // reutiliza ReservasService.create con tipo MULTIPLE a partir de los items de la cotizacion.
 model Cotizacion {
-  id                    String           @id @default(cuid())
-  agenciaId             String
-  clienteId             String
-  vendedorId            String
-  listaPrecioId         String?
-  monedaId              String?
-  reservaId             String?          @unique
-  codigoCotizacion      String           @unique
-  estado                EstadoCotizacion @default(PENDIENTE)
-  cantidadPersonas      Int
-  pasajeroResponsable   String
-  documentoResponsable  String?
-  telefonoResponsable   String?
-  fechaServicio         DateTime
-  notas                 String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                   String           @id @default(cuid())
+  agenciaId            String
+  clienteId            String
+  vendedorId           String
+  listaPrecioId        String?
+  monedaId             String?
+  reservaId            String?          @unique
+  codigoCotizacion     String           @unique
+  estado               EstadoCotizacion @default(PENDIENTE)
+  cantidadPersonas     Int
+  pasajeroResponsable  String
+  documentoResponsable String?
+  telefonoResponsable  String?
+  fechaServicio        DateTime
+  notas                String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   agencia     Agencia          @relation(fields: [agenciaId], references: [id])
   cliente     Cliente          @relation(fields: [clienteId], references: [id])
@@ -303,13 +305,13 @@ model Reserva {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  agencia              Agencia               @relation(fields: [agenciaId], references: [id])
-  cliente              Cliente               @relation(fields: [clienteId], references: [id])
-  vendedor             Usuario               @relation("VendedorReserva", fields: [vendedorId], references: [id])
-  moneda               Moneda?               @relation(fields: [monedaId], references: [id])
-  formaPago            FormaPago?            @relation(fields: [formaPagoId], references: [id])
-  plantillaItinerario  PlantillaItinerario?  @relation(fields: [plantillaItinerarioId], references: [id])
-  servicio             Servicio?             @relation(fields: [servicioId], references: [id])
+  agencia             Agencia              @relation(fields: [agenciaId], references: [id])
+  cliente             Cliente              @relation(fields: [clienteId], references: [id])
+  vendedor            Usuario              @relation("VendedorReserva", fields: [vendedorId], references: [id])
+  moneda              Moneda?              @relation(fields: [monedaId], references: [id])
+  formaPago           FormaPago?           @relation(fields: [formaPagoId], references: [id])
+  plantillaItinerario PlantillaItinerario? @relation(fields: [plantillaItinerarioId], references: [id])
+  servicio            Servicio?            @relation(fields: [servicioId], references: [id])
 
   pasajeros  Pasajero[]
   voucher    Voucher?
@@ -321,16 +323,16 @@ model Reserva {
 }
 
 model Pasajero {
-  id         String       @id @default(cuid())
-  reservaId  String
-  nombre     String
-  documento  String?
-  telefono   String?
-  tipo       TipoPasajero @default(ADULTO)
-  nacionalidad String?
+  id            String       @id @default(cuid())
+  reservaId     String
+  nombre        String
+  documento     String?
+  telefono      String?
+  tipo          TipoPasajero @default(ADULTO)
+  nacionalidad  String?
   // Responsable/titular del grupo dentro de la reserva. Una reserva puede llevar varios
   // pasajeros pero siempre debe tener exactamente un responsable de contacto.
-  esResponsable Boolean   @default(false)
+  esResponsable Boolean      @default(false)
 
   reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
 
@@ -338,15 +340,15 @@ model Pasajero {
 }
 
 model Voucher {
-  id          String   @id @default(cuid())
-  reservaId   String   @unique
-  codigo      String   @unique
+  id          String    @id @default(cuid())
+  reservaId   String    @unique
+  codigo      String    @unique
   qrUrl       String
   // URL pública (texto plano) que codifica el QR, para poder compartirla directamente
   // (ej. por WhatsApp) sin tener que decodificar la imagen del QR.
   url         String?
   pdfUrl      String?
-  emitidoAt   DateTime @default(now())
+  emitidoAt   DateTime  @default(now())
   validoHasta DateTime?
 
   reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
@@ -359,20 +361,21 @@ model Voucher {
 // ----------------------------------------------------------------------------
 
 model Proveedor {
-  id                String        @id @default(cuid())
-  agenciaId         String
-  nombre            String
-  tipo              String        // hotel | transportista | guia_freelance | otro
-  contacto          String?
-  condicionesPago   String?
-  cuentaBancaria    String?
-  estado            EstadoGeneral @default(ACTIVO)
+  id              String        @id @default(cuid())
+  agenciaId       String
+  nombre          String
+  tipo            String // hotel | transportista | guia_freelance | otro
+  contacto        String?
+  condicionesPago String?
+  cuentaBancaria  String?
+  estado          EstadoGeneral @default(ACTIVO)
 
-  agencia      Agencia       @relation(fields: [agenciaId], references: [id])
-  servicios    Servicio[]
-  vehiculos    Vehiculo[]
-  guias        Guia[]
-  liquidaciones Liquidacion[]
+  agencia         Agencia         @relation(fields: [agenciaId], references: [id])
+  servicios       Servicio[]
+  vehiculos       Vehiculo[]
+  guias           Guia[]
+  liquidaciones   Liquidacion[]
+  ordenesServicio OrdenServicio[]
 
   @@map("proveedores")
 }
@@ -388,22 +391,27 @@ model TipoServicio {
 }
 
 model Servicio {
-  id               String        @id @default(cuid())
-  agenciaId        String
-  proveedorId      String
-  tipoServicioId   String
-  nombre           String
-  descripcion      String?
-  capacidadMax     Int?
-  duracionMin      Int?
-  precioBase       Decimal       @db.Decimal(12, 2)
-  monedaId         String
-  rutaId           String?
-  puntoRecogidaId  String?
-  estado           EstadoGeneral @default(ACTIVO)
+  id              String        @id @default(cuid())
+  agenciaId       String
+  proveedorId     String
+  tipoServicioId  String
+  nombre          String
+  descripcion     String?
+  capacidadMax    Int?
+  duracionMin     Int?
+  precioBase      Decimal       @db.Decimal(12, 2)
+  // Precio que la agencia paga al proveedor por este servicio (opcional). Sirve de valor por
+  // defecto al armar una OrdenServicio, para no tener que digitarlo cada vez (ver
+  // OrdenesServicioService.construirItems); cada línea de la orden lo congela igual que
+  // CotizacionItem congela precioUnitario.
+  precioCosto     Decimal?      @db.Decimal(12, 2)
+  monedaId        String
+  rutaId          String?
+  puntoRecogidaId String?
+  estado          EstadoGeneral @default(ACTIVO)
   // Palabras clave opcionales (sin el símbolo #) para facilitar la búsqueda cuando la
   // agencia tiene muchos servicios; se muestran/capturan como hashtags en la UI.
-  palabrasClave    String[]      @default([])
+  palabrasClave   String[]      @default([])
 
   agencia       Agencia        @relation(fields: [agenciaId], references: [id])
   proveedor     Proveedor      @relation(fields: [proveedorId], references: [id])
@@ -412,11 +420,12 @@ model Servicio {
   ruta          Ruta?          @relation(fields: [rutaId], references: [id])
   puntoRecogida PuntoRecogida? @relation(fields: [puntoRecogidaId], references: [id])
 
-  impuestos                ServicioImpuesto[]
-  plantillaItems           PlantillaItinerarioServicio[]
-  itinerarioItems          ItinerarioServicio[]
-  reservas                 Reserva[]
-  cotizacionItems          CotizacionItem[]
+  impuestos          ServicioImpuesto[]
+  plantillaItems     PlantillaItinerarioServicio[]
+  itinerarioItems    ItinerarioServicio[]
+  reservas           Reserva[]
+  cotizacionItems    CotizacionItem[]
+  ordenServicioItems OrdenServicioItem[]
 
   @@map("servicios")
 }
@@ -441,7 +450,7 @@ model PlantillaItinerario {
   diasTotales Int
   estado      EstadoGeneral @default(ACTIVO)
 
-  agencia  Agencia                      @relation(fields: [agenciaId], references: [id])
+  agencia  Agencia                  @relation(fields: [agenciaId], references: [id])
   dias     PlantillaItinerarioDia[]
   reservas Reserva[]
 
@@ -461,11 +470,11 @@ model PlantillaItinerarioDia {
 }
 
 model PlantillaItinerarioServicio {
-  id                        String   @id @default(cuid())
-  plantillaItinerarioDiaId  String
-  servicioId                String
-  horaInicio                String   // "HH:mm"
-  orden                     Int
+  id                       String @id @default(cuid())
+  plantillaItinerarioDiaId String
+  servicioId               String
+  horaInicio               String // "HH:mm"
+  orden                    Int
 
   dia      PlantillaItinerarioDia @relation(fields: [plantillaItinerarioDiaId], references: [id], onDelete: Cascade)
   servicio Servicio               @relation(fields: [servicioId], references: [id])
@@ -478,7 +487,7 @@ model Itinerario {
   id        String @id @default(cuid())
   reservaId String @unique
 
-  reserva Reserva          @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+  reserva Reserva         @relation(fields: [reservaId], references: [id], onDelete: Cascade)
   dias    ItinerarioDia[]
 
   @@map("itinerarios")
@@ -498,27 +507,27 @@ model ItinerarioDia {
 }
 
 model ItinerarioServicio {
-  id               String                   @id @default(cuid())
-  itinerarioDiaId  String
-  servicioId       String
-  horaInicio       String
-  horaFin          String?
-  vehiculoId       String?
-  guiaId           String?
-  puntoRecogidaId  String?
-  estado           EstadoItinerarioServicio @default(PENDIENTE)
+  id              String                   @id @default(cuid())
+  itinerarioDiaId String
+  servicioId      String
+  horaInicio      String
+  horaFin         String?
+  vehiculoId      String?
+  guiaId          String?
+  puntoRecogidaId String?
+  estado          EstadoItinerarioServicio @default(PENDIENTE)
   // Precio liquidado y moneda de esta línea de servicio dentro de la reserva. Solo se usan
   // cuando la reserva es de tipo MULTIPLE (varios servicios, cada uno con su propia moneda);
   // para reservas de un solo servicio o plantilla, el precio vive en Reserva.total/monedaId.
-  precio           Decimal?                 @db.Decimal(12, 2)
-  monedaId         String?
+  precio          Decimal?                 @db.Decimal(12, 2)
+  monedaId        String?
 
-  dia            ItinerarioDia   @relation(fields: [itinerarioDiaId], references: [id], onDelete: Cascade)
-  servicio       Servicio        @relation(fields: [servicioId], references: [id])
-  vehiculo       Vehiculo?       @relation(fields: [vehiculoId], references: [id])
-  guia           Guia?           @relation(fields: [guiaId], references: [id])
-  puntoRecogida  PuntoRecogida?  @relation(fields: [puntoRecogidaId], references: [id])
-  moneda         Moneda?         @relation(fields: [monedaId], references: [id])
+  dia           ItinerarioDia  @relation(fields: [itinerarioDiaId], references: [id], onDelete: Cascade)
+  servicio      Servicio       @relation(fields: [servicioId], references: [id])
+  vehiculo      Vehiculo?      @relation(fields: [vehiculoId], references: [id])
+  guia          Guia?          @relation(fields: [guiaId], references: [id])
+  puntoRecogida PuntoRecogida? @relation(fields: [puntoRecogidaId], references: [id])
+  moneda        Moneda?        @relation(fields: [monedaId], references: [id])
 
   checkin             CheckIn?
   liquidacionDetalles LiquidacionDetalle[]
@@ -527,12 +536,12 @@ model ItinerarioServicio {
 }
 
 model CheckIn {
-  id                    String        @id @default(cuid())
-  itinerarioServicioId  String        @unique
-  usuarioOperacionId    String
-  fechaHora             DateTime      @default(now())
-  metodo                MetodoCheckIn @default(QR)
-  observaciones         String?
+  id                   String        @id @default(cuid())
+  itinerarioServicioId String        @unique
+  usuarioOperacionId   String
+  fechaHora            DateTime      @default(now())
+  metodo               MetodoCheckIn @default(QR)
+  observaciones        String?
 
   itinerarioServicio ItinerarioServicio @relation(fields: [itinerarioServicioId], references: [id], onDelete: Cascade)
   usuarioOperacion   Usuario            @relation(fields: [usuarioOperacionId], references: [id])
@@ -545,13 +554,13 @@ model CheckIn {
 // ----------------------------------------------------------------------------
 
 model Vehiculo {
-  id           String        @id @default(cuid())
-  agenciaId    String
-  proveedorId  String?
-  patente      String
-  tipo         String
-  capacidad    Int
-  estado       EstadoGeneral @default(ACTIVO)
+  id          String        @id @default(cuid())
+  agenciaId   String
+  proveedorId String?
+  patente     String
+  tipo        String
+  capacidad   Int
+  estado      EstadoGeneral @default(ACTIVO)
 
   agencia   Agencia              @relation(fields: [agenciaId], references: [id])
   proveedor Proveedor?           @relation(fields: [proveedorId], references: [id])
@@ -561,14 +570,14 @@ model Vehiculo {
 }
 
 model Guia {
-  id           String        @id @default(cuid())
-  agenciaId    String
-  proveedorId  String?
-  nombre       String
-  idiomas      String[]
-  licencia     String?
-  telefono     String?
-  estado       EstadoGeneral @default(ACTIVO)
+  id          String        @id @default(cuid())
+  agenciaId   String
+  proveedorId String?
+  nombre      String
+  idiomas     String[]
+  licencia    String?
+  telefono    String?
+  estado      EstadoGeneral @default(ACTIVO)
 
   agencia   Agencia              @relation(fields: [agenciaId], references: [id])
   proveedor Proveedor?           @relation(fields: [proveedorId], references: [id])
@@ -578,13 +587,13 @@ model Guia {
 }
 
 model Ruta {
-  id                 String  @id @default(cuid())
-  agenciaId          String
-  nombre             String
-  origen             String
-  destino            String
+  id                  String   @id @default(cuid())
+  agenciaId           String
+  nombre              String
+  origen              String
+  destino             String
   duracionEstimadaMin Int?
-  distanciaKm        Decimal? @db.Decimal(8, 2)
+  distanciaKm         Decimal? @db.Decimal(8, 2)
 
   agencia   Agencia    @relation(fields: [agenciaId], references: [id])
   servicios Servicio[]
@@ -593,7 +602,7 @@ model Ruta {
 }
 
 model PuntoRecogida {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   agenciaId  String
   nombre     String
   direccion  String?
@@ -601,9 +610,9 @@ model PuntoRecogida {
   lng        Decimal? @db.Decimal(10, 7)
   referencia String?
 
-  agencia          Agencia              @relation(fields: [agenciaId], references: [id])
-  servicios        Servicio[]
-  itinerarioItems  ItinerarioServicio[]
+  agencia         Agencia              @relation(fields: [agenciaId], references: [id])
+  servicios       Servicio[]
+  itinerarioItems ItinerarioServicio[]
 
   @@map("puntos_recogida")
 }
@@ -613,31 +622,32 @@ model PuntoRecogida {
 // ----------------------------------------------------------------------------
 
 model Moneda {
-  id           String   @id @default(cuid())
-  agenciaId    String
-  codigo       String   // USD | PEN | CLP ...
-  simbolo      String
-  tasaCambio   Decimal  @db.Decimal(10, 4) @default(1)
-  esPrincipal  Boolean  @default(false)
+  id          String  @id @default(cuid())
+  agenciaId   String
+  codigo      String // USD | PEN | CLP ...
+  simbolo     String
+  tasaCambio  Decimal @default(1) @db.Decimal(10, 4)
+  esPrincipal Boolean @default(false)
 
-  agencia            Agencia              @relation(fields: [agenciaId], references: [id])
-  servicios          Servicio[]
-  reservas           Reserva[]
+  agencia             Agencia              @relation(fields: [agenciaId], references: [id])
+  servicios           Servicio[]
+  reservas            Reserva[]
   itinerarioServicios ItinerarioServicio[]
-  pagos              Pago[]
-  cotizacionItems    CotizacionItem[]
-  cotizaciones       Cotizacion[]
+  pagos               Pago[]
+  cotizacionItems     CotizacionItem[]
+  cotizaciones        Cotizacion[]
+  ordenServicioItems  OrdenServicioItem[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")
 }
 
 model Impuesto {
-  id          String          @id @default(cuid())
-  agenciaId   String
-  nombre      String
-  porcentaje  Decimal         @db.Decimal(5, 2)
-  aplicaA     AplicaImpuesto  @default(SERVICIO)
+  id         String         @id @default(cuid())
+  agenciaId  String
+  nombre     String
+  porcentaje Decimal        @db.Decimal(5, 2)
+  aplicaA    AplicaImpuesto @default(SERVICIO)
 
   agencia   Agencia            @relation(fields: [agenciaId], references: [id])
   servicios ServicioImpuesto[]
@@ -646,10 +656,10 @@ model Impuesto {
 }
 
 model FormaPago {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   agenciaId String
-  nombre    String   // efectivo | tarjeta | transferencia | pasarela
-  config    Json     @default("{}")
+  nombre    String // efectivo | tarjeta | transferencia | pasarela
+  config    Json   @default("{}")
 
   agencia  Agencia   @relation(fields: [agenciaId], references: [id])
   reservas Reserva[]
@@ -659,15 +669,15 @@ model FormaPago {
 }
 
 model Pago {
-  id                 String     @id @default(cuid())
-  reservaId          String
-  formaPagoId        String
-  monto              Decimal    @db.Decimal(12, 2)
-  monedaId           String
-  fecha              DateTime   @default(now())
-  referenciaExterna  String?
-  comprobanteUrl     String?
-  estado             EstadoPago @default(PENDIENTE)
+  id                String     @id @default(cuid())
+  reservaId         String
+  formaPagoId       String
+  monto             Decimal    @db.Decimal(12, 2)
+  monedaId          String
+  fecha             DateTime   @default(now())
+  referenciaExterna String?
+  comprobanteUrl    String?
+  estado            EstadoPago @default(PENDIENTE)
 
   reserva   Reserva   @relation(fields: [reservaId], references: [id])
   formaPago FormaPago @relation(fields: [formaPagoId], references: [id])
@@ -677,29 +687,80 @@ model Pago {
 }
 
 model Liquidacion {
-  id             String            @id @default(cuid())
-  proveedorId    String
-  periodoInicio  DateTime          @db.Date
-  periodoFin     DateTime          @db.Date
-  total          Decimal           @db.Decimal(12, 2)
-  estado         EstadoLiquidacion @default(PENDIENTE)
-  fechaPago      DateTime?
+  id            String            @id @default(cuid())
+  proveedorId   String
+  periodoInicio DateTime          @db.Date
+  periodoFin    DateTime          @db.Date
+  total         Decimal           @db.Decimal(12, 2)
+  estado        EstadoLiquidacion @default(PENDIENTE)
+  fechaPago     DateTime?
 
-  proveedor Proveedor             @relation(fields: [proveedorId], references: [id])
+  proveedor Proveedor            @relation(fields: [proveedorId], references: [id])
   detalles  LiquidacionDetalle[]
 
   @@map("liquidaciones")
 }
 
 model LiquidacionDetalle {
-  id                    String  @id @default(cuid())
-  liquidacionId         String
-  itinerarioServicioId  String
-  monto                 Decimal @db.Decimal(12, 2)
-  comisionAgencia       Decimal @db.Decimal(12, 2) @default(0)
+  id                   String  @id @default(cuid())
+  liquidacionId        String
+  itinerarioServicioId String
+  monto                Decimal @db.Decimal(12, 2)
+  comisionAgencia      Decimal @default(0) @db.Decimal(12, 2)
 
   liquidacion        Liquidacion        @relation(fields: [liquidacionId], references: [id], onDelete: Cascade)
   itinerarioServicio ItinerarioServicio @relation(fields: [itinerarioServicioId], references: [id])
 
   @@map("liquidacion_detalles")
+}
+
+// ----------------------------------------------------------------------------
+// COMPRAS — Órdenes de servicio a proveedores (módulo opcional)
+// ----------------------------------------------------------------------------
+
+enum EstadoOrdenServicio {
+  EMITIDA
+  ANULADA
+}
+
+// Documento que la agencia envía a un proveedor pidiéndole que ejecute uno o más servicios a
+// un precio costo pactado (ver OrdenServicioItem). Es independiente de Reserva/Cotizacion:
+// no reserva capacidad ni compromete al cliente, solo documenta la orden de compra hacia el
+// proveedor (ver diseño en OrdenesServicioService).
+model OrdenServicio {
+  id            String              @id @default(cuid())
+  agenciaId     String
+  proveedorId   String
+  usuarioId     String
+  codigoOrden   String              @unique
+  estado        EstadoOrdenServicio @default(EMITIDA)
+  fechaEmision  DateTime            @default(now())
+  fechaServicio DateTime
+  notas         String?
+  createdAt     DateTime            @default(now())
+
+  agencia   Agencia             @relation(fields: [agenciaId], references: [id])
+  proveedor Proveedor           @relation(fields: [proveedorId], references: [id])
+  usuario   Usuario             @relation(fields: [usuarioId], references: [id])
+  items     OrdenServicioItem[]
+
+  @@map("ordenes_servicio")
+}
+
+// Linea de una orden de servicio. precioCosto queda congelado al crear la orden (tomado de
+// Servicio.precioCosto o sobreescrito a mano), igual que CotizacionItem.precioUnitario, para
+// que el documento enviado al proveedor no cambie si luego se edita el costo del servicio.
+model OrdenServicioItem {
+  id              String  @id @default(cuid())
+  ordenServicioId String
+  servicioId      String
+  cantidad        Int
+  precioCosto     Decimal @db.Decimal(12, 2)
+  monedaId        String
+
+  ordenServicio OrdenServicio @relation(fields: [ordenServicioId], references: [id], onDelete: Cascade)
+  servicio      Servicio      @relation(fields: [servicioId], references: [id])
+  moneda        Moneda        @relation(fields: [monedaId], references: [id])
+
+  @@map("orden_servicio_items")
 }

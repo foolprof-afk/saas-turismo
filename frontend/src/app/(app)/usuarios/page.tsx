@@ -54,6 +54,7 @@ const PAGINAS_ADMIN = [
   { key: "plantillas-itinerario", label: "Plantillas" },
   { key: "servicios", label: "Servicios" },
   { key: "proveedores", label: "Proveedores" },
+  { key: "ordenes-servicio", label: "Órdenes de servicio" },
   { key: "vehiculos", label: "Vehículos" },
   { key: "guias", label: "Guías" },
   { key: "rutas", label: "Rutas" },
