@@ -107,3 +107,62 @@ export function convertirAPrincipal(
 export function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number): number {
   return (monto * tasaDestino) / tasaOrigen;
 }
+
+interface PagoConMoneda {
+  monto: unknown;
+  monedaId: string;
+  moneda: MonedaInfo;
+  estado: string;
+}
+
+/**
+ * Suma lo efectivamente abonado a una reserva, agrupado por moneda. Solo cuentan los pagos en
+ * estado PAGADO (los PENDIENTE son pagos diferidos que aún no se han cobrado). El impuesto de
+ * cada pago (Pago.montoImpuesto) queda fuera de esta suma a propósito: es un cargo aparte de la
+ * forma de pago, no un abono al total de la reserva.
+ */
+export function calcularAbonado(pagos: PagoConMoneda[]): MontoPorMoneda[] {
+  const map = new Map<string, MontoPorMoneda>();
+  for (const pago of pagos) {
+    if (pago.estado !== 'PAGADO') continue;
+    const entry = map.get(pago.monedaId) ?? {
+      monedaId: pago.monedaId,
+      monedaCodigo: pago.moneda.codigo,
+      monedaSimbolo: pago.moneda.simbolo,
+      tasaCambio: Number(pago.moneda.tasaCambio),
+      total: 0,
+    };
+    entry.total += Number(pago.monto);
+    map.set(pago.monedaId, entry);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Total de la reserva menos lo abonado, por moneda (nunca se mezclan montos de monedas
+ * distintas). Si se abonó en una moneda que no forma parte del total de la reserva, igual se
+ * incluye (como saldo negativo, es decir sobrepago informativo en esa moneda).
+ */
+export function calcularSaldoPendiente(montos: MontoPorMoneda[], abonado: MontoPorMoneda[]): MontoPorMoneda[] {
+  const map = new Map<string, MontoPorMoneda>();
+  for (const m of montos) map.set(m.monedaId, { ...m });
+  for (const a of abonado) {
+    const existente = map.get(a.monedaId);
+    if (existente) {
+      existente.total -= a.total;
+    } else {
+      map.set(a.monedaId, { ...a, total: -a.total });
+    }
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Impuesto de un pago según el porcentaje configurado en la forma de pago elegida
+ * (FormaPago.config.impuestoPorcentaje). Se calcula sobre el monto abonado pero se registra
+ * aparte (Pago.montoImpuesto): no se suma al abono ni se descuenta del saldo pendiente.
+ */
+export function calcularMontoImpuesto(porcentaje: number | undefined | null, monto: number): number {
+  if (!porcentaje) return 0;
+  return Math.round(monto * (porcentaje / 100) * 100) / 100;
+}

@@ -6,7 +6,12 @@ import { api, ApiError } from "@/lib/api";
 interface FormaPago {
   id: string;
   nombre: string;
-  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean; permitePagoDiferido?: boolean };
+  config?: {
+    requiereReferencia?: boolean;
+    requiereComprobante?: boolean;
+    permitePagoDiferido?: boolean;
+    impuestoPorcentaje?: number;
+  };
 }
 
 export default function FormasPagoPage() {
@@ -18,6 +23,7 @@ export default function FormasPagoPage() {
   const [requiereReferencia, setRequiereReferencia] = useState(true);
   const [requiereComprobante, setRequiereComprobante] = useState(false);
   const [permitePagoDiferido, setPermitePagoDiferido] = useState(false);
+  const [impuestoPorcentaje, setImpuestoPorcentaje] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,6 +46,7 @@ export default function FormasPagoPage() {
     setRequiereReferencia(true);
     setRequiereComprobante(false);
     setPermitePagoDiferido(false);
+    setImpuestoPorcentaje("");
   };
 
   const editar = (f: FormaPago) => {
@@ -48,6 +55,7 @@ export default function FormasPagoPage() {
     setRequiereReferencia(f.config?.requiereReferencia ?? true);
     setRequiereComprobante(f.config?.requiereComprobante ?? false);
     setPermitePagoDiferido(f.config?.permitePagoDiferido ?? false);
+    setImpuestoPorcentaje(f.config?.impuestoPorcentaje ? String(f.config.impuestoPorcentaje) : "");
   };
 
   const eliminar = async (id: string) => {
@@ -65,7 +73,15 @@ export default function FormasPagoPage() {
     setError(null);
     setSaving(true);
     try {
-      const data = { nombre, config: { requiereReferencia, requiereComprobante, permitePagoDiferido } };
+      const data = {
+        nombre,
+        config: {
+          requiereReferencia,
+          requiereComprobante,
+          permitePagoDiferido,
+          impuestoPorcentaje: impuestoPorcentaje ? Number(impuestoPorcentaje) : undefined,
+        },
+      };
       if (editingId) {
         await api.put(`/formas-pago/${editingId}`, data);
       } else {
@@ -132,6 +148,24 @@ export default function FormasPagoPage() {
           )}
         </div>
 
+        <div>
+          <label className="block text-sm font-medium">Impuesto (%) — opcional</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={impuestoPorcentaje}
+            onChange={(e) => setImpuestoPorcentaje(e.target.value)}
+            placeholder="Ej. 10"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Si esta forma de pago cobra impuestos aparte (ej. tarjeta con recargo), indica el
+            porcentaje. Se calcula sobre cada pago y se registra por separado: no se suma al
+            abono ni al saldo de la reserva.
+          </p>
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -162,20 +196,21 @@ export default function FormasPagoPage() {
               <th className="px-4 py-2">Ref. obligatoria</th>
               <th className="px-4 py-2">Comprobante obligatorio</th>
               <th className="px-4 py-2">Pago diferido</th>
+              <th className="px-4 py-2">Impuesto</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && formasPago.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No hay formas de pago todavía
                 </td>
               </tr>
@@ -186,6 +221,7 @@ export default function FormasPagoPage() {
                 <td className="px-4 py-2">{(f.config?.requiereReferencia ?? true) ? "Sí" : "No"}</td>
                 <td className="px-4 py-2">{f.config?.requiereComprobante ? "Sí" : "No"}</td>
                 <td className="px-4 py-2">{f.config?.permitePagoDiferido ? "Sí" : "No"}</td>
+                <td className="px-4 py-2">{f.config?.impuestoPorcentaje ? `${f.config.impuestoPorcentaje}%` : "-"}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(f)} className="mr-3 text-blue-600 hover:underline">
                     Editar

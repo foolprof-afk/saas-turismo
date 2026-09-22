@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
+import {
+  calcularAbonado,
+  calcularSaldoPendiente,
+  convertirAPrincipal,
+  desglosePorMoneda,
+} from '../../../common/utils/reserva-montos.util';
 import { QrTokenService } from './qr-token.service';
 
 const VOUCHER_EXPIRA_HORAS_MARGEN = 24;
@@ -59,12 +64,35 @@ export class VouchersService {
         pasajeros: true,
         voucher: true,
         moneda: true,
+        pagos: { include: { moneda: true } },
         itinerario: {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
-    return { ...reserva, montos: desglosePorMoneda(reserva) };
+    const montos = desglosePorMoneda(reserva);
+    const monedaPrincipalRaw = await this.prisma.moneda.findFirst({
+      where: { agenciaId: reserva.agenciaId, esPrincipal: true },
+    });
+    const monedaPrincipal = monedaPrincipalRaw
+      ? {
+          id: monedaPrincipalRaw.id,
+          codigo: monedaPrincipalRaw.codigo,
+          simbolo: monedaPrincipalRaw.simbolo,
+          tasaCambio: Number(monedaPrincipalRaw.tasaCambio),
+        }
+      : null;
+    const totalAbonado = calcularAbonado(reserva.pagos);
+    const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
+    return {
+      ...reserva,
+      montos,
+      totalPrincipal: convertirAPrincipal(montos, monedaPrincipal),
+      totalAbonado,
+      totalAbonadoPrincipal: convertirAPrincipal(totalAbonado, monedaPrincipal),
+      saldoPendiente,
+      saldoPendientePrincipal: convertirAPrincipal(saldoPendiente, monedaPrincipal),
+    };
   }
 }

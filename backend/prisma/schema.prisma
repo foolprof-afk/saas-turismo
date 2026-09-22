@@ -673,6 +673,9 @@ model Pago {
   reservaId         String
   formaPagoId       String
   monto             Decimal    @db.Decimal(12, 2)
+  // Impuesto cobrado aparte según la configuración de la forma de pago (config.impuestoPorcentaje).
+  // No forma parte del abono: no se descuenta del saldo pendiente de la reserva.
+  montoImpuesto     Decimal    @default(0) @db.Decimal(12, 2)
   monedaId          String
   fecha             DateTime   @default(now())
   referenciaExterna String?

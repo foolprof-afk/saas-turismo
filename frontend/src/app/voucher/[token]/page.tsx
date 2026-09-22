@@ -19,6 +19,8 @@ interface ReservaPublica {
   estado: string;
   total: string | null;
   montos: MontoPorMoneda[];
+  totalAbonado: MontoPorMoneda[];
+  saldoPendiente: MontoPorMoneda[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string; logoUrl?: string | null };
@@ -40,9 +42,13 @@ interface ReservaPublica {
   };
 }
 
+function montosTexto(montos: MontoPorMoneda[]): string {
+  if (!montos || montos.length === 0) return "-";
+  return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
+}
+
 function montoTexto(reserva: ReservaPublica): string {
-  if (!reserva.montos || reserva.montos.length === 0) return "-";
-  return reserva.montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
+  return montosTexto(reserva.montos);
 }
 
 export default function VoucherPublicoPage() {
@@ -118,10 +124,24 @@ export default function VoucherPublicoPage() {
           <p className="text-sm">
             <span className="text-gray-500">Total:</span> {montoTexto(reserva)}
           </p>
+          {reserva.totalAbonado.length > 0 && (
+            <>
+              <p className="text-sm">
+                <span className="text-gray-500">Abonado:</span> {montosTexto(reserva.totalAbonado)}
+              </p>
+              <p className="text-sm">
+                <span className="text-gray-500">Saldo pendiente:</span>{" "}
+                <span className="font-medium text-amber-700">{montosTexto(reserva.saldoPendiente)}</span>
+              </p>
+            </>
+          )}
+          <p className="text-sm">
+            <span className="text-gray-500">Cantidad de personas:</span> {reserva.pasajeros.length}
+          </p>
         </div>
 
         <div className="rounded-lg border bg-white p-5">
-          <h2 className="mb-2 text-sm font-semibold text-gray-500">Pasajeros</h2>
+          <h2 className="mb-2 text-sm font-semibold text-gray-500">Pasajeros ({reserva.pasajeros.length})</h2>
           <ul className="space-y-1 text-sm">
             {reserva.pasajeros.map((p, i) => (
               <li key={i}>

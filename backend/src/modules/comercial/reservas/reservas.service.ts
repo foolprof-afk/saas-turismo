@@ -6,7 +6,14 @@ import { VouchersService } from '../vouchers/vouchers.service';
 import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
-import { convertirAPrincipal, desglosePorMoneda, MonedaPrincipalInfo } from '../../../common/utils/reserva-montos.util';
+import {
+  calcularAbonado,
+  calcularMontoImpuesto,
+  calcularSaldoPendiente,
+  convertirAPrincipal,
+  desglosePorMoneda,
+  MonedaPrincipalInfo,
+} from '../../../common/utils/reserva-montos.util';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import { firmarEnlaceCliente, verificarEnlaceCliente } from '../../../common/utils/enlace-cliente-token.util';
@@ -216,6 +223,7 @@ export class ReservasService {
         pasajeros: true,
         voucher: true,
         moneda: true,
+        pagos: { include: { moneda: true } },
         itinerario: {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
@@ -224,7 +232,17 @@ export class ReservasService {
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
     const montos = desglosePorMoneda(reserva);
     const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
-    return { ...reserva, montos, totalPrincipal: convertirAPrincipal(montos, monedaPrincipal) };
+    const totalAbonado = calcularAbonado(reserva.pagos);
+    const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
+    return {
+      ...reserva,
+      montos,
+      totalPrincipal: convertirAPrincipal(montos, monedaPrincipal),
+      totalAbonado,
+      totalAbonadoPrincipal: convertirAPrincipal(totalAbonado, monedaPrincipal),
+      saldoPendiente,
+      saldoPendientePrincipal: convertirAPrincipal(saldoPendiente, monedaPrincipal),
+    };
   }
 
   private generarCodigoReserva(): string {
@@ -651,20 +669,30 @@ export class ReservasService {
   }
 
   /**
-   * Confirma una reserva registrando el pago. La forma de pago se elige recién en este paso
-   * (no al crear la reserva). Los requisitos (número/referencia de pago y foto de comprobante)
-   * dependen de cómo esté configurada la forma de pago elegida (FormaPago.config:
-   * { requiereReferencia, requiereComprobante, permitePagoDiferido }):
+   * Confirma una reserva registrando un pago (total o parcial). La forma de pago se elige en
+   * este paso (no al crear la reserva). Puede llamarse más de una vez sobre la misma reserva
+   * para registrar abonos sucesivos hasta cubrir el saldo pendiente (total de la reserva menos
+   * lo ya abonado); cada llamada valida que el monto no supere ese saldo. Los requisitos
+   * (número/referencia de pago y foto de comprobante) dependen de cómo esté configurada la
+   * forma de pago elegida (FormaPago.config: { requiereReferencia, requiereComprobante,
+   * permitePagoDiferido, impuestoPorcentaje }):
    * - Si permitePagoDiferido es true, se puede confirmar sin referencia ni comprobante (el
    *   cliente pagará después); el pago queda registrado con estado PENDIENTE en vez de PAGADO.
    * - Si no, se aplican requiereReferencia/requiereComprobante como antes (por defecto
    *   requiereReferencia=true, requiereComprobante=false).
+   * - Si impuestoPorcentaje está configurado, se calcula un impuesto sobre el monto y se
+   *   guarda aparte en Pago.montoImpuesto: es un cargo de la forma de pago, no un abono, así
+   *   que no se suma al total abonado ni se descuenta del saldo pendiente de la reserva.
    * En reservas MULTIPLE no hay un total/moneda único, así que monto y monedaId son obligatorios.
    */
   async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({
       where: { id, agenciaId },
-      include: { moneda: true, itinerario: { include: INCLUDE_ITINERARIO_MONTOS } },
+      include: {
+        moneda: true,
+        itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+        pagos: { include: { moneda: true } },
+      },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
     if (reserva.estado === 'CANCELADA') {
@@ -681,6 +709,7 @@ export class ReservasService {
         requiereReferencia?: boolean;
         requiereComprobante?: boolean;
         permitePagoDiferido?: boolean;
+        impuestoPorcentaje?: number;
       }) ?? {};
     const permitePagoDiferido = config.permitePagoDiferido ?? false;
     const requiereReferencia = permitePagoDiferido ? false : (config.requiereReferencia ?? true);
@@ -697,45 +726,60 @@ export class ReservasService {
       );
     }
 
-    const monto = dto.monto ?? (reserva.total !== null ? Number(reserva.total) : undefined);
-    const monedaPagoId = dto.monedaId ?? reserva.monedaId ?? undefined;
-    if (monto === undefined || !monedaPagoId) {
+    // Saldo pendiente = total de la reserva menos lo ya abonado (PAGADO), por moneda. El monto
+    // de este pago no puede superar el saldo pendiente de su moneda; si no se indica monto, se
+    // usa por defecto el saldo pendiente completo (pago total).
+    const montosReserva = desglosePorMoneda(reserva);
+    const abonadoActual = calcularAbonado(reserva.pagos);
+    const saldoActual = calcularSaldoPendiente(montosReserva, abonadoActual);
+
+    const monedaPagoId =
+      dto.monedaId ?? reserva.monedaId ?? (montosReserva.length === 1 ? montosReserva[0].monedaId : undefined);
+    if (!monedaPagoId) {
       throw new BadRequestException(
         'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
       );
     }
 
-    // En reservas MULTIPLE el monto se indica manualmente (no viene ya validado contra
-    // reserva.total como en SERVICIO/PLANTILLA), así que se verifica que cubra el total de
-    // todos los servicios de la reserva. Si el pago está en una moneda distinta a alguno de
-    // los servicios, la comparación se hace convirtiendo ambos a la moneda principal (ver
-    // mantenedor de monedas); si no hay moneda principal configurada, no se puede convertir y
-    // se omite esta validación.
-    if (reserva.tipo === 'MULTIPLE') {
-      const montosReserva = desglosePorMoneda(reserva);
-      const totalDirecto = montosReserva.find((m) => m.monedaId === monedaPagoId);
-      const cubreEnUnaSolaMoneda = montosReserva.length === 1 && totalDirecto;
-      if (cubreEnUnaSolaMoneda) {
-        if (monto < totalDirecto.total - 0.01) {
+    const saldoEnMoneda = saldoActual.find((s) => s.monedaId === monedaPagoId);
+    if (saldoEnMoneda && saldoEnMoneda.total <= 0.01) {
+      throw new BadRequestException('Esta reserva ya está pagada por completo en esa moneda');
+    }
+
+    const monto = dto.monto ?? saldoEnMoneda?.total;
+    if (monto === undefined) {
+      throw new BadRequestException(
+        'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
+      );
+    }
+    if (monto <= 0) {
+      throw new BadRequestException('El monto del pago debe ser mayor a cero');
+    }
+
+    // Si la moneda del pago coincide con alguna de las monedas de la reserva se compara el
+    // saldo directo; si no, se convierte a la moneda principal de la agencia (si existe) para
+    // poder comparar. Si no hay nada contra qué comparar, se omite la validación.
+    if (saldoEnMoneda) {
+      if (monto > saldoEnMoneda.total + 0.01) {
+        throw new BadRequestException(
+          `El monto del pago (${monto}) supera el saldo pendiente (${saldoEnMoneda.total.toFixed(2)} ${saldoEnMoneda.monedaCodigo})`,
+        );
+      }
+    } else if (saldoActual.length > 0) {
+      const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+      const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
+      if (monedaPrincipal && monedaPago) {
+        const saldoPrincipal = convertirAPrincipal(saldoActual, monedaPrincipal)?.total ?? 0;
+        const montoPrincipal = (monto * monedaPrincipal.tasaCambio) / Number(monedaPago.tasaCambio);
+        if (montoPrincipal > saldoPrincipal + 0.01) {
           throw new BadRequestException(
-            `El monto del pago (${monto}) no cubre el total de los servicios de la reserva (${totalDirecto.total.toFixed(2)} ${totalDirecto.monedaCodigo})`,
+            `El monto del pago (equivalente a ${montoPrincipal.toFixed(2)} ${monedaPrincipal.codigo}) supera el saldo pendiente (${saldoPrincipal.toFixed(2)} ${monedaPrincipal.codigo})`,
           );
-        }
-      } else if (montosReserva.length > 0) {
-        const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
-        const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
-        if (monedaPrincipal && monedaPago) {
-          const totalReservaPrincipal = convertirAPrincipal(montosReserva, monedaPrincipal)?.total ?? 0;
-          const montoPrincipal = (monto * monedaPrincipal.tasaCambio) / Number(monedaPago.tasaCambio);
-          if (montoPrincipal < totalReservaPrincipal - 0.01) {
-            throw new BadRequestException(
-              `El monto del pago (equivalente a ${montoPrincipal.toFixed(2)} ${monedaPrincipal.codigo}) no cubre el total de los servicios de la reserva (${totalReservaPrincipal.toFixed(2)} ${monedaPrincipal.codigo})`,
-            );
-          }
         }
       }
     }
 
+    const montoImpuesto = calcularMontoImpuesto(config.impuestoPorcentaje, monto);
     const tienePrueba = Boolean(dto.referenciaExterna || dto.comprobanteUrl);
 
     await this.prisma.$transaction([
@@ -744,6 +788,7 @@ export class ReservasService {
           reservaId: id,
           formaPagoId: dto.formaPagoId,
           monto,
+          montoImpuesto,
           monedaId: monedaPagoId,
           referenciaExterna: dto.referenciaExterna,
           comprobanteUrl: dto.comprobanteUrl,

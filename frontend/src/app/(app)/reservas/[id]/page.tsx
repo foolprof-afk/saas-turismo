@@ -32,6 +32,10 @@ interface ReservaDetalle {
   moneda?: { codigo: string; simbolo: string } | null;
   montos: MontoPorMoneda[];
   totalPrincipal: MontoPorMoneda | null;
+  totalAbonado: MontoPorMoneda[];
+  totalAbonadoPrincipal: MontoPorMoneda | null;
+  saldoPendiente: MontoPorMoneda[];
+  saldoPendientePrincipal: MontoPorMoneda | null;
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string; email?: string; logoUrl?: string | null };
@@ -56,12 +60,18 @@ interface ReservaDetalle {
 interface FormaPago {
   id: string;
   nombre: string;
-  config?: { requiereReferencia?: boolean; requiereComprobante?: boolean; permitePagoDiferido?: boolean };
+  config?: {
+    requiereReferencia?: boolean;
+    requiereComprobante?: boolean;
+    permitePagoDiferido?: boolean;
+    impuestoPorcentaje?: number;
+  };
 }
 
 interface Pago {
   id: string;
   monto: string;
+  montoImpuesto?: string | null;
   formaPago: { nombre: string };
   moneda: { codigo: string; simbolo: string; tasaCambio: string };
   referenciaExterna?: string | null;
@@ -94,6 +104,23 @@ function montoTexto(reserva: ReservaDetalle): string {
   const p = reserva.totalPrincipal;
   const mostrarEquivalente = p && (reserva.montos.length > 1 || reserva.montos[0]?.monedaId !== p.monedaId);
   return mostrarEquivalente ? `${base} (≈ ${p!.monedaSimbolo}${formatMonto(p!.total)} ${p!.monedaCodigo})` : base;
+}
+
+function montosTexto(montos: MontoPorMoneda[]): string {
+  if (!montos || montos.length === 0) return "-";
+  return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
+}
+
+function abonadoTexto(reserva: ReservaDetalle): string {
+  return montosTexto(reserva.totalAbonado);
+}
+
+function saldoTexto(reserva: ReservaDetalle): string {
+  return montosTexto(reserva.saldoPendiente);
+}
+
+function saldoPendienteTotal(reserva: ReservaDetalle): number {
+  return reserva.saldoPendiente.reduce((acc, s) => acc + Math.max(s.total, 0), 0);
 }
 
 function monedaPrincipalDe(monedas: Moneda[]): Moneda | undefined {
@@ -142,10 +169,18 @@ export default function ReservaDetallePage() {
   const permitePagoDiferido = formaPagoSeleccionada?.config?.permitePagoDiferido ?? false;
   const requiereReferencia = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereReferencia ?? true);
   const requiereComprobante = permitePagoDiferido ? false : (formaPagoSeleccionada?.config?.requiereComprobante ?? false);
-  const requiereMontoManual = reserva?.total === null;
+  // Reservas MULTIPLE no tienen una moneda única: el vendedor debe elegirla manualmente. En el
+  // resto, se infiere de la reserva (o del saldo pendiente, si ya hay abonos parciales).
+  const requiereMonedaManual = reserva?.total === null;
   const principal = monedaPrincipalDe(monedas);
-  const monedaPagoSeleccionada = monedas.find((m) => m.id === monedaPagoId);
+  const monedaEfectivaId = monedaPagoId || reserva?.monedaId || "";
+  const saldoEnMonedaEfectiva = reserva?.saldoPendiente.find((s) => s.monedaId === monedaEfectivaId);
+  const monedaPagoSeleccionada = monedas.find((m) => m.id === monedaEfectivaId);
   const tipoCambioPago = tipoCambioTexto(monedaPagoSeleccionada, principal);
+  const impuestoPct = formaPagoSeleccionada?.config?.impuestoPorcentaje ?? 0;
+  const montoParaImpuesto = monto ? Number(monto) : saldoEnMonedaEfectiva?.total;
+  const impuestoCalculado =
+    impuestoPct && montoParaImpuesto ? Math.round(montoParaImpuesto * (impuestoPct / 100) * 100) / 100 : 0;
 
   const cargar = () => {
     api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
@@ -158,11 +193,19 @@ export default function ReservaDetallePage() {
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => setMonedas([]));
   }, [params.id]);
 
+  // Preselecciona la moneda del pago con la de la reserva (si tiene una única moneda), para no
+  // obligar al vendedor a elegirla en el caso común.
+  useEffect(() => {
+    if (reserva?.monedaId && !monedaPagoId) {
+      setMonedaPagoId(reserva.monedaId);
+    }
+  }, [reserva?.id, reserva?.monedaId]);
+
   const handleConfirmar = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (requiereMontoManual && (!monto || !monedaPagoId)) {
-      setError("Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago");
+    if (requiereMonedaManual && !monedaPagoId) {
+      setError("Esta reserva incluye servicios en distintas monedas: indica la moneda de este pago");
       return;
     }
     setConfirmando(true);
@@ -181,7 +224,7 @@ export default function ReservaDetallePage() {
       setMonedaPagoId("");
       cargar();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo confirmar la reserva");
+      setError(err instanceof ApiError ? err.message : "No se pudo registrar el pago");
     } finally {
       setConfirmando(false);
     }
@@ -225,8 +268,12 @@ export default function ReservaDetallePage() {
       }`,
     );
     lineas.push(`Total: ${montoTexto(reserva)}`);
+    if (reserva.totalAbonado.length > 0) {
+      lineas.push(`Abonado: ${abonadoTexto(reserva)}`);
+      lineas.push(`Saldo pendiente: ${saldoTexto(reserva)}`);
+    }
     lineas.push("");
-    lineas.push("Pasajeros:");
+    lineas.push(`Pasajeros (${reserva.pasajeros.length}):`);
     reserva.pasajeros.forEach((p) => {
       lineas.push(`- ${p.nombre} (${p.tipo})${p.esResponsable ? " [Responsable]" : ""}${p.telefono ? " " + p.telefono : ""}`);
     });
@@ -287,7 +334,15 @@ export default function ReservaDetallePage() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
-          <p className="mt-2 text-lg font-semibold">{montoTexto(reserva)}</p>
+          <div className="mt-2 text-right">
+            <p className="text-lg font-semibold">Total: {montoTexto(reserva)}</p>
+            {reserva.totalAbonado.length > 0 && (
+              <>
+                <p className="text-sm text-green-700">Abonado: {abonadoTexto(reserva)}</p>
+                <p className="text-sm font-medium text-amber-700">Saldo pendiente: {saldoTexto(reserva)}</p>
+              </>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => window.print()}
@@ -344,9 +399,17 @@ export default function ReservaDetallePage() {
         </div>
       </div>
 
-      {reserva.estado === "PENDIENTE" && (
+      {reserva.estado !== "CANCELADA" && saldoPendienteTotal(reserva) > 0.01 && (
         <div className="rounded-lg border bg-white p-5 print:hidden">
-          <h2 className="mb-3 text-sm font-semibold text-gray-500">Confirmar reserva</h2>
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">
+            {pagos.length > 0 ? "Registrar abono" : "Confirmar reserva"}
+          </h2>
+          {pagos.length > 0 && (
+            <p className="mb-3 text-xs text-gray-500">
+              Saldo pendiente: <span className="font-medium text-amber-700">{saldoTexto(reserva)}</span>. Puedes
+              registrar un pago total o un abono parcial.
+            </p>
+          )}
           <form onSubmit={handleConfirmar} className="space-y-3">
             <div>
               <label className="block text-sm font-medium">Forma de pago</label>
@@ -373,47 +436,62 @@ export default function ReservaDetallePage() {
               </p>
             )}
 
-            {requiereMontoManual && (
-              <div className="grid grid-cols-1 gap-3 rounded border border-amber-200 bg-amber-50 p-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium">Monto de este pago</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
-                    className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Moneda</label>
-                  <select
-                    required
-                    value={monedaPagoId}
-                    onChange={(e) => setMonedaPagoId(e.target.value)}
-                    className="mt-1 w-full rounded border px-3 py-2 text-sm"
-                  >
-                    <option value="">Seleccionar...</option>
-                    {monedas.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.codigo}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="col-span-2 text-xs text-amber-700">
-                  Esta reserva tiene servicios en distintas monedas ({montoTexto(reserva)}). Indica el monto y
-                  moneda de este pago en particular.
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium">Monto a abonar</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  placeholder={
+                    saldoEnMonedaEfectiva ? formatMonto(saldoEnMonedaEfectiva.total) : "0.00"
+                  }
+                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Déjalo vacío para pagar el saldo pendiente completo
+                  {saldoEnMonedaEfectiva
+                    ? ` (${saldoEnMonedaEfectiva.monedaSimbolo}${formatMonto(saldoEnMonedaEfectiva.total)} ${saldoEnMonedaEfectiva.monedaCodigo})`
+                    : ""}
+                  .
                 </p>
-                {tipoCambioPago && (
-                  <p className="col-span-2 text-xs font-medium text-amber-800">{tipoCambioPago}</p>
-                )}
               </div>
+              <div>
+                <label className="block text-sm font-medium">
+                  Moneda {requiereMonedaManual ? "" : "(opcional)"}
+                </label>
+                <select
+                  required={requiereMonedaManual}
+                  value={monedaPagoId}
+                  onChange={(e) => setMonedaPagoId(e.target.value)}
+                  className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                >
+                  <option value="">Seleccionar...</option>
+                  {monedas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.codigo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {requiereMonedaManual && (
+              <p className="text-xs text-amber-700">
+                Esta reserva tiene servicios en distintas monedas ({montoTexto(reserva)}). Indica la moneda de
+                este pago en particular.
+              </p>
             )}
-            {!requiereMontoManual && tipoCambioTexto(monedas.find((m) => m.id === reserva.monedaId), principal) && (
-              <p className="text-xs text-gray-500">
-                {tipoCambioTexto(monedas.find((m) => m.id === reserva.monedaId), principal)}
+            {tipoCambioPago && <p className="text-xs text-gray-500">{tipoCambioPago}</p>}
+
+            {impuestoPct > 0 && (
+              <p className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700">
+                Esta forma de pago aplica {impuestoPct}% de impuesto adicional
+                {impuestoCalculado > 0
+                  ? ` (${monedaPagoSeleccionada?.codigo ?? ""} ${formatMonto(impuestoCalculado)})`
+                  : ""}
+                , que se cobra aparte y no se descuenta del abono.
               </p>
             )}
 
@@ -452,7 +530,7 @@ export default function ReservaDetallePage() {
               disabled={confirmando}
               className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
-              {confirmando ? "Confirmando..." : "Confirmar reserva"}
+              {confirmando ? "Guardando..." : pagos.length > 0 ? "Registrar abono" : "Confirmar reserva"}
             </button>
           </form>
         </div>
@@ -477,6 +555,12 @@ export default function ReservaDetallePage() {
                       <span className="text-gray-400"> (≈ {principal!.simbolo}{formatMonto(equivalente)} {principal!.codigo})</span>
                     )}
                   </p>
+                  {p.montoImpuesto && Number(p.montoImpuesto) > 0 && (
+                    <p className="text-xs text-gray-400">
+                      + impuesto: {p.moneda?.simbolo}
+                      {formatMonto(p.montoImpuesto)} {p.moneda?.codigo} (aparte, no cuenta como abono)
+                    </p>
+                  )}
                   {p.referenciaExterna && <p className="text-xs text-gray-400">Ref: {p.referenciaExterna}</p>}
                   <p className="text-xs text-gray-400">{formatFechaHora(p.fecha)}</p>
                 </div>
@@ -509,7 +593,7 @@ export default function ReservaDetallePage() {
         </div>
 
         <div className="rounded-lg border bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold text-gray-500">Pasajeros</h2>
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">Pasajeros ({reserva.pasajeros.length})</h2>
           <ul className="space-y-1 text-sm">
             {reserva.pasajeros.map((p, i) => (
               <li key={i}>
@@ -572,7 +656,13 @@ export default function ReservaDetallePage() {
           {reserva.horaServicio ? ` ${reserva.horaServicio}` : ""}
         </p>
         <p>Total: {montoTexto(reserva)}</p>
-        <p className="mt-2 font-bold">Pasajeros:</p>
+        {reserva.totalAbonado.length > 0 && (
+          <>
+            <p>Abonado: {abonadoTexto(reserva)}</p>
+            <p>Saldo pendiente: {saldoTexto(reserva)}</p>
+          </>
+        )}
+        <p className="mt-2 font-bold">Pasajeros ({reserva.pasajeros.length}):</p>
         {reserva.pasajeros.map((p, i) => (
           <p key={i}>
             - {p.nombre} ({p.tipo}){p.esResponsable ? " [Responsable]" : ""}
