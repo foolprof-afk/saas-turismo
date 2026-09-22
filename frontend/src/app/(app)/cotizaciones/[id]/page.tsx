@@ -48,6 +48,28 @@ function totalConvertido(cotizacion: CotizacionDetalle): { total: number; simbol
   return { total, simbolo: cotizacion.moneda.simbolo, codigo: cotizacion.moneda.codigo };
 }
 
+// Precio unitario y subtotal de una línea, expresados en la moneda de la cotización (si se
+// eligió una); si el servicio ya está en esa misma moneda, el resultado es igual al original.
+// Si la cotización no tiene moneda fijada, se muestra la línea en su propia moneda.
+function itemEnMonedaCotizacion(item: CotizacionItem, cotizacion: CotizacionDetalle) {
+  const precioOriginal = Number(item.precioUnitario);
+  if (!cotizacion.moneda) {
+    return {
+      precioUnitario: precioOriginal,
+      subtotal: precioOriginal * cotizacion.cantidadPersonas,
+      simbolo: item.moneda.simbolo,
+      codigo: item.moneda.codigo,
+    };
+  }
+  const precioUnitario = convertirMonto(precioOriginal, Number(item.moneda.tasaCambio), Number(cotizacion.moneda.tasaCambio));
+  return {
+    precioUnitario,
+    subtotal: precioUnitario * cotizacion.cantidadPersonas,
+    simbolo: cotizacion.moneda.simbolo,
+    codigo: cotizacion.moneda.codigo,
+  };
+}
+
 function logoDe(cotizacion: CotizacionDetalle): string | undefined {
   return cotizacion.agencia?.logoUrl || undefined;
 }
@@ -245,7 +267,7 @@ export default function CotizacionDetallePage() {
 
     agruparPorDia(cotizacion).forEach(([dia, itemsDia]) => {
       itemsDia.forEach((item, idx) => {
-        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+        const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
         const nombreLineas = doc.splitTextToSize(item.servicio.nombre, colX.horas - colX.servicio - 3);
         const descLineas = item.servicio.descripcion
@@ -263,8 +285,8 @@ export default function CotizacionDetallePage() {
         doc.text(nombreLineas, colX.servicio, y);
         doc.text(horas ? `${horas} h` : "-", colX.horas, y);
         doc.text(String(cotizacion.cantidadPersonas), colX.cantidad, y);
-        doc.text(`${item.moneda.simbolo}${formatMonto(item.precioUnitario)}`, colX.unitario, y);
-        doc.text(`${item.moneda.simbolo}${formatMonto(subtotal)}`, colX.subtotal, y);
+        doc.text(`${conv.simbolo}${formatMonto(conv.precioUnitario)}`, colX.unitario, y);
+        doc.text(`${conv.simbolo}${formatMonto(conv.subtotal)}`, colX.subtotal, y);
         y += nombreLineas.length * 4.5;
         if (descLineas.length) {
           doc.setFontSize(8);
@@ -277,12 +299,13 @@ export default function CotizacionDetallePage() {
       });
     });
 
+    const totalesAMostrar = totalUnificado ? [totalUnificado] : totales;
     y += 4;
-    saltoDePaginaSiNecesario(6 * totales.length + 10);
+    saltoDePaginaSiNecesario(6 * totalesAMostrar.length + 10);
     doc.line(marginX, y, pageWidth - marginX, y);
     y += 7;
     doc.setFontSize(11);
-    totales.forEach((t) => {
+    totalesAMostrar.forEach((t) => {
       doc.setFont("helvetica", "bold");
       doc.text(`Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`, pageWidth - marginX, y, { align: "right" });
       doc.setFont("helvetica", "normal");
@@ -313,13 +336,13 @@ export default function CotizacionDetallePage() {
     ...agruparPorDia(cotizacion).flatMap(([dia, itemsDia]) => [
       `Día ${dia}:`,
       ...itemsDia.map((item) => {
-        const subtotal = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+        const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
-        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${item.moneda.simbolo}${formatMonto(subtotal)} ${item.moneda.codigo}`;
+        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${conv.simbolo}${formatMonto(conv.subtotal)} ${conv.codigo}`;
       }),
     ]),
     "",
-    ...totales.map((t) => `Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`),
+    ...(totalUnificado ? [totalUnificado] : totales).map((t) => `Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`),
   ].join("\n");
 
   const linkWhatsapp = cotizacion.telefonoResponsable
@@ -461,27 +484,30 @@ export default function CotizacionDetallePage() {
           </thead>
           <tbody>
             {agruparPorDia(cotizacion).map(([dia, itemsDia]) =>
-              itemsDia.map((item, idx) => (
-                <tr key={item.id} className="border-t align-top">
-                  <td className="py-2">{idx === 0 ? `Día ${dia}` : ""}</td>
-                  <td className="py-2">
-                    <p className="font-medium">{item.servicio.nombre}</p>
-                    {item.servicio.descripcion && (
-                      <p className="text-xs text-gray-400">{item.servicio.descripcion}</p>
-                    )}
-                  </td>
-                  <td className="py-2">{horasDe(item) ?? "-"}</td>
-                  <td className="py-2">{cotizacion.cantidadPersonas}</td>
-                  <td className="py-2">
-                    {item.moneda.simbolo}
-                    {formatMonto(item.precioUnitario)} {item.moneda.codigo}
-                  </td>
-                  <td className="py-2">
-                    {item.moneda.simbolo}
-                    {formatMonto(Number(item.precioUnitario) * cotizacion.cantidadPersonas)} {item.moneda.codigo}
-                  </td>
-                </tr>
-              )),
+              itemsDia.map((item, idx) => {
+                const conv = itemEnMonedaCotizacion(item, cotizacion);
+                return (
+                  <tr key={item.id} className="border-t align-top">
+                    <td className="py-2">{idx === 0 ? `Día ${dia}` : ""}</td>
+                    <td className="py-2">
+                      <p className="font-medium">{item.servicio.nombre}</p>
+                      {item.servicio.descripcion && (
+                        <p className="text-xs text-gray-400">{item.servicio.descripcion}</p>
+                      )}
+                    </td>
+                    <td className="py-2">{horasDe(item) ?? "-"}</td>
+                    <td className="py-2">{cotizacion.cantidadPersonas}</td>
+                    <td className="py-2">
+                      {conv.simbolo}
+                      {formatMonto(conv.precioUnitario)} {conv.codigo}
+                    </td>
+                    <td className="py-2">
+                      {conv.simbolo}
+                      {formatMonto(conv.subtotal)} {conv.codigo}
+                    </td>
+                  </tr>
+                );
+              }),
             )}
           </tbody>
         </table>
