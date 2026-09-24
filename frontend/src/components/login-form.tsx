@@ -52,7 +52,9 @@ export function LoginForm({ agenciaSlug }: { agenciaSlug?: string }) {
             />
           </div>
         )}
-        <h1 className="text-xl font-semibold">{branding?.nombre ? `Iniciar sesión — ${branding.nombre}` : "Iniciar sesión"}</h1>
+        <h1 className="text-xl font-semibold">
+          {agenciaSlug && branding?.nombre ? `Iniciar sesión — ${branding.nombre}` : "Iniciar sesión"}
+        </h1>
         <div className="space-y-1">
           <label className="block text-sm font-medium">Email</label>
           <input
