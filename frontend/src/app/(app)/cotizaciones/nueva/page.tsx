@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
@@ -19,6 +19,7 @@ interface ServicioOpcion {
 interface LineaServicio {
   servicioId: string;
   dia: number;
+  cantidad: string;
   precioUnitario: string;
 }
 
@@ -52,10 +53,11 @@ export default function NuevaCotizacionPage() {
   const [listaPrecioId, setListaPrecioId] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<LineaServicio[]>([{ servicioId: "", dia: 1, precioUnitario: "" }]);
+  const [lineas, setLineas] = useState<LineaServicio[]>([{ servicioId: "", dia: 1, cantidad: "", precioUnitario: "" }]);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
     api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
@@ -71,19 +73,38 @@ export default function NuevaCotizacionPage() {
   const monedaCotizacion = monedas.find((m) => m.id === monedaId);
 
   const agregarServicio = () =>
-    setLineas((s) => [...s, { servicioId: "", dia: s[s.length - 1]?.dia ?? 1, precioUnitario: "" }]);
+    setLineas((s) => [...s, { servicioId: "", dia: s[s.length - 1]?.dia ?? 1, cantidad: "", precioUnitario: "" }]);
   const quitarServicio = (i: number) => setLineas((s) => s.filter((_, idx) => idx !== i));
   const actualizarServicio = (i: number, id: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, servicioId: id, precioUnitario: "" } : x)));
   const actualizarDia = (i: number, dia: number) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, dia } : x)));
+  const actualizarCantidad = (i: number, cantidad: string) =>
+    setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, cantidad } : x)));
   const actualizarPrecio = (i: number, precioUnitario: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, precioUnitario } : x)));
+
+  // Reordenar servicios arrastrando (cada línea conserva su propio "dia", así que el
+  // agrupamiento por día se mantiene aunque se reordenen visualmente).
+  const handleDragStart = (i: number) => setDragIndex(i);
+  const handleDragOver = (e: DragEvent) => e.preventDefault();
+  const handleDrop = (i: number) => {
+    if (dragIndex === null || dragIndex === i) return;
+    setLineas((s) => {
+      const copia = [...s];
+      const [movida] = copia.splice(dragIndex, 1);
+      copia.splice(i, 0, movida);
+      return copia;
+    });
+    setDragIndex(null);
+  };
 
   const precioLinea = (l: LineaServicio, s: ServicioOpcion | undefined) => {
     if (!s) return 0;
     return l.precioUnitario !== "" ? Number(l.precioUnitario) : Number(s.precioBase) * factor;
   };
+
+  const cantidadLinea = (l: LineaServicio) => (l.cantidad !== "" ? Number(l.cantidad) : Number(cantidadPersonas) || 0);
 
   const totalEstimado = lineas.reduce((acc, l) => {
     const s = servicios.find((x) => x.id === l.servicioId);
@@ -93,7 +114,7 @@ export default function NuevaCotizacionPage() {
       const monedaServicio = monedas.find((m) => m.id === s.monedaId);
       if (monedaServicio) precio = convertirMonto(precio, Number(monedaServicio.tasaCambio), Number(monedaCotizacion.tasaCambio));
     }
-    return acc + precio * (Number(cantidadPersonas) || 0);
+    return acc + precio * cantidadLinea(l);
   }, 0);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -119,6 +140,7 @@ export default function NuevaCotizacionPage() {
         items: items.map((l) => ({
           servicioId: l.servicioId,
           dia: l.dia || 1,
+          cantidad: l.cantidad !== "" ? Number(l.cantidad) : undefined,
           precioUnitario: l.precioUnitario !== "" ? Number(l.precioUnitario) : undefined,
         })),
       });
@@ -222,8 +244,21 @@ export default function NuevaCotizacionPage() {
               const s = servicios.find((x) => x.id === linea.servicioId);
               const horas = s?.duracionMin ? (s.duracionMin / 60).toFixed(1) : null;
               return (
-                <div key={i} className="space-y-1 rounded border p-3">
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(i)}
+                  className={`space-y-1 rounded border p-3 ${dragIndex === i ? "opacity-50" : ""}`}
+                >
                   <div className="flex items-center gap-2">
+                    <span
+                      className="cursor-move select-none px-1 text-gray-300"
+                      title="Arrastrar para reordenar"
+                    >
+                      ⠿
+                    </span>
                     <div>
                       <label className="block text-xs text-gray-500">Día</label>
                       <input
@@ -243,6 +278,19 @@ export default function NuevaCotizacionPage() {
                         onChange={(sid) => actualizarServicio(i, sid)}
                       />
                     </div>
+                    {s && (
+                      <div>
+                        <label className="block text-xs text-gray-500">Cantidad</label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder={cantidadPersonas || "1"}
+                          value={linea.cantidad}
+                          onChange={(e) => actualizarCantidad(i, e.target.value)}
+                          className="mt-1 w-20 rounded border px-2 py-2 text-sm"
+                        />
+                      </div>
+                    )}
                     {s && (
                       <div>
                         <label className="block text-xs text-gray-500">Precio unitario</label>
@@ -270,8 +318,8 @@ export default function NuevaCotizacionPage() {
                   {s && (
                     <p className="text-xs text-gray-400">
                       {s.descripcion ?? "Sin descripción"} · precio unitario:{" "}
-                      {formatMonto(precioLinea(linea, s))} x {cantidadPersonas || 0} personas = total{" "}
-                      {formatMonto(precioLinea(linea, s) * (Number(cantidadPersonas) || 0))}
+                      {formatMonto(precioLinea(linea, s))} x {cantidadLinea(linea)} personas = total{" "}
+                      {formatMonto(precioLinea(linea, s) * cantidadLinea(linea))}
                       {horas ? ` · ${horas} h` : ""}
                     </p>
                   )}

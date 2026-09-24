@@ -14,7 +14,8 @@ interface Cotizacion {
   cantidadPersonas: number;
   pasajeroResponsable: string;
   vendedor: { nombre: string };
-  items: { precioUnitario: string; moneda: { codigo: string; simbolo: string } }[];
+  moneda?: { codigo: string; simbolo: string; tasaCambio: string } | null;
+  items: { precioUnitario: string; cantidad: number; moneda: { codigo: string; simbolo: string; tasaCambio: string } }[];
 }
 
 interface Vendedor {
@@ -24,11 +25,26 @@ interface Vendedor {
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
 
+function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
+  return (monto * tasaDestino) / tasaOrigen;
+}
+
+// Mismo criterio que en el detalle de la cotización (ver [id]/page.tsx): si la cotización
+// tiene una moneda fijada, todas las líneas se convierten a esa moneda para dar un único
+// total; si no, se agrupan por la moneda propia de cada servicio.
 function totalCotizacion(c: Cotizacion) {
+  if (c.moneda) {
+    const tasaDestino = Number(c.moneda.tasaCambio);
+    const total = c.items.reduce((acc, item) => {
+      const monto = Number(item.precioUnitario) * item.cantidad;
+      return acc + convertirMonto(monto, Number(item.moneda.tasaCambio), tasaDestino);
+    }, 0);
+    return [{ total, codigo: c.moneda.codigo, simbolo: c.moneda.simbolo }];
+  }
   const porMoneda = new Map<string, { total: number; codigo: string; simbolo: string }>();
   for (const item of c.items) {
     const entry = porMoneda.get(item.moneda.codigo) ?? { total: 0, codigo: item.moneda.codigo, simbolo: item.moneda.simbolo };
-    entry.total += Number(item.precioUnitario) * c.cantidadPersonas;
+    entry.total += Number(item.precioUnitario) * item.cantidad;
     porMoneda.set(item.moneda.codigo, entry);
   }
   return Array.from(porMoneda.values());

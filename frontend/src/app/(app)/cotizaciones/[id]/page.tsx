@@ -10,6 +10,7 @@ import { formatMonto } from "@/lib/moneda";
 interface CotizacionItem {
   id: string;
   dia: number;
+  cantidad: number;
   precioUnitario: string;
   servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
   moneda: { codigo: string; simbolo: string; tasaCambio: string };
@@ -42,7 +43,7 @@ function totalConvertido(cotizacion: CotizacionDetalle): { total: number; simbol
   if (!cotizacion.moneda) return null;
   const tasaDestino = Number(cotizacion.moneda.tasaCambio);
   const total = cotizacion.items.reduce((acc, item) => {
-    const monto = Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+    const monto = Number(item.precioUnitario) * item.cantidad;
     return acc + convertirMonto(monto, Number(item.moneda.tasaCambio), tasaDestino);
   }, 0);
   return { total, simbolo: cotizacion.moneda.simbolo, codigo: cotizacion.moneda.codigo };
@@ -56,7 +57,7 @@ function itemEnMonedaCotizacion(item: CotizacionItem, cotizacion: CotizacionDeta
   if (!cotizacion.moneda) {
     return {
       precioUnitario: precioOriginal,
-      subtotal: precioOriginal * cotizacion.cantidadPersonas,
+      subtotal: precioOriginal * item.cantidad,
       simbolo: item.moneda.simbolo,
       codigo: item.moneda.codigo,
     };
@@ -64,7 +65,7 @@ function itemEnMonedaCotizacion(item: CotizacionItem, cotizacion: CotizacionDeta
   const precioUnitario = convertirMonto(precioOriginal, Number(item.moneda.tasaCambio), Number(cotizacion.moneda.tasaCambio));
   return {
     precioUnitario,
-    subtotal: precioUnitario * cotizacion.cantidadPersonas,
+    subtotal: precioUnitario * item.cantidad,
     simbolo: cotizacion.moneda.simbolo,
     codigo: cotizacion.moneda.codigo,
   };
@@ -97,7 +98,7 @@ function totalesPorMoneda(cotizacion: CotizacionDetalle) {
   const porMoneda = new Map<string, { total: number; codigo: string; simbolo: string }>();
   for (const item of cotizacion.items) {
     const entry = porMoneda.get(item.moneda.codigo) ?? { total: 0, codigo: item.moneda.codigo, simbolo: item.moneda.simbolo };
-    entry.total += Number(item.precioUnitario) * cotizacion.cantidadPersonas;
+    entry.total += Number(item.precioUnitario) * item.cantidad;
     porMoneda.set(item.moneda.codigo, entry);
   }
   return Array.from(porMoneda.values());
@@ -284,7 +285,7 @@ export default function CotizacionDetallePage() {
         doc.setFontSize(9);
         doc.text(nombreLineas, colX.servicio, y);
         doc.text(horas ? `${horas} h` : "-", colX.horas, y);
-        doc.text(String(cotizacion.cantidadPersonas), colX.cantidad, y);
+        doc.text(String(item.cantidad), colX.cantidad, y);
         doc.text(`${conv.simbolo}${formatMonto(conv.precioUnitario)}`, colX.unitario, y);
         doc.text(`${conv.simbolo}${formatMonto(conv.subtotal)}`, colX.subtotal, y);
         y += nombreLineas.length * 4.5;
@@ -338,7 +339,7 @@ export default function CotizacionDetallePage() {
       ...itemsDia.map((item) => {
         const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
-        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${cotizacion.cantidadPersonas} = ${conv.simbolo}${formatMonto(conv.subtotal)} ${conv.codigo}`;
+        return `- ${item.servicio.nombre}${horas ? ` (${horas} h)` : ""} x${item.cantidad} = ${conv.simbolo}${formatMonto(conv.subtotal)} ${conv.codigo}`;
       }),
     ]),
     "",
@@ -496,7 +497,7 @@ export default function CotizacionDetallePage() {
                       )}
                     </td>
                     <td className="py-2">{horasDe(item) ?? "-"}</td>
-                    <td className="py-2">{cotizacion.cantidadPersonas}</td>
+                    <td className="py-2">{item.cantidad}</td>
                     <td className="py-2">
                       {conv.simbolo}
                       {formatMonto(conv.precioUnitario)} {conv.codigo}

@@ -222,6 +222,13 @@ model CotizacionItem {
   cotizacionId   String
   servicioId     String
   dia            Int     @default(1)
+  // Posición dentro del listado de items (permite reordenar servicios en la UI de forma
+  // manual, ej. arrastrando, sin depender del orden de inserción en la base de datos).
+  orden          Int     @default(0)
+  // Cantidad de pasajeros a facturar en esta línea específica. Por defecto toma
+  // Cotizacion.cantidadPersonas, pero puede ser distinta (ej. un traslado solo para 2 de los
+  // 4 pasajeros de la cotización).
+  cantidad       Int     @default(1)
   precioUnitario Decimal @db.Decimal(12, 2)
   monedaId       String
 

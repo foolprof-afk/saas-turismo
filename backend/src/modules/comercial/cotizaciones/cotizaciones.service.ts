@@ -27,8 +27,11 @@ const INCLUDE_COTIZACION = {
   listaPrecio: true,
   moneda: true,
   reserva: { select: { id: true, codigoReserva: true } },
-  items: { include: { servicio: true, moneda: true } },
-} as const;
+  items: {
+    include: { servicio: true, moneda: true },
+    orderBy: [{ dia: 'asc' }, { orden: 'asc' }] as Prisma.CotizacionItemOrderByWithRelationInput[],
+  },
+};
 
 @Injectable()
 export class CotizacionesService {
@@ -145,16 +148,26 @@ export class CotizacionesService {
 
   private async construirItems(
     agenciaId: string,
-    items: { servicioId: string; dia?: number; precioUnitario?: number }[],
+    items: { servicioId: string; dia?: number; precioUnitario?: number; cantidad?: number }[],
     factor: number,
+    cantidadPersonas: number,
   ) {
-    const itemsData: { servicioId: string; dia: number; precioUnitario: number; monedaId: string }[] = [];
-    for (const item of items) {
+    const itemsData: {
+      servicioId: string;
+      dia: number;
+      orden: number;
+      cantidad: number;
+      precioUnitario: number;
+      monedaId: string;
+    }[] = [];
+    for (const [orden, item] of items.entries()) {
       const servicio = await this.prisma.servicio.findFirst({ where: { id: item.servicioId, agenciaId } });
       if (!servicio) throw new NotFoundException(`Servicio no encontrado: ${item.servicioId}`);
       itemsData.push({
         servicioId: servicio.id,
         dia: item.dia ?? 1,
+        orden,
+        cantidad: item.cantidad ?? cantidadPersonas,
         precioUnitario: item.precioUnitario ?? Number(servicio.precioBase) * factor,
         monedaId: servicio.monedaId,
       });
@@ -166,7 +179,7 @@ export class CotizacionesService {
     const listaPrecio = await this.resolverListaPrecio(agenciaId, user, dto.listaPrecioId);
     const moneda = await this.resolverMoneda(agenciaId, dto.monedaId);
     const factor = 1 + (listaPrecio ? Number(listaPrecio.porcentajeAdicional) : 0) / 100;
-    const itemsData = await this.construirItems(agenciaId, dto.items, factor);
+    const itemsData = await this.construirItems(agenciaId, dto.items, factor, dto.cantidadPersonas);
     const cliente = await this.resolverClientePropio(agenciaId, vendedorId);
 
     const cotizacion = await this.prisma.cotizacion.create({
@@ -234,7 +247,12 @@ export class CotizacionesService {
               : 0) ??
             0,
         ) / 100;
-      const itemsData = await this.construirItems(agenciaId, dto.items, factor);
+      const itemsData = await this.construirItems(
+        agenciaId,
+        dto.items,
+        factor,
+        dto.cantidadPersonas ?? cotizacion.cantidadPersonas,
+      );
       await this.prisma.cotizacionItem.deleteMany({ where: { cotizacionId: id } });
       data.items = { create: itemsData };
     } else if (listaPrecioCambio) {
@@ -280,9 +298,10 @@ export class CotizacionesService {
   /**
    * Transforma la cotización en una reserva real de tipo MULTIPLE, reutilizando
    * ReservasService.create (voucher, itinerario y transacción quedan a cargo de ese método,
-   * sin duplicar esa lógica aquí). El precio de cada línea ya viene multiplicado por
-   * cantidadPersonas porque las líneas MULTIPLE no se multiplican automáticamente por
-   * pasajero (a diferencia de reservas de tipo SERVICIO/PLANTILLA).
+   * sin duplicar esa lógica aquí). El precio de cada línea se multiplica aquí por
+   * item.cantidad (cantidad de pasajeros propia de esa línea, no siempre igual a
+   * cotizacion.cantidadPersonas) porque las líneas MULTIPLE no se multiplican automáticamente
+   * por pasajero (a diferencia de reservas de tipo SERVICIO/PLANTILLA).
    */
   async confirmar(agenciaId: string, id: string, user: AuthenticatedUser) {
     const cotizacion = await this.prisma.cotizacion.findFirst({
@@ -304,7 +323,7 @@ export class CotizacionesService {
       serviciosMultiples: cotizacion.items.map((item) => ({
         servicioId: item.servicioId,
         fecha: new Date(cotizacion.fechaServicio.getTime() + (item.dia - 1) * MS_POR_DIA).toISOString(),
-        precio: Number(item.precioUnitario) * cotizacion.cantidadPersonas,
+        precio: Number(item.precioUnitario) * item.cantidad,
       })),
       pasajeros: [
         {

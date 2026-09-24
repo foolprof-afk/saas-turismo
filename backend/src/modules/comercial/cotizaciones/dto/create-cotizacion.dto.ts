@@ -10,8 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// Servicio incluido en la cotización. La cantidad a facturar es siempre cantidadPersonas
-// (ver CreateCotizacionDto), no hay cantidad independiente por línea.
+// Servicio incluido en la cotización.
 export class CotizacionItemDto {
   @IsString()
   servicioId: string;
@@ -29,6 +28,15 @@ export class CotizacionItemDto {
   @IsNumber()
   @Min(0)
   precioUnitario?: number;
+
+  // Cantidad de pasajeros a facturar en esta línea. Si no se envía, toma el valor de
+  // CreateCotizacionDto.cantidadPersonas (ver construirItems). Permite que servicios distintos
+  // de una misma cotización se coticen para grupos de tamaño distinto (ej. un traslado solo
+  // para 2 de los 4 pasajeros).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  cantidad?: number;
 }
 
 export class CreateCotizacionDto {
