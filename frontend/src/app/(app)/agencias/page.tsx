@@ -130,6 +130,7 @@ export default function AgenciasPage() {
               <label className="block text-sm font-medium">Nombre</label>
               <input
                 required
+                autoComplete="off"
                 value={adminNombre}
                 onChange={(e) => setAdminNombre(e.target.value)}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm"
@@ -140,6 +141,7 @@ export default function AgenciasPage() {
               <input
                 type="email"
                 required
+                autoComplete="off"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
                 className="mt-1 w-full rounded border px-3 py-2 text-sm"
@@ -152,6 +154,7 @@ export default function AgenciasPage() {
               type="password"
               required
               minLength={6}
+              autoComplete="new-password"
               value={adminPassword}
               onChange={(e) => setAdminPassword(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
