@@ -25,19 +25,27 @@ export class AuthService {
       agenciaId = agencia.id;
     }
 
-    const usuario = await this.prisma.usuario.findFirst({
+    // El email es único por agencia, no globalmente (@@unique([agenciaId, email])), así que
+    // cuando se ingresa por el login principal (sin agenciaSlug) puede haber más de un usuario
+    // con ese correo en agencias distintas. Se busca entre todos los candidatos activos y se
+    // valida la contraseña de cada uno hasta encontrar el que corresponde, para que el usuario
+    // no tenga que saber ni elegir la URL de su agencia de antemano.
+    const candidatos = await this.prisma.usuario.findMany({
       where: agenciaId
         ? { email: dto.email, estado: 'ACTIVO', agenciaId }
-        : { email: dto.email, estado: 'ACTIVO', agencia: { esPlataforma: true } },
+        : { email: dto.email, estado: 'ACTIVO', agencia: { estado: 'ACTIVO' } },
       include: { rol: true, agencia: { select: { esPlataforma: true, subdominio: true } } },
     });
 
-    if (!usuario) {
-      throw new UnauthorizedException('Credenciales inválidas');
+    let usuario: (typeof candidatos)[number] | undefined;
+    for (const candidato of candidatos) {
+      if (await bcrypt.compare(dto.password, candidato.passwordHash)) {
+        usuario = candidato;
+        break;
+      }
     }
 
-    const passwordValida = await bcrypt.compare(dto.password, usuario.passwordHash);
-    if (!passwordValida) {
+    if (!usuario) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
