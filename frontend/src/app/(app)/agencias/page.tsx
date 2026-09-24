@@ -31,6 +31,13 @@ export default function AgenciasPage() {
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editSubdominio, setEditSubdominio] = useState("");
+  const [editEstado, setEditEstado] = useState("ACTIVO");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
   useEffect(() => {
     if (!authLoading && usuario && !usuario.agenciaEsPlataforma) {
       router.replace("/dashboard");
@@ -70,6 +77,39 @@ export default function AgenciasPage() {
       setError(err instanceof ApiError ? err.message : "No se pudo crear la agencia");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const iniciarEdicion = (a: Agencia) => {
+    setEditandoId(a.id);
+    setEditNombre(a.nombre);
+    setEditSubdominio(a.subdominio);
+    setEditEstado(a.estado);
+    setEditError(null);
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoId(null);
+    setEditError(null);
+  };
+
+  const guardarEdicion = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editandoId) return;
+    setEditError(null);
+    setEditSaving(true);
+    try {
+      await api.put(`/agencias/${editandoId}`, {
+        nombre: editNombre,
+        subdominio: editSubdominio,
+        estado: editEstado,
+      });
+      setEditandoId(null);
+      cargar();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "No se pudo actualizar la agencia");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -198,33 +238,89 @@ export default function AgenciasPage() {
                 </td>
               </tr>
             )}
-            {agencias.map((a) => (
-              <tr key={a.id} className="border-t">
-                <td className="px-4 py-2">
-                  {a.nombre}
-                  {a.esPlataforma && (
-                    <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                      Plataforma
+            {agencias.map((a) =>
+              editandoId === a.id ? (
+                <tr key={a.id} className="border-t bg-gray-50">
+                  <td colSpan={4} className="px-4 py-3">
+                    <form onSubmit={guardarEdicion} className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500">Nombre</label>
+                        <input
+                          required
+                          value={editNombre}
+                          onChange={(e) => setEditNombre(e.target.value)}
+                          className="mt-1 rounded border px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500">URL / carpeta (slug)</label>
+                        <input
+                          required
+                          value={editSubdominio}
+                          onChange={(e) => setEditSubdominio(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                          className="mt-1 rounded border px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500">Estado</label>
+                        <select
+                          value={editEstado}
+                          onChange={(e) => setEditEstado(e.target.value)}
+                          className="mt-1 rounded border px-3 py-1.5 text-sm"
+                        >
+                          <option value="ACTIVO">ACTIVO</option>
+                          <option value="INACTIVO">INACTIVO</option>
+                        </select>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={editSaving}
+                        className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        {editSaving ? "Guardando..." : "Guardar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelarEdicion}
+                        className="rounded border px-3 py-1.5 text-sm"
+                      >
+                        Cancelar
+                      </button>
+                      {editError && <p className="w-full text-sm text-red-600">{editError}</p>}
+                    </form>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={a.id} className="border-t">
+                  <td className="px-4 py-2">
+                    {a.nombre}
+                    {a.esPlataforma && (
+                      <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                        Plataforma
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 font-mono text-xs text-gray-600">{urlDe(a.subdominio)}</td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        a.estado === "ACTIVO" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {a.estado}
                     </span>
-                  )}
-                </td>
-                <td className="px-4 py-2 font-mono text-xs text-gray-600">{urlDe(a.subdominio)}</td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      a.estado === "ACTIVO" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {a.estado}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button onClick={() => copiarUrl(a)} className="text-blue-600 hover:underline">
-                    {copiedId === a.id ? "Copiado" : "Copiar URL"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-4 py-2 text-right space-x-3">
+                    <button onClick={() => iniciarEdicion(a)} className="text-blue-600 hover:underline">
+                      Editar
+                    </button>
+                    <button onClick={() => copiarUrl(a)} className="text-blue-600 hover:underline">
+                      {copiedId === a.id ? "Copiado" : "Copiar URL"}
+                    </button>
+                  </td>
+                </tr>
+              )
+            )}
           </tbody>
         </table>
       </div>

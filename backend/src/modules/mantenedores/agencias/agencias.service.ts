@@ -62,7 +62,14 @@ export class AgenciasService {
 
   async update(id: string, data: Record<string, unknown>) {
     await this.findOne(id);
-    return this.prisma.agencia.update({ where: { id }, data });
+    try {
+      return await this.prisma.agencia.update({ where: { id }, data });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new BadRequestException('El subdominio ya está en uso por otra agencia');
+      }
+      throw err;
+    }
   }
 
   // Usado por la pantalla de login (sin autenticacion) para mostrar el logo de la agencia.
