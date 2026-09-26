@@ -24,9 +24,14 @@ interface CotizacionPublica {
   fechaServicio: string;
   notas?: string | null;
   vendedor: { nombre: string };
+  cliente?: { logoUrl?: string | null } | null;
   moneda?: { codigo: string; simbolo: string; tasaCambio: string } | null;
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   items: CotizacionItem[];
+}
+
+function logoDe(cotizacion: CotizacionPublica): string | undefined {
+  return cotizacion.cliente?.logoUrl || cotizacion.agencia?.logoUrl || undefined;
 }
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
@@ -130,10 +135,10 @@ export default function CotizacionClientePublicaPage() {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="rounded-lg border bg-white p-5 text-center">
-          {cotizacion.agencia?.logoUrl && (
+          {logoDe(cotizacion) && (
             <img
-              src={cotizacion.agencia.logoUrl}
-              alt={cotizacion.agencia.nombre ?? "Logo"}
+              src={logoDe(cotizacion)}
+              alt={cotizacion.agencia?.nombre ?? "Logo"}
               className="mx-auto mb-2 h-16 w-16 object-contain"
             />
           )}
