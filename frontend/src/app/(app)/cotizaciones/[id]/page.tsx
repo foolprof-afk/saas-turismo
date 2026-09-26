@@ -115,6 +115,7 @@ export default function CotizacionDetallePage() {
   const [generandoEnlace, setGenerandoEnlace] = useState(false);
   const [enlace, setEnlace] = useState<string | null>(null);
   const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
+  const [enlaceCopiado, setEnlaceCopiado] = useState(false);
 
   const cargar = () => {
     api.get<CotizacionDetalle>(`/cotizaciones/${params.id}`).then(setCotizacion).catch(() => null);
@@ -164,10 +165,22 @@ export default function CotizacionDetallePage() {
     try {
       const res = await api.get<{ url: string }>(`/cotizaciones/${cotizacion.id}/enlace`);
       setEnlace(res.url);
+      setEnlaceCopiado(false);
     } catch (err) {
       setErrorEnlace(err instanceof ApiError ? err.message : "No se pudo generar el enlace");
     } finally {
       setGenerandoEnlace(false);
+    }
+  };
+
+  const copiarEnlace = async () => {
+    if (!enlace) return;
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setEnlaceCopiado(true);
+      setTimeout(() => setEnlaceCopiado(false), 1500);
+    } catch {
+      // ignore
     }
   };
 
@@ -474,6 +487,12 @@ export default function CotizacionDetallePage() {
               className="w-full rounded border px-2 py-1 text-xs font-mono"
             />
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={copiarEnlace}
+                className="rounded border px-3 py-1 text-xs font-medium hover:bg-gray-50"
+              >
+                {enlaceCopiado ? "Copiado" : "Copiar enlace"}
+              </button>
               {cotizacion.telefonoResponsable && (
                 <a
                   href={`https://wa.me/${cotizacion.telefonoResponsable.replace(/\D/g, "")}?text=${encodeURIComponent(
