@@ -112,6 +112,9 @@ export default function CotizacionDetallePage() {
   const [cancelando, setCancelando] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [generandoEnlace, setGenerandoEnlace] = useState(false);
+  const [enlace, setEnlace] = useState<string | null>(null);
+  const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
 
   const cargar = () => {
     api.get<CotizacionDetalle>(`/cotizaciones/${params.id}`).then(setCotizacion).catch(() => null);
@@ -152,6 +155,19 @@ export default function CotizacionDetallePage() {
       setError(err instanceof ApiError ? err.message : "No se pudo cancelar la cotización");
     } finally {
       setCancelando(false);
+    }
+  };
+
+  const handleGenerarEnlace = async () => {
+    setGenerandoEnlace(true);
+    setErrorEnlace(null);
+    try {
+      const res = await api.get<{ url: string }>(`/cotizaciones/${cotizacion.id}/enlace`);
+      setEnlace(res.url);
+    } catch (err) {
+      setErrorEnlace(err instanceof ApiError ? err.message : "No se pudo generar el enlace");
+    } finally {
+      setGenerandoEnlace(false);
     }
   };
 
@@ -434,6 +450,54 @@ export default function CotizacionDetallePage() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="rounded-lg border bg-white p-5">
+        <h2 className="text-sm font-semibold text-gray-500">Enlace para el cliente</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Genera un enlace público (sin login) con esta cotización. Siempre muestra la versión más reciente, así
+          no tienes que reenviar archivos cada vez que la actualices.
+        </p>
+        <button
+          onClick={handleGenerarEnlace}
+          disabled={generandoEnlace}
+          className="mt-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {generandoEnlace ? "Generando..." : "Generar enlace"}
+        </button>
+        {errorEnlace && <p className="mt-2 text-xs text-red-600">{errorEnlace}</p>}
+        {enlace && (
+          <div className="mt-3 space-y-2">
+            <input
+              readOnly
+              value={enlace}
+              onClick={(e) => e.currentTarget.select()}
+              className="w-full rounded border px-2 py-1 text-xs font-mono"
+            />
+            <div className="flex flex-wrap gap-2">
+              {cotizacion.telefonoResponsable && (
+                <a
+                  href={`https://wa.me/${cotizacion.telefonoResponsable.replace(/\D/g, "")}?text=${encodeURIComponent(
+                    `Hola, aquí está tu cotización ${cotizacion.codigoCotizacion}: ${enlace}`,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  Enviar por WhatsApp
+                </a>
+              )}
+              <a
+                href={`mailto:?subject=${encodeURIComponent(
+                  `Cotización ${cotizacion.codigoCotizacion}`,
+                )}&body=${encodeURIComponent(`Hola, aquí está tu cotización: ${enlace}`)}`}
+                className="rounded border px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+              >
+                Enviar por correo
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="rounded-lg border bg-white p-5">
         <h2 className="mb-3 text-sm font-semibold text-gray-500">Datos del responsable</h2>

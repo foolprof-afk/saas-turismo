@@ -9,6 +9,7 @@ import { UpdateCotizacionDto } from './dto/update-cotizacion.dto';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import { convertirMonto } from '../../../common/utils/reserva-montos.util';
+import { firmarEnlaceCotizacion, verificarEnlaceCotizacion } from '../../../common/utils/enlace-cotizacion-token.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -342,5 +343,32 @@ export class CotizacionesService {
     });
 
     return this.findOne(agenciaId, id, user);
+  }
+
+  /**
+   * Genera la URL pública (para el código QR) de una cotización. El token es autoverificable
+   * (HMAC, ver enlace-cotizacion-token.util) y no se persiste en BD, así el mismo QR siempre
+   * refleja la versión actual de la cotización sin tener que reenviarlo tras cada actualización.
+   */
+  async generarEnlacePublico(agenciaId: string, id: string) {
+    const cotizacion = await this.prisma.cotizacion.findFirst({ where: { id, agenciaId } });
+    if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
+    const token = firmarEnlaceCotizacion({ cotizacionId: id, agenciaId });
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
+    return { url: `${frontendUrl}/cotizacion-cliente/${token}` };
+  }
+
+  /**
+   * Vista pública de una cotización, accedida vía el enlace/QR generado en generarEnlacePublico.
+   * Sin `user` (sin restricción por vendedor): el cliente debe poder verla sin sesión.
+   */
+  async cotizacionPublica(token: string) {
+    const payload = verificarEnlaceCotizacion(token);
+    const cotizacion = await this.prisma.cotizacion.findFirst({
+      where: { id: payload.cotizacionId, agenciaId: payload.agenciaId },
+      include: { ...INCLUDE_COTIZACION, agencia: { select: { logoUrl: true, nombre: true } } },
+    });
+    if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
+    return cotizacion;
   }
 }

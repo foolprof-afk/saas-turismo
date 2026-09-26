@@ -18,6 +18,12 @@ export class CotizacionesController {
     return this.cotizacionesService.findAll(user.agenciaId, filtros.skip, filtros.limit, filtros, user);
   }
 
+  @Get(':id/enlace')
+  @Roles('admin', 'vendedor')
+  generarEnlace(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.cotizacionesService.generarEnlacePublico(user.agenciaId, id);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.cotizacionesService.findOne(user.agenciaId, id, user);
