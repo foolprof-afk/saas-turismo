@@ -34,6 +34,36 @@ interface Vendedor {
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
 
+// Suma los montos de todas las reservas actualmente listadas (sea la búsqueda por defecto o
+// filtrada), agrupados por moneda: r.montos ya trae el monto real de cada reserva en su propia
+// moneda, y r.totalPrincipal el equivalente convertido a la moneda predeterminada de la agencia.
+function totalesLista(reservas: Reserva[]) {
+  const porMoneda = new Map<string, { total: number; codigo: string; simbolo: string }>();
+  for (const r of reservas) {
+    for (const m of r.montos ?? []) {
+      const entry = porMoneda.get(m.monedaCodigo) ?? { total: 0, codigo: m.monedaCodigo, simbolo: m.monedaSimbolo };
+      entry.total += m.total;
+      porMoneda.set(m.monedaCodigo, entry);
+    }
+  }
+  return Array.from(porMoneda.values());
+}
+
+function totalPrincipalLista(reservas: Reserva[]) {
+  const porMoneda = new Map<string, { total: number; codigo: string; simbolo: string }>();
+  for (const r of reservas) {
+    if (!r.totalPrincipal) continue;
+    const entry = porMoneda.get(r.totalPrincipal.monedaCodigo) ?? {
+      total: 0,
+      codigo: r.totalPrincipal.monedaCodigo,
+      simbolo: r.totalPrincipal.monedaSimbolo,
+    };
+    entry.total += r.totalPrincipal.total;
+    porMoneda.set(r.totalPrincipal.monedaCodigo, entry);
+  }
+  return Array.from(porMoneda.values());
+}
+
 function MontoCelda({ reserva }: { reserva: Reserva }) {
   if (!reserva.montos || reserva.montos.length === 0) {
     return <span className="text-gray-400">-</span>;
@@ -195,6 +225,27 @@ export default function ReservasPage() {
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && reservas.length > 0 && (() => {
+        const totalPrincipal = totalPrincipalLista(reservas);
+        const porMoneda = totalesLista(reservas);
+        return (
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-4">
+            <span className="text-sm font-semibold text-gray-500">Total de la lista ({reservas.length}):</span>
+            {totalPrincipal.map((t) => (
+              <span key={t.codigo} className="text-sm font-semibold">
+                {t.simbolo} {formatMonto(t.total)} {t.codigo}
+              </span>
+            ))}
+            {(totalPrincipal.length === 0 || porMoneda.length > 1) &&
+              porMoneda.map((t) => (
+                <span key={t.codigo} className="text-xs text-gray-400">
+                  {t.simbolo} {formatMonto(t.total)} {t.codigo}
+                </span>
+              ))}
+          </div>
+        );
+      })()}
 
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full min-w-[640px] text-sm">

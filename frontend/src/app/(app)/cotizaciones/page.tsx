@@ -50,6 +50,20 @@ function totalCotizacion(c: Cotizacion) {
   return Array.from(porMoneda.values());
 }
 
+// Suma los totales de todas las cotizaciones actualmente listadas (sea la búsqueda por defecto
+// o filtrada), agrupados por moneda, reutilizando totalCotizacion para cada fila.
+function totalesLista(cotizaciones: Cotizacion[]) {
+  const porMoneda = new Map<string, { total: number; codigo: string; simbolo: string }>();
+  for (const c of cotizaciones) {
+    for (const t of totalCotizacion(c)) {
+      const entry = porMoneda.get(t.codigo) ?? { total: 0, codigo: t.codigo, simbolo: t.simbolo };
+      entry.total += t.total;
+      porMoneda.set(t.codigo, entry);
+    }
+  }
+  return Array.from(porMoneda.values());
+}
+
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -146,6 +160,17 @@ export default function CotizacionesPage() {
       </form>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {!loading && cotizaciones.length > 0 && (
+        <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-4">
+          <span className="text-sm font-semibold text-gray-500">Total de la lista ({cotizaciones.length}):</span>
+          {totalesLista(cotizaciones).map((t) => (
+            <span key={t.codigo} className="text-sm font-semibold">
+              {t.simbolo} {formatMonto(t.total)} {t.codigo}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full min-w-[640px] text-sm">
