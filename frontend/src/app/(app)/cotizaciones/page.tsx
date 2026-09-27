@@ -23,6 +23,13 @@ interface Vendedor {
   nombre: string;
 }
 
+interface Moneda {
+  codigo: string;
+  simbolo: string;
+  tasaCambio: string;
+  esPrincipal: boolean;
+}
+
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
@@ -64,9 +71,27 @@ function totalesLista(cotizaciones: Cotizacion[]) {
   return Array.from(porMoneda.values());
 }
 
+// Convierte el total de cada cotización a la moneda predeterminada de la agencia y los suma en
+// un único total general, para no fragmentar el resumen por cada moneda distinta usada.
+function totalPredeterminado(cotizaciones: Cotizacion[], monedas: Moneda[]) {
+  const principal = monedas.find((m) => m.esPrincipal);
+  if (!principal) return null;
+  const tasaPrincipal = Number(principal.tasaCambio);
+  let total = 0;
+  for (const c of cotizaciones) {
+    for (const t of totalCotizacion(c)) {
+      const moneda = monedas.find((m) => m.codigo === t.codigo);
+      const tasaOrigen = moneda ? Number(moneda.tasaCambio) : tasaPrincipal;
+      total += convertirMonto(t.total, tasaOrigen, tasaPrincipal);
+    }
+  }
+  return { total, codigo: principal.codigo, simbolo: principal.simbolo };
+}
+
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [monedas, setMonedas] = useState<Moneda[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,6 +116,7 @@ export default function CotizacionesPage() {
 
   useEffect(() => {
     api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => null);
+    api.get<Moneda[]>("/monedas?limit=500").then(setMonedas).catch(() => null);
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -161,16 +187,25 @@ export default function CotizacionesPage() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {!loading && cotizaciones.length > 0 && (
-        <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-4">
-          <span className="text-sm font-semibold text-gray-500">Total de la lista ({cotizaciones.length}):</span>
-          {totalesLista(cotizaciones).map((t) => (
-            <span key={t.codigo} className="text-sm font-semibold">
-              {t.simbolo} {formatMonto(t.total)} {t.codigo}
-            </span>
-          ))}
-        </div>
-      )}
+      {!loading && cotizaciones.length > 0 && (() => {
+        const predeterminado = totalPredeterminado(cotizaciones, monedas);
+        const porMoneda = totalesLista(cotizaciones).filter((t) => t.codigo !== predeterminado?.codigo);
+        return (
+          <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-4">
+            <span className="text-sm font-semibold text-gray-500">Total de la lista ({cotizaciones.length}):</span>
+            {predeterminado && (
+              <span className="text-sm font-semibold">
+                {predeterminado.simbolo} {formatMonto(predeterminado.total)} {predeterminado.codigo}
+              </span>
+            )}
+            {porMoneda.map((t) => (
+              <span key={t.codigo} className="text-xs text-gray-400">
+                {t.simbolo} {formatMonto(t.total)} {t.codigo}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full min-w-[640px] text-sm">
