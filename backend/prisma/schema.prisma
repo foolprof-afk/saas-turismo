@@ -71,6 +71,13 @@ enum AplicaImpuesto {
   RESERVA
 }
 
+enum EstadoLinkPago {
+  PENDIENTE
+  PAGADO
+  EXPIRADO
+  CANCELADO
+}
+
 // ----------------------------------------------------------------------------
 // NÚCLEO / MULTI-TENANT
 // ----------------------------------------------------------------------------
@@ -106,6 +113,8 @@ model Agencia {
   listasPrecio         ListaPrecio[]
   cotizaciones         Cotizacion[]
   ordenesServicio      OrdenServicio[]
+  pasarelasPago        PasarelaPago[]
+  linksPago            LinkPago[]
 
   @@map("agencias")
 }
@@ -325,6 +334,7 @@ model Reserva {
   itinerario Itinerario?
   pagos      Pago[]
   cotizacion Cotizacion?
+  linksPago  LinkPago[]
 
   @@map("reservas")
 }
@@ -644,6 +654,7 @@ model Moneda {
   cotizacionItems     CotizacionItem[]
   cotizaciones        Cotizacion[]
   ordenServicioItems  OrdenServicioItem[]
+  linksPago           LinkPago[]
 
   @@unique([agenciaId, codigo])
   @@map("monedas")
@@ -668,9 +679,10 @@ model FormaPago {
   nombre    String // efectivo | tarjeta | transferencia | pasarela
   config    Json   @default("{}")
 
-  agencia  Agencia   @relation(fields: [agenciaId], references: [id])
-  reservas Reserva[]
-  pagos    Pago[]
+  agencia      Agencia       @relation(fields: [agenciaId], references: [id])
+  reservas     Reserva[]
+  pagos        Pago[]
+  pasarelaPago PasarelaPago?
 
   @@map("formas_pago")
 }
@@ -692,8 +704,65 @@ model Pago {
   reserva   Reserva   @relation(fields: [reservaId], references: [id])
   formaPago FormaPago @relation(fields: [formaPagoId], references: [id])
   moneda    Moneda    @relation(fields: [monedaId], references: [id])
+  linkPago  LinkPago?
 
   @@map("pagos")
+}
+
+// ----------------------------------------------------------------------------
+// PASARELAS DE PAGO / LINKS DE PAGO
+// ----------------------------------------------------------------------------
+
+// Mantenedor de conexiones con proveedores de pasarela de pago (Recurrente y, a futuro, otras).
+// El campo config es libre (igual que FormaPago.config) para no atar el modelo a los campos
+// específicos de un solo proveedor: cada proveedor define qué claves espera dentro de config
+// (ver providers/*.provider.ts).
+model PasarelaPago {
+  id          String   @id @default(cuid())
+  agenciaId   String
+  // Identificador del proveedor (recurrente | ...) usado para elegir el adapter correcto.
+  proveedor   String
+  nombre      String
+  activo      Boolean  @default(true)
+  urlBase     String?
+  config      Json     @default("{}")
+  // Forma de pago creada automáticamente junto con la pasarela, usada para registrar los pagos
+  // que confirma el webhook del proveedor (ver PasarelasPagoService.create).
+  formaPagoId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agencia   Agencia    @relation(fields: [agenciaId], references: [id])
+  formaPago FormaPago  @relation(fields: [formaPagoId], references: [id])
+  linksPago LinkPago[]
+
+  @@map("pasarelas_pago")
+}
+
+// Link de pago generado para una reserva puntual. Se crea con estado PENDIENTE al llamar a la
+// API del proveedor; el webhook lo marca PAGADO y enlaza el Pago creado automáticamente.
+model LinkPago {
+  id                String         @id @default(cuid())
+  agenciaId         String
+  reservaId         String
+  pasarelaPagoId    String
+  monedaId          String
+  monto             Decimal        @db.Decimal(12, 2)
+  estado            EstadoLinkPago @default(PENDIENTE)
+  urlPago           String
+  // Id del checkout en el sistema del proveedor, usado para relacionar el webhook con este link.
+  referenciaExterna String?
+  pagoId            String?        @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  agencia      Agencia      @relation(fields: [agenciaId], references: [id])
+  reserva      Reserva      @relation(fields: [reservaId], references: [id])
+  pasarelaPago PasarelaPago @relation(fields: [pasarelaPagoId], references: [id])
+  moneda       Moneda       @relation(fields: [monedaId], references: [id])
+  pago         Pago?        @relation(fields: [pagoId], references: [id])
+
+  @@map("links_pago")
 }
 
 model Liquidacion {

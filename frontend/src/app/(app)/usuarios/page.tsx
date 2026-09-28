@@ -62,6 +62,7 @@ const PAGINAS_ADMIN = [
   { key: "impuestos", label: "Impuestos" },
   { key: "monedas", label: "Monedas" },
   { key: "formas-pago", label: "Formas de pago" },
+  { key: "pasarelas-pago", label: "Pasarelas de pago" },
   { key: "listas-precio", label: "Listas de precio" },
 ];
 

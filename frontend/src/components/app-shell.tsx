@@ -30,6 +30,7 @@ const NAV_ADMIN = [
   { href: "/impuestos", label: "Impuestos", pagina: "impuestos" },
   { href: "/monedas", label: "Monedas", pagina: "monedas" },
   { href: "/formas-pago", label: "Formas de pago", pagina: "formas-pago" },
+  { href: "/pasarelas-pago", label: "Pasarelas de pago", pagina: "pasarelas-pago" },
   { href: "/listas-precio", label: "Listas de precio", pagina: "listas-precio" },
 ];
 

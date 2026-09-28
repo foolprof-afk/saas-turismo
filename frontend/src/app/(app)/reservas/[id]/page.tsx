@@ -80,6 +80,20 @@ interface Pago {
   estado: string;
 }
 
+interface PasarelaPago {
+  id: string;
+  nombre: string;
+  activo: boolean;
+}
+
+interface LinkPago {
+  id: string;
+  monto: string;
+  estado: string;
+  urlPago: string;
+  moneda: { codigo: string; simbolo: string };
+}
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -154,6 +168,10 @@ export default function ReservaDetallePage() {
   const [formasPago, setFormasPago] = useState<FormaPago[]>([]);
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
+  const [pasarelasPago, setPasarelasPago] = useState<PasarelaPago[]>([]);
+  const [linksPago, setLinksPago] = useState<LinkPago[]>([]);
+  const [monedaLinkId, setMonedaLinkId] = useState("");
+  const [generandoLink, setGenerandoLink] = useState(false);
 
   const [formaPagoId, setFormaPagoId] = useState("");
   const [referenciaExterna, setReferenciaExterna] = useState("");
@@ -185,12 +203,14 @@ export default function ReservaDetallePage() {
   const cargar = () => {
     api.get<ReservaDetalle>(`/reservas/${params.id}`).then(setReserva).catch(() => null);
     api.get<Pago[]>(`/pagos/reserva/${params.id}`).then(setPagos).catch(() => setPagos([]));
+    api.get<LinkPago[]>(`/reservas/${params.id}/links-pago`).then(setLinksPago).catch(() => setLinksPago([]));
   };
 
   useEffect(() => {
     cargar();
     api.get<FormaPago[]>("/formas-pago").then(setFormasPago).catch(() => setFormasPago([]));
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => setMonedas([]));
+    api.get<PasarelaPago[]>("/pasarelas-pago").then(setPasarelasPago).catch(() => setPasarelasPago([]));
   }, [params.id]);
 
   // Preselecciona la moneda del pago con la de la reserva (si tiene una única moneda), para no
@@ -227,6 +247,24 @@ export default function ReservaDetallePage() {
       setError(err instanceof ApiError ? err.message : "No se pudo registrar el pago");
     } finally {
       setConfirmando(false);
+    }
+  };
+
+  const handleGenerarLink = async () => {
+    setError(null);
+    if (requiereMonedaManual && !monedaLinkId) {
+      setError("Esta reserva incluye servicios en distintas monedas: indica la moneda del link de pago");
+      return;
+    }
+    setGenerandoLink(true);
+    try {
+      await api.post(`/reservas/${params.id}/links-pago`, { monedaId: monedaLinkId || undefined });
+      setMonedaLinkId("");
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo generar el link de pago");
+    } finally {
+      setGenerandoLink(false);
     }
   };
 
@@ -533,6 +571,56 @@ export default function ReservaDetallePage() {
               {confirmando ? "Guardando..." : pagos.length > 0 ? "Registrar abono" : "Confirmar reserva"}
             </button>
           </form>
+        </div>
+      )}
+
+      {reserva.estado !== "CANCELADA" && saldoPendienteTotal(reserva) > 0.01 && pasarelasPago.some((p) => p.activo) && (
+        <div className="rounded-lg border bg-white p-5 print:hidden">
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">Link de pago</h2>
+          <div className="flex flex-wrap items-end gap-3">
+            {requiereMonedaManual && (
+              <div>
+                <label className="block text-sm font-medium">Moneda</label>
+                <select
+                  value={monedaLinkId}
+                  onChange={(e) => setMonedaLinkId(e.target.value)}
+                  className="mt-1 rounded border px-3 py-2 text-sm"
+                >
+                  <option value="">Seleccionar...</option>
+                  {monedas.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.codigo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={handleGenerarLink}
+              disabled={generandoLink}
+              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {generandoLink ? "Generando..." : "Generar link de pago"}
+            </button>
+          </div>
+          {linksPago.length > 0 && (
+            <ul className="mt-4 space-y-2 text-sm">
+              {linksPago.map((l) => (
+                <li key={l.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                  <span>
+                    {l.moneda.simbolo}
+                    {formatMonto(l.monto)} {l.moneda.codigo} —{" "}
+                    <span className={l.estado === "PAGADO" ? "text-green-700" : "text-amber-700"}>{l.estado}</span>
+                  </span>
+                  {l.estado === "PENDIENTE" && l.urlPago && (
+                    <a href={l.urlPago} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                      Abrir link
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

@@ -15,6 +15,7 @@ import { ImpuestosModule } from './impuestos/impuestos.module';
 import { FormasPagoModule } from './formas-pago/formas-pago.module';
 import { LogsModule } from './logs/logs.module';
 import { ListasPrecioModule } from './listas-precio/listas-precio.module';
+import { PasarelasPagoModule } from './pasarelas-pago/pasarelas-pago.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ListasPrecioModule } from './listas-precio/listas-precio.module';
     FormasPagoModule,
     LogsModule,
     ListasPrecioModule,
+    PasarelasPagoModule,
   ],
 })
 export class MantenedoresModule {}
