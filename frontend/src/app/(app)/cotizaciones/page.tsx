@@ -218,19 +218,20 @@ export default function CotizacionesPage() {
               <th className="px-4 py-2">Fecha</th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2">Total</th>
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && cotizaciones.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   No hay cotizaciones todavía
                 </td>
               </tr>
@@ -255,6 +256,11 @@ export default function CotizacionesPage() {
                       {t.simbolo} {formatMonto(t.total)} <span className="text-xs text-gray-400">{t.codigo}</span>
                     </div>
                   ))}
+                </td>
+                <td className="px-4 py-2">
+                  <Link href={`/cotizaciones/nueva?copiarDe=${c.id}`} className="text-blue-600 hover:underline">
+                    Copiar
+                  </Link>
                 </td>
               </tr>
             ))}

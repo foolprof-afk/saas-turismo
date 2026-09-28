@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent, DragEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
 import { formatMonto } from "@/lib/moneda";
@@ -36,12 +36,31 @@ interface Moneda {
   tasaCambio: string;
 }
 
+// Datos de la cotización de origen al usar "Copiar" desde el listado: se reutilizan personas,
+// lista de precio, moneda, notas y servicios, pero se dejan vacíos nombre y teléfono del
+// responsable ya que son obligatorios y corresponden a un pasajero distinto.
+interface CotizacionParaCopiar {
+  cantidadPersonas: number;
+  documentoResponsable?: string | null;
+  notas?: string | null;
+  listaPrecio?: { id: string } | null;
+  moneda?: { id: string } | null;
+  items: {
+    dia: number;
+    cantidad: number;
+    precioUnitario: string;
+    servicio: { id: string };
+  }[];
+}
+
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
   return (monto * tasaDestino) / tasaOrigen;
 }
 
 export default function NuevaCotizacionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const copiarDe = searchParams.get("copiarDe");
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
@@ -57,6 +76,7 @@ export default function NuevaCotizacionPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [copiando, setCopiando] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -66,8 +86,34 @@ export default function NuevaCotizacionPage() {
   }, []);
 
   useEffect(() => {
-    if (listasPrecio.length === 1) setListaPrecioId(listasPrecio[0].id);
+    if (listasPrecio.length === 1 && !listaPrecioId) setListaPrecioId(listasPrecio[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listasPrecio]);
+
+  useEffect(() => {
+    if (!copiarDe) return;
+    setCopiando(true);
+    api
+      .get<CotizacionParaCopiar>(`/cotizaciones/${copiarDe}`)
+      .then((c) => {
+        setCantidadPersonas(String(c.cantidadPersonas));
+        setDocumentoResponsable(c.documentoResponsable ?? "");
+        setListaPrecioId(c.listaPrecio?.id ?? "");
+        setMonedaId(c.moneda?.id ?? "");
+        setNotas(c.notas ?? "");
+        setLineas(
+          c.items.map((item) => ({
+            servicioId: item.servicio.id,
+            dia: item.dia,
+            cantidad: String(item.cantidad),
+            precioUnitario: item.precioUnitario,
+          })),
+        );
+      })
+      .catch(() => setError("No se pudo cargar la cotización a copiar"))
+      .finally(() => setCopiando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copiarDe]);
 
   const factor = 1 + (Number(listasPrecio.find((l) => l.id === listaPrecioId)?.porcentajeAdicional) || 0) / 100;
   const monedaCotizacion = monedas.find((m) => m.id === monedaId);
@@ -155,6 +201,12 @@ export default function NuevaCotizacionPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold">Nueva cotización</h1>
+      {copiando && <p className="text-sm text-gray-400">Copiando datos de la cotización...</p>}
+      {copiarDe && !copiando && (
+        <p className="text-sm text-blue-600">
+          Se copiaron los servicios de la cotización original. Completa el nombre y teléfono del nuevo responsable.
+        </p>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
