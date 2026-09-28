@@ -587,9 +587,9 @@ export default function ReservaDetallePage() {
                   className="mt-1 rounded border px-3 py-2 text-sm"
                 >
                   <option value="">Seleccionar...</option>
-                  {monedas.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.codigo}
+                  {reserva.montos.map((m) => (
+                    <option key={m.monedaId} value={m.monedaId}>
+                      {m.monedaCodigo}
                     </option>
                   ))}
                 </select>
@@ -603,6 +603,7 @@ export default function ReservaDetallePage() {
               {generandoLink ? "Generando..." : "Generar link de pago"}
             </button>
           </div>
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           {linksPago.length > 0 && (
             <ul className="mt-4 space-y-2 text-sm">
               {linksPago.map((l) => (
