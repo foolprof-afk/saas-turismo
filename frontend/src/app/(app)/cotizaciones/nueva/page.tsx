@@ -36,6 +36,19 @@ interface Moneda {
   tasaCambio: string;
 }
 
+interface PlantillaOpcion {
+  id: string;
+  nombre: string;
+}
+
+interface PlantillaDetalle {
+  id: string;
+  dias: {
+    numeroDia: number;
+    servicios: { servicio: { id: string; precioBase: string; monedaId: string } }[];
+  }[];
+}
+
 // Datos de la cotización de origen al usar "Copiar" desde el listado: se reutilizan personas,
 // lista de precio, moneda, notas y servicios, pero se dejan vacíos nombre y teléfono del
 // responsable ya que son obligatorios y corresponden a un pasajero distinto.
@@ -64,6 +77,9 @@ export default function NuevaCotizacionPage() {
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
   const [listasPrecio, setListasPrecio] = useState<ListaPrecio[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
+  const [plantillas, setPlantillas] = useState<PlantillaOpcion[]>([]);
+  const [plantillaCargarId, setPlantillaCargarId] = useState("");
+  const [cargandoPlantilla, setCargandoPlantilla] = useState(false);
 
   const [cantidadPersonas, setCantidadPersonas] = useState("1");
   const [pasajeroResponsable, setPasajeroResponsable] = useState("");
@@ -83,6 +99,7 @@ export default function NuevaCotizacionPage() {
     api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
     api.get<ListaPrecio[]>("/listas-precio/mias").then(setListasPrecio).catch(() => null);
     api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
+    api.get<PlantillaOpcion[]>("/plantillas-itinerario").then(setPlantillas).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -129,6 +146,40 @@ export default function NuevaCotizacionPage() {
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, cantidad } : x)));
   const actualizarPrecio = (i: number, precioUnitario: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, precioUnitario } : x)));
+
+  // Carga los servicios de una plantilla de itinerario como líneas de la cotización, una por
+  // cada servicio de cada día. La cantidad siempre inicia en 1 (independiente de
+  // cantidadPersonas): la plantilla define el paquete por persona y el usuario ajusta la
+  // cantidad si corresponde. El precio unitario se calcula ya convertido a la moneda de la
+  // cotización (si se seleccionó una), igual que se convierte el total estimado.
+  const cargarPlantilla = async (id: string) => {
+    if (!id) return;
+    const hayServiciosCargados = lineas.some((l) => l.servicioId);
+    if (hayServiciosCargados && !confirm("Esto reemplazará los servicios ya agregados. ¿Continuar?")) {
+      setPlantillaCargarId("");
+      return;
+    }
+    setCargandoPlantilla(true);
+    try {
+      const detalle = await api.get<PlantillaDetalle>(`/plantillas-itinerario/${id}`);
+      const nuevasLineas: LineaServicio[] = detalle.dias.flatMap((dia) =>
+        dia.servicios.map(({ servicio }) => {
+          let precio = Number(servicio.precioBase) * factor;
+          if (monedaCotizacion) {
+            const monedaServicio = monedas.find((m) => m.id === servicio.monedaId);
+            if (monedaServicio) precio = convertirMonto(precio, Number(monedaServicio.tasaCambio), Number(monedaCotizacion.tasaCambio));
+          }
+          return { servicioId: servicio.id, dia: dia.numeroDia, cantidad: "1", precioUnitario: precio.toFixed(2) };
+        }),
+      );
+      if (nuevasLineas.length > 0) setLineas(nuevasLineas);
+    } catch {
+      setError("No se pudo cargar la plantilla de itinerario");
+    } finally {
+      setCargandoPlantilla(false);
+      setPlantillaCargarId("");
+    }
+  };
 
   // Reordenar servicios arrastrando (cada línea conserva su propio "dia", así que el
   // agrupamiento por día se mantiene aunque se reordenen visualmente).
@@ -285,11 +336,29 @@ export default function NuevaCotizacionPage() {
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <label className="block text-sm font-medium">Servicios</label>
-            <button type="button" onClick={agregarServicio} className="text-sm text-blue-600 hover:underline">
-              + Agregar servicio
-            </button>
+            <div className="flex items-center gap-3">
+              <select
+                value={plantillaCargarId}
+                disabled={cargandoPlantilla}
+                onChange={(e) => {
+                  setPlantillaCargarId(e.target.value);
+                  cargarPlantilla(e.target.value);
+                }}
+                className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+              >
+                <option value="">{cargandoPlantilla ? "Cargando..." : "Cargar plantilla..."}</option>
+                {plantillas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={agregarServicio} className="text-sm text-blue-600 hover:underline">
+                + Agregar servicio
+              </button>
+            </div>
           </div>
           <div className="space-y-3">
             {lineas.map((linea, i) => {
