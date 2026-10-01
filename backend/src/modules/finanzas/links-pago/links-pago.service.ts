@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { GenerarLinkPagoDto } from './dto/generar-link-pago.dto';
 import { obtenerProvider } from '../../mantenedores/pasarelas-pago/providers/registry';
 import { calcularAbonado, calcularMontoImpuesto, calcularSaldoPendiente, desglosePorMoneda } from '../../../common/utils/reserva-montos.util';
+import { normalizarCodigoIso } from '../../../common/utils/moneda-iso.util';
 
 const INCLUDE_ITINERARIO_MONTOS = {
   dias: { include: { servicios: { include: { moneda: true } } } },
@@ -59,7 +60,8 @@ export class LinksPagoService {
     }
     const moneda = await this.prisma.moneda.findFirst({ where: { id: monedaId, agenciaId } });
     if (!moneda) throw new NotFoundException('Moneda no encontrada');
-    if (!provider.monedasSoportadas.includes(moneda.codigo)) {
+    const codigoIso = normalizarCodigoIso(moneda.codigo);
+    if (!provider.monedasSoportadas.includes(codigoIso)) {
       throw new BadRequestException(
         `La pasarela ${pasarela.nombre} no admite pagos en ${moneda.codigo} (monedas admitidas: ${provider.monedasSoportadas.join(', ')})`,
       );
@@ -90,7 +92,7 @@ export class LinksPagoService {
         urlBase: pasarela.urlBase ?? '',
         config,
         monto,
-        monedaCodigo: moneda.codigo,
+        monedaCodigo: codigoIso,
         descripcion: `Reserva ${reserva.codigoReserva}`,
         referenciaInterna: linkPago.id,
         successUrl,
