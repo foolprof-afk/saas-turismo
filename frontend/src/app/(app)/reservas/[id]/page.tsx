@@ -171,6 +171,7 @@ export default function ReservaDetallePage() {
   const [pasarelasPago, setPasarelasPago] = useState<PasarelaPago[]>([]);
   const [linksPago, setLinksPago] = useState<LinkPago[]>([]);
   const [monedaLinkId, setMonedaLinkId] = useState("");
+  const [montoLink, setMontoLink] = useState("");
   const [generandoLink, setGenerandoLink] = useState(false);
 
   const [formaPagoId, setFormaPagoId] = useState("");
@@ -193,6 +194,8 @@ export default function ReservaDetallePage() {
   const principal = monedaPrincipalDe(monedas);
   const monedaEfectivaId = monedaPagoId || reserva?.monedaId || "";
   const saldoEnMonedaEfectiva = reserva?.saldoPendiente.find((s) => s.monedaId === monedaEfectivaId);
+  const monedaLinkEfectivaId = monedaLinkId || reserva?.monedaId || "";
+  const saldoEnMonedaLink = reserva?.saldoPendiente.find((s) => s.monedaId === monedaLinkEfectivaId);
   const monedaPagoSeleccionada = monedas.find((m) => m.id === monedaEfectivaId);
   const tipoCambioPago = tipoCambioTexto(monedaPagoSeleccionada, principal);
   const impuestoPct = formaPagoSeleccionada?.config?.impuestoPorcentaje ?? 0;
@@ -258,8 +261,12 @@ export default function ReservaDetallePage() {
     }
     setGenerandoLink(true);
     try {
-      await api.post(`/reservas/${params.id}/links-pago`, { monedaId: monedaLinkId || undefined });
+      await api.post(`/reservas/${params.id}/links-pago`, {
+        monedaId: monedaLinkId || undefined,
+        monto: montoLink ? Number(montoLink) : undefined,
+      });
       setMonedaLinkId("");
+      setMontoLink("");
       cargar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo generar el link de pago");
@@ -578,6 +585,18 @@ export default function ReservaDetallePage() {
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Link de pago</h2>
           <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-sm font-medium">Monto a abonar</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={montoLink}
+                onChange={(e) => setMontoLink(e.target.value)}
+                placeholder={saldoEnMonedaLink ? formatMonto(saldoEnMonedaLink.total) : "0.00"}
+                className="mt-1 w-36 rounded border px-3 py-2 text-sm"
+              />
+            </div>
             {requiereMonedaManual && (
               <div>
                 <label className="block text-sm font-medium">Moneda</label>
@@ -603,6 +622,13 @@ export default function ReservaDetallePage() {
               {generandoLink ? "Generando..." : "Generar link de pago"}
             </button>
           </div>
+          <p className="mt-1 text-xs text-gray-400">
+            Déjalo vacío para generar el link por el saldo pendiente completo
+            {saldoEnMonedaLink
+              ? ` (${saldoEnMonedaLink.monedaSimbolo}${formatMonto(saldoEnMonedaLink.total)} ${saldoEnMonedaLink.monedaCodigo})`
+              : ""}
+            .
+          </p>
           {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           {linksPago.length > 0 && (
             <ul className="mt-4 space-y-2 text-sm">
