@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, formatFechaHora } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -14,6 +14,14 @@ interface MontoPorMoneda {
   total: number;
 }
 
+interface Pago {
+  monto: string;
+  formaPago: { nombre: string };
+  moneda: { codigo: string; simbolo: string };
+  referenciaExterna?: string | null;
+  fecha: string;
+}
+
 interface ReservaPublica {
   codigoReserva: string;
   estado: string;
@@ -21,6 +29,7 @@ interface ReservaPublica {
   montos: MontoPorMoneda[];
   totalAbonado: MontoPorMoneda[];
   saldoPendiente: MontoPorMoneda[];
+  pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
   cliente: { nombre: string; logoUrl?: string | null };
@@ -156,6 +165,22 @@ export default function VoucherPublicoPage() {
             ))}
           </ul>
         </div>
+
+        {reserva.pagos && reserva.pagos.length > 0 && (
+          <div className="rounded-lg border bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold text-gray-500">Pagos registrados</h2>
+            <ul className="space-y-1 text-sm">
+              {reserva.pagos.map((p, i) => (
+                <li key={i}>
+                  {p.formaPago?.nombre} — {p.moneda?.simbolo}
+                  {formatMonto(p.monto)} {p.moneda?.codigo}
+                  {p.referenciaExterna && <span className="text-gray-400"> (Ref: {p.referenciaExterna})</span>}
+                  <span className="block text-xs text-gray-400">{formatFechaHora(p.fecha)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {reserva.itinerario && (
           <div className="rounded-lg border bg-white p-5">
