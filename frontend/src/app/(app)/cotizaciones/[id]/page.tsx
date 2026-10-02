@@ -199,6 +199,7 @@ export default function CotizacionDetallePage() {
 
   const descargarPDF = async () => {
     const { jsPDF } = await import("jspdf");
+    const { limpiarPdf } = await import("@/lib/pdfTexto");
 
     const doc = new jsPDF({ unit: "mm", format: "letter" });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -225,7 +226,7 @@ export default function CotizacionDetallePage() {
     doc.setFontSize(10);
     doc.text(`Estado: ${cotizacion.estado}`, pageWidth - marginX, y + 11, { align: "right" });
     if (cotizacion.agencia?.nombre) {
-      doc.text(cotizacion.agencia.nombre, pageWidth - marginX, y + 17, { align: "right" });
+      doc.text(limpiarPdf(cotizacion.agencia.nombre), pageWidth - marginX, y + 17, { align: "right" });
     }
     y += 26;
 
@@ -254,7 +255,7 @@ export default function CotizacionDetallePage() {
       doc.setFont("helvetica", "bold");
       doc.text(`${label}:`, x, filaY);
       doc.setFont("helvetica", "normal");
-      doc.text(valor, x + 38, filaY);
+      doc.text(limpiarPdf(valor), x + 38, filaY);
     });
     y += Math.ceil(datos.length / 2) * 6 + 6;
 
@@ -299,9 +300,9 @@ export default function CotizacionDetallePage() {
       itemsDia.forEach((item, idx) => {
         const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
-        const nombreLineas = doc.splitTextToSize(item.servicio.nombre, colX.horas - colX.servicio - 3);
+        const nombreLineas = doc.splitTextToSize(limpiarPdf(item.servicio.nombre), colX.horas - colX.servicio - 3);
         const descLineas = item.servicio.descripcion
-          ? doc.splitTextToSize(item.servicio.descripcion, colX.horas - colX.servicio - 3)
+          ? doc.splitTextToSize(limpiarPdf(item.servicio.descripcion), colX.horas - colX.servicio - 3)
           : [];
         const alturaFila = (nombreLineas.length + descLineas.length) * 4.5 + 2;
 
@@ -351,7 +352,7 @@ export default function CotizacionDetallePage() {
       doc.setFont("helvetica", "normal");
       y += 5;
       doc.setFontSize(9);
-      const notasLineas = doc.splitTextToSize(cotizacion.notas, anchoUtil);
+      const notasLineas = doc.splitTextToSize(limpiarPdf(cotizacion.notas), anchoUtil);
       doc.text(notasLineas, marginX, y);
     }
 

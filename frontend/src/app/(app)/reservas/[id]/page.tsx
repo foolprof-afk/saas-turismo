@@ -319,6 +319,7 @@ export default function ReservaDetallePage() {
 
   const descargarPDF = async () => {
     const { jsPDF } = await import("jspdf");
+    const { limpiarPdf } = await import("@/lib/pdfTexto");
 
     const lineas: string[] = [];
     lineas.push(`Cliente: ${reserva.cliente?.nombre ?? ""}`);
@@ -367,7 +368,7 @@ export default function ReservaDetallePage() {
     y += 7;
     doc.setFontSize(9);
     lineas.forEach((linea) => {
-      const wrapped = doc.splitTextToSize(linea, 70);
+      const wrapped = doc.splitTextToSize(limpiarPdf(linea), 70);
       doc.text(wrapped, 5, y);
       y += wrapped.length * lineHeightMm;
     });
