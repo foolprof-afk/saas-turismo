@@ -8,6 +8,7 @@ import { CreateReservaDto } from './dto/create-reserva.dto';
 import { UpdateReservaDto } from './dto/update-reserva.dto';
 import { ConfirmarReservaDto } from './dto/confirmar-reserva.dto';
 import { FiltrosReservaDto } from './dto/filtros-reserva.dto';
+import { CalendarioReservaDto } from './dto/calendario-reserva.dto';
 
 @Controller('reservas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,6 +23,14 @@ export class ReservasController {
   @Get('cuadre')
   cuadre(@CurrentUser() user: AuthenticatedUser, @Query() filtros: FiltrosReservaDto) {
     return this.reservasService.cuadre(user.agenciaId, filtros, user);
+  }
+
+  @Get('calendario')
+  calendario(@CurrentUser() user: AuthenticatedUser, @Query() filtros: CalendarioReservaDto) {
+    const hoy = new Date();
+    const anio = filtros.anio ?? hoy.getFullYear();
+    const mes = filtros.mes ?? hoy.getMonth() + 1;
+    return this.reservasService.calendario(user.agenciaId, anio, mes, user);
   }
 
   @Get('cuadre/enlace')

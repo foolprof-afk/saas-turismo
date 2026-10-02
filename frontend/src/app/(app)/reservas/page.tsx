@@ -134,9 +134,14 @@ export default function ReservasPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Reservas</h1>
-        <Link href="/reservas/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
-          Nueva reserva
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/reservas/calendario" className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Calendario
+          </Link>
+          <Link href="/reservas/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
+            Nueva reserva
+          </Link>
+        </div>
       </div>
 
       <form

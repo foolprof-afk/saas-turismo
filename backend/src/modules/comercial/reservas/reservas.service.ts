@@ -208,6 +208,53 @@ export class ReservasService {
     };
   }
 
+  /**
+   * Vista de calendario: una entrada por cada día de itinerario con servicios dentro del mes
+   * solicitado (no por reserva), para que una reserva de varios días aparezca en cada día que
+   * realmente tiene actividad. Respeta la misma visibilidad por vendedor que el resto del
+   * módulo (admin ve todo, vendedor ve lo propio + usuariosVisibles asignados en Usuarios).
+   */
+  async calendario(agenciaId: string, anio: number, mes: number, user?: AuthenticatedUser) {
+    const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
+    const inicioMes = new Date(Date.UTC(anio, mes - 1, 1));
+    const finMes = new Date(Date.UTC(anio, mes, 1));
+
+    const dias = await this.prisma.itinerarioDia.findMany({
+      where: {
+        fecha: { gte: inicioMes, lt: finMes },
+        itinerario: {
+          reserva: {
+            agenciaId,
+            estado: { not: 'CANCELADA' },
+            ...(vendedorIdsPermitidos ? { vendedorId: { in: vendedorIdsPermitidos } } : {}),
+          },
+        },
+      },
+      include: {
+        servicios: { include: { servicio: true } },
+        itinerario: {
+          include: {
+            reserva: { include: { cliente: true, pasajeros: true } },
+          },
+        },
+      },
+      orderBy: { fecha: 'asc' },
+    });
+
+    return dias.map((dia) => {
+      const reserva = dia.itinerario.reserva;
+      const responsable = reserva.pasajeros.find((p) => p.esResponsable);
+      return {
+        fecha: dia.fecha,
+        reservaId: reserva.id,
+        codigoReserva: reserva.codigoReserva,
+        estado: reserva.estado,
+        clienteNombre: responsable?.nombre ?? reserva.cliente.nombre,
+        servicios: dia.servicios.map((s) => s.servicio.nombre),
+      };
+    });
+  }
+
   async findOne(agenciaId: string, id: string, user?: AuthenticatedUser) {
     const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
     const reserva = await this.prisma.reserva.findFirst({
