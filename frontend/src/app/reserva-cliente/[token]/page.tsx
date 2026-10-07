@@ -32,10 +32,12 @@ interface ReservaPublica {
   pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
+  // "cliente" es la identidad comercial/agencia bajo la cual se vendió la reserva (no el
+  // pasajero final, ver Cliente en el schema): de cara al pasajero que recibe este enlace, esto
+  // es "la agencia" que emite la reserva, así que se rotula como tal en pantalla.
   cliente: { nombre: string; logoUrl?: string | null };
-  agencia?: { logoUrl?: string | null } | null;
+  agencia?: { logoUrl?: string | null; nombre?: string } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
-  voucher?: { codigo: string; validoHasta?: string; qrUrl?: string };
   itinerario?: {
     dias: {
       numeroDia: number;
@@ -43,7 +45,7 @@ interface ReservaPublica {
       servicios: {
         horaInicio: string;
         estado: string;
-        servicio: { nombre: string; descripcion?: string | null };
+        servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
         precio?: string | null;
         moneda?: { codigo: string; simbolo: string } | null;
       }[];
@@ -51,38 +53,38 @@ interface ReservaPublica {
   };
 }
 
+function logoDe(reserva: ReservaPublica): string | undefined {
+  return reserva.cliente?.logoUrl || reserva.agencia?.logoUrl || undefined;
+}
+
 function montosTexto(montos: MontoPorMoneda[]): string {
   if (!montos || montos.length === 0) return "-";
   return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
 }
 
-function montoTexto(reserva: ReservaPublica): string {
-  return montosTexto(reserva.montos);
-}
-
-export default function VoucherPublicoPage() {
+export default function ReservaClientePublicaPage() {
   const params = useParams<{ token: string }>();
   const [reserva, setReserva] = useState<ReservaPublica | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/vouchers/publico/${params.token}`)
+    fetch(`${API_URL}/reserva-cliente/publico/${params.token}`)
       .then(async (res) => {
         if (!res.ok) {
-          const body = await res.json().catch(() => ({ message: "No se pudo validar el voucher" }));
-          throw new Error(body.message ?? "No se pudo validar el voucher");
+          const body = await res.json().catch(() => ({ message: "No se pudo validar el enlace" }));
+          throw new Error(body.message ?? "No se pudo validar el enlace");
         }
         return res.json();
       })
       .then(setReserva)
-      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo validar el voucher"));
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudo validar el enlace"));
   }, [params.token]);
 
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
         <div className="max-w-sm rounded-lg border bg-white p-6 text-center">
-          <p className="text-lg font-semibold text-red-600">Voucher inválido</p>
+          <p className="text-lg font-semibold text-red-600">Enlace inválido</p>
           <p className="mt-2 text-sm text-gray-500">{error}</p>
         </div>
       </div>
@@ -92,61 +94,58 @@ export default function VoucherPublicoPage() {
   if (!reserva) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-400">Validando reserva...</p>
+        <p className="text-sm text-gray-400">Cargando reserva...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="mx-auto max-w-md space-y-4">
+      <div className="mx-auto max-w-2xl space-y-4">
         <div className="rounded-lg border bg-white p-5 text-center">
-          {(reserva.cliente?.logoUrl || reserva.agencia?.logoUrl) && (
+          {logoDe(reserva) && (
             <img
-              src={reserva.cliente?.logoUrl || reserva.agencia?.logoUrl || undefined}
-              alt="Logo"
+              src={logoDe(reserva)}
+              alt={reserva.agencia?.nombre ?? "Logo"}
               className="mx-auto mb-2 h-16 w-16 object-contain"
             />
           )}
-          <p className="text-xs font-semibold uppercase tracking-wide text-green-600">Reserva válida</p>
-          <h1 className="mt-1 text-xl font-bold">{reserva.codigoReserva}</h1>
-          <span className="mt-2 inline-block rounded-full bg-gray-100 px-3 py-1 text-sm">{reserva.estado}</span>
-          {reserva.voucher?.qrUrl && (
-            <img
-              src={reserva.voucher.qrUrl}
-              alt="Código QR del voucher"
-              className="mx-auto mt-4 h-40 w-40"
-            />
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+            {reserva.agencia?.nombre ?? "Reserva"}
+          </p>
+          <h1 className="mt-1 text-xl font-bold">Reserva {reserva.codigoReserva}</h1>
+          <span className="mt-2 inline-block rounded-full bg-gray-100 px-3 py-1 text-xs">{reserva.estado}</span>
+          <p className="mt-2 text-xs text-gray-400">
+            Guarda este enlace: siempre muestra la versión más reciente de tu reserva, aunque la agencia
+            la modifique después.
+          </p>
+        </div>
+
+        <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5 text-center">
+          <h2 className="mb-1 text-sm font-semibold text-blue-700">Total</h2>
+          <p className="text-2xl font-bold text-blue-800">{montosTexto(reserva.montos)}</p>
+          {reserva.totalAbonado.length > 0 && (
+            <div className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-sm">
+              <p className="text-blue-700">Abonado: {montosTexto(reserva.totalAbonado)}</p>
+              <p className="font-medium text-amber-700">Saldo pendiente: {montosTexto(reserva.saldoPendiente)}</p>
+            </div>
           )}
         </div>
 
         <div className="rounded-lg border bg-white p-5">
-          <h2 className="mb-2 text-sm font-semibold text-gray-500">Detalle</h2>
-          <p className="text-sm">
-            <span className="text-gray-500">Agencia:</span> {reserva.cliente?.nombre}
-          </p>
-          <p className="text-sm">
-            <span className="text-gray-500">Fecha:</span>{" "}
-            {formatFecha(reserva.fechaServicioInicio)}
-            {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
-          </p>
-          <p className="text-sm">
-            <span className="text-gray-500">Total:</span> {montoTexto(reserva)}
-          </p>
-          {reserva.totalAbonado.length > 0 && (
-            <>
-              <p className="text-sm">
-                <span className="text-gray-500">Abonado:</span> {montosTexto(reserva.totalAbonado)}
-              </p>
-              <p className="text-sm">
-                <span className="text-gray-500">Saldo pendiente:</span>{" "}
-                <span className="font-medium text-amber-700">{montosTexto(reserva.saldoPendiente)}</span>
-              </p>
-            </>
-          )}
-          <p className="text-sm">
-            <span className="text-gray-500">Cantidad de personas:</span> {reserva.pasajeros.length}
-          </p>
+          <h2 className="mb-3 text-sm font-semibold text-gray-500">Datos de la reserva</h2>
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+            <p>
+              <span className="text-gray-400">Agencia:</span> {reserva.cliente?.nombre}
+            </p>
+            <p>
+              <span className="text-gray-400">Fecha:</span> {formatFecha(reserva.fechaServicioInicio)}
+              {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
+            </p>
+            <p>
+              <span className="text-gray-400">Pasajeros:</span> {reserva.pasajeros.length}
+            </p>
+          </div>
         </div>
 
         <div className="rounded-lg border bg-white p-5">
@@ -166,25 +165,9 @@ export default function VoucherPublicoPage() {
           </ul>
         </div>
 
-        {reserva.pagos && reserva.pagos.length > 0 && (
+        {reserva.itinerario && reserva.itinerario.dias.length > 0 && (
           <div className="rounded-lg border bg-white p-5">
-            <h2 className="mb-2 text-sm font-semibold text-gray-500">Pagos registrados</h2>
-            <ul className="space-y-1 text-sm">
-              {reserva.pagos.map((p, i) => (
-                <li key={i}>
-                  {p.formaPago?.nombre} — {p.moneda?.simbolo}
-                  {formatMonto(p.monto)} {p.moneda?.codigo}
-                  {p.referenciaExterna && <span className="text-gray-400"> (Ref: {p.referenciaExterna})</span>}
-                  <span className="block text-xs text-gray-400">{formatFechaHora(p.fecha)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {reserva.itinerario && (
-          <div className="rounded-lg border bg-white p-5">
-            <h2 className="mb-2 text-sm font-semibold text-gray-500">Itinerario</h2>
+            <h2 className="mb-3 text-sm font-semibold text-gray-500">Itinerario</h2>
             <div className="space-y-3">
               {reserva.itinerario.dias.map((dia) => (
                 <div key={dia.numeroDia}>
@@ -210,6 +193,22 @@ export default function VoucherPublicoPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {reserva.pagos && reserva.pagos.length > 0 && (
+          <div className="rounded-lg border bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold text-gray-500">Pagos registrados</h2>
+            <ul className="space-y-1 text-sm">
+              {reserva.pagos.map((p, i) => (
+                <li key={i}>
+                  {p.formaPago?.nombre} — {p.moneda?.simbolo}
+                  {formatMonto(p.monto)} {p.moneda?.codigo}
+                  {p.referenciaExterna && <span className="text-gray-400"> (Ref: {p.referenciaExterna})</span>}
+                  <span className="block text-xs text-gray-400">{formatFechaHora(p.fecha)}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

@@ -97,7 +97,7 @@ export default function CotizacionesPage() {
 
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
-  const [codigoCotizacion, setCodigoCotizacion] = useState("");
+  const [busqueda, setBusqueda] = useState("");
 
   const cargar = () => {
     setLoading(true);
@@ -105,7 +105,7 @@ export default function CotizacionesPage() {
     const params = new URLSearchParams();
     if (estado) params.set("estado", estado);
     if (vendedorId) params.set("vendedorId", vendedorId);
-    if (codigoCotizacion) params.set("codigoCotizacion", codigoCotizacion);
+    if (busqueda) params.set("q", busqueda);
     const qs = params.toString();
     api
       .get<Cotizacion[]>(`/cotizaciones${qs ? `?${qs}` : ""}`)
@@ -138,12 +138,12 @@ export default function CotizacionesPage() {
         className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
       >
         <div>
-          <label className="block text-sm font-medium">Código</label>
+          <label className="block text-sm font-medium">Buscar</label>
           <input
-            value={codigoCotizacion}
-            onChange={(e) => setCodigoCotizacion(e.target.value)}
-            placeholder="COT-XXXXXXXX"
-            className="mt-1 rounded border px-3 py-2 text-sm font-mono"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Código, nombre o teléfono"
+            className="mt-1 w-56 rounded border px-3 py-2 text-sm"
           />
         </div>
         <div>

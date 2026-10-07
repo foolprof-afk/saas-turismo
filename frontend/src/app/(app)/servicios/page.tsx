@@ -14,6 +14,10 @@ interface Moneda {
   codigo: string;
 }
 
+interface ServicioAsociacion {
+  servicioAsociado: { id: string; nombre: string };
+}
+
 interface Servicio {
   id: string;
   proveedorId: string;
@@ -29,6 +33,9 @@ interface Servicio {
   puntoRecogidaId?: string | null;
   estado: string;
   palabrasClave?: string[];
+  fotoUrl?: string | null;
+  estadoPublicacion?: "PUBLICO" | "PRIVADO";
+  asociaciones?: ServicioAsociacion[];
 }
 
 export default function ServiciosPage() {
@@ -55,6 +62,10 @@ export default function ServiciosPage() {
   const [rutaId, setRutaId] = useState("");
   const [puntoRecogidaId, setPuntoRecogidaId] = useState("");
   const [palabrasClaveInput, setPalabrasClaveInput] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [estadoPublicacion, setEstadoPublicacion] = useState<"PUBLICO" | "PRIVADO">("PRIVADO");
+  const [asociadoIds, setAsociadoIds] = useState<string[]>([]);
+  const [buscarAsociado, setBuscarAsociado] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -108,6 +119,10 @@ export default function ServiciosPage() {
     setRutaId("");
     setPuntoRecogidaId("");
     setPalabrasClaveInput("");
+    setFotoUrl("");
+    setEstadoPublicacion("PRIVADO");
+    setAsociadoIds([]);
+    setBuscarAsociado("");
   };
 
   const editar = (s: Servicio) => {
@@ -124,6 +139,10 @@ export default function ServiciosPage() {
     setRutaId(s.rutaId ?? "");
     setPuntoRecogidaId(s.puntoRecogidaId ?? "");
     setPalabrasClaveInput((s.palabrasClave ?? []).map((p) => `#${p}`).join(" "));
+    setFotoUrl(s.fotoUrl ?? "");
+    setEstadoPublicacion(s.estadoPublicacion ?? "PRIVADO");
+    setAsociadoIds((s.asociaciones ?? []).map((a) => a.servicioAsociado.id));
+    setBuscarAsociado("");
   };
 
   // Precarga el formulario con los datos del servicio seleccionado, pero sin editingId, para
@@ -142,6 +161,10 @@ export default function ServiciosPage() {
     setRutaId(s.rutaId ?? "");
     setPuntoRecogidaId(s.puntoRecogidaId ?? "");
     setPalabrasClaveInput((s.palabrasClave ?? []).map((p) => `#${p}`).join(" "));
+    setFotoUrl("");
+    setEstadoPublicacion("PRIVADO");
+    setAsociadoIds([]);
+    setBuscarAsociado("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -163,6 +186,9 @@ export default function ServiciosPage() {
         rutaId: rutaId || undefined,
         puntoRecogidaId: puntoRecogidaId || undefined,
         palabrasClave: parsearPalabrasClave(palabrasClaveInput),
+        fotoUrl: fotoUrl || undefined,
+        estadoPublicacion,
+        asociadoIds,
       };
       if (editingId) {
         await api.put(`/servicios/${editingId}`, data);
@@ -360,6 +386,70 @@ export default function ServiciosPage() {
           </p>
         </div>
 
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium">Foto (URL, opcional)</label>
+            <input
+              value={fotoUrl}
+              onChange={(e) => setFotoUrl(e.target.value)}
+              placeholder="https://..."
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">Foto principal para el catálogo público (Front Office).</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Publicación en catálogo web</label>
+            <select
+              value={estadoPublicacion}
+              onChange={(e) => setEstadoPublicacion(e.target.value as "PUBLICO" | "PRIVADO")}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            >
+              <option value="PRIVADO">Privado (no visible en el catálogo web)</option>
+              <option value="PUBLICO">Público (visible en el catálogo web)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Independiente del estado activo/inactivo: un servicio puede estar activo pero aún
+              privado mientras se prepara su publicación.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Servicios asociados (opcional)</label>
+          <p className="mt-1 text-xs text-gray-400">
+            Se mostrarán como sugerencia (&quot;También puedes agregar&quot;) junto a este servicio en el
+            catálogo web. Selecciona uno o más de la lista.
+          </p>
+          <input
+            value={buscarAsociado}
+            onChange={(e) => setBuscarAsociado(e.target.value)}
+            placeholder="Buscar servicio..."
+            className="mt-2 w-full rounded border px-3 py-2 text-sm"
+          />
+          <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded border p-2">
+            {servicios
+              .filter((s) => s.id !== editingId)
+              .filter((s) => s.nombre.toLowerCase().includes(buscarAsociado.trim().toLowerCase()))
+              .map((s) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={asociadoIds.includes(s.id)}
+                    onChange={(e) =>
+                      setAsociadoIds((prev) =>
+                        e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id),
+                      )
+                    }
+                  />
+                  {s.nombre}
+                </label>
+              ))}
+            {servicios.filter((s) => s.id !== editingId).length === 0 && (
+              <p className="text-xs text-gray-400">No hay otros servicios creados todavía.</p>
+            )}
+          </div>
+        </div>
+
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
@@ -398,6 +488,7 @@ export default function ServiciosPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Proveedor</th>
               <th className="px-4 py-2">Tipo</th>
+              <th className="px-4 py-2">Catálogo web</th>
               {verCostos && <th className="px-4 py-2">Precio</th>}
               <th className="px-4 py-2"></th>
             </tr>
@@ -405,14 +496,14 @@ export default function ServiciosPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={verCostos ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verCostos ? 6 : 5} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && serviciosFiltrados.length === 0 && (
               <tr>
-                <td colSpan={verCostos ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={verCostos ? 6 : 5} className="px-4 py-6 text-center text-gray-400">
                   {servicios.length === 0 ? "No hay servicios todavía" : "Sin resultados para la búsqueda"}
                 </td>
               </tr>
@@ -429,6 +520,18 @@ export default function ServiciosPage() {
                 </td>
                 <td className="px-4 py-2">{proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "-"}</td>
                 <td className="px-4 py-2">{tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "-"}</td>
+                <td className="px-4 py-2">
+                  <span
+                    className={
+                      "rounded px-2 py-0.5 text-xs font-medium " +
+                      (s.estadoPublicacion === "PUBLICO"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-600")
+                    }
+                  >
+                    {s.estadoPublicacion === "PUBLICO" ? "Público" : "Privado"}
+                  </span>
+                </td>
                 {verCostos && <td className="px-4 py-2">{formatMonto(s.precioBase)}</td>}
                 <td className="px-4 py-2 text-right space-x-3">
                   <button onClick={() => editar(s)} className="text-blue-600 hover:underline">

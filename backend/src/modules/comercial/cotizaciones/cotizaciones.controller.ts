@@ -29,8 +29,11 @@ export class CotizacionesController {
     return this.cotizacionesService.findOne(user.agenciaId, id, user);
   }
 
+  // 'catalogo_web' es el rol del usuario interno restringido (usuario.web) que usa el catálogo
+  // público del Front Office (Guatetur) para crear cotizaciones en nombre de clientes anónimos.
+  // Solo puede crear; actualizar/cancelar/confirmar/eliminar siguen reservados a admin/vendedor.
   @Post()
-  @Roles('admin', 'vendedor')
+  @Roles('admin', 'vendedor', 'catalogo_web')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateCotizacionDto) {
     return this.cotizacionesService.create(user.agenciaId, user.userId, user, dto);
   }

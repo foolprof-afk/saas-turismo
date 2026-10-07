@@ -13,6 +13,14 @@ interface Opcion {
 interface Moneda {
   id: string;
   codigo: string;
+  tasaCambio: string;
+}
+
+// tasaCambio de cada moneda representa cuántas unidades de esa moneda equivalen a 1 unidad de
+// la moneda principal (ver reserva-montos.util.ts en el backend); por eso convertir entre dos
+// monedas cualquiera es monto * tasaDestino / tasaOrigen.
+function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
+  return (monto * tasaDestino) / tasaOrigen;
 }
 interface ServicioOpcion {
   id: string;
@@ -43,6 +51,7 @@ export default function NuevaReservaPage() {
   const [fechaServicioInicio, setFechaServicioInicio] = useState("");
   const [horaServicio, setHoraServicio] = useState("");
   const [monedaId, setMonedaId] = useState("");
+  const [monedaOrigenId, setMonedaOrigenId] = useState("");
   const [precioLiquidado, setPrecioLiquidado] = useState("");
   const [precioUnitarioPlantilla, setPrecioUnitarioPlantilla] = useState<number | null>(null);
   const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", telefono: "", tipo: "ADULTO" }]);
@@ -68,11 +77,23 @@ export default function NuevaReservaPage() {
         ? precioUnitarioPlantilla * pasajeros.length
         : 0;
 
+  // precioMinimo está en la moneda propia del servicio/plantilla (monedaOrigenId). Si el
+  // vendedor cambia la moneda de la reserva (monedaId) a una distinta, hay que convertir el
+  // mínimo usando la tasaCambio oficial de cada moneda antes de compararlo o mostrarlo.
+  const monedaOrigen = monedas.find((m) => m.id === monedaOrigenId);
+  const monedaActual = monedas.find((m) => m.id === monedaId);
+  const convertirAMonedaActual = (monto: number) =>
+    monedaOrigen && monedaActual
+      ? convertirMonto(monto, Number(monedaOrigen.tasaCambio), Number(monedaActual.tasaCambio))
+      : monto;
+  const precioMinimoConvertido = convertirAMonedaActual(precioMinimo);
+
   const seleccionarServicio = (id: string) => {
     setServicioId(id);
     const s = servicios.find((x) => x.id === id);
     if (s) {
       setMonedaId(s.monedaId);
+      setMonedaOrigenId(s.monedaId);
       setPrecioLiquidado(String(Number(s.precioBase) * pasajeros.length));
     }
   };
@@ -91,7 +112,10 @@ export default function NuevaReservaPage() {
       );
       setPrecioUnitarioPlantilla(totalUnitario);
       const primerServicio = detalle.dias[0]?.servicios[0]?.servicio;
-      if (primerServicio) setMonedaId(primerServicio.monedaId);
+      if (primerServicio) {
+        setMonedaId(primerServicio.monedaId);
+        setMonedaOrigenId(primerServicio.monedaId);
+      }
       setPrecioLiquidado(String(totalUnitario * pasajeros.length));
     } catch {
       setPrecioUnitarioPlantilla(null);
@@ -102,10 +126,10 @@ export default function NuevaReservaPage() {
     setPasajeros((p) => {
       const nuevos = [...p, { nombre: "", telefono: "", tipo: "ADULTO" as const }];
       if (tipoReserva === "servicio" && servicioSeleccionado) {
-        const nuevoMinimo = Number(servicioSeleccionado.precioBase) * nuevos.length;
+        const nuevoMinimo = convertirAMonedaActual(Number(servicioSeleccionado.precioBase) * nuevos.length);
         setPrecioLiquidado((prev) => String(Math.max(Number(prev) || 0, nuevoMinimo)));
       } else if (tipoReserva === "plantilla" && precioUnitarioPlantilla !== null) {
-        const nuevoMinimo = precioUnitarioPlantilla * nuevos.length;
+        const nuevoMinimo = convertirAMonedaActual(precioUnitarioPlantilla * nuevos.length);
         setPrecioLiquidado((prev) => String(Math.max(Number(prev) || 0, nuevoMinimo)));
       }
       return nuevos;
@@ -133,8 +157,8 @@ export default function NuevaReservaPage() {
     e.preventDefault();
     setError(null);
 
-    if (tipoReserva !== "multiple" && precioLiquidado && Number(precioLiquidado) < precioMinimo) {
-      setError(`El precio no puede ser menor al precio establecido (${precioMinimo})`);
+    if (tipoReserva !== "multiple" && precioLiquidado && Number(precioLiquidado) < precioMinimoConvertido) {
+      setError(`El precio no puede ser menor al precio establecido (${precioMinimoConvertido.toFixed(2)})`);
       return;
     }
 
@@ -378,13 +402,13 @@ export default function NuevaReservaPage() {
                 Precio a liquidar
                 {(tipoReserva === "servicio" && servicioSeleccionado) ||
                 (tipoReserva === "plantilla" && precioUnitarioPlantilla !== null)
-                  ? ` (mínimo: ${precioMinimo})`
+                  ? ` (mínimo: ${precioMinimoConvertido.toFixed(2)}${monedaActual ? ` ${monedaActual.codigo}` : ""})`
                   : ""}
               </label>
               <input
                 type="number"
                 step="0.01"
-                min={precioMinimo}
+                min={precioMinimoConvertido}
                 value={precioLiquidado}
                 onChange={(e) => setPrecioLiquidado(e.target.value)}
                 placeholder="Se calcula automáticamente según el servicio o la plantilla"

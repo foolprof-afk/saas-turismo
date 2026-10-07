@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { imprimirElemento } from "@/lib/imprimir";
-import { formatFecha, formatFechaCorta } from "@/lib/fecha";
+import { formatFecha, formatFechaCorta, formatFechaHora } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 
 interface OrdenServicioItem {
@@ -27,6 +27,7 @@ interface OrdenServicioDetalle {
   usuario: { nombre: string; cliente?: { logoUrl?: string | null } | null };
   agencia?: { nombre: string; razonSocial?: string | null; rutONit?: string | null; logoUrl?: string | null } | null;
   items: OrdenServicioItem[];
+  historial: { id: string; descripcion: string; fecha: string; usuario: { nombre: string } }[];
 }
 
 function totalPorMoneda(orden: OrdenServicioDetalle) {
@@ -106,6 +107,14 @@ export default function OrdenServicioDetallePage() {
           >
             Imprimir / PDF
           </button>
+          {orden.estado === "EMITIDA" && (
+            <Link
+              href={`/ordenes-servicio/${orden.id}/editar`}
+              className="rounded border px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+            >
+              Editar
+            </Link>
+          )}
           {orden.estado === "EMITIDA" && (
             <button
               onClick={handleAnular}
@@ -220,6 +229,25 @@ export default function OrdenServicioDetallePage() {
           </div>
         )}
       </div>
+
+      {orden.historial.length > 0 && (
+        <div className="space-y-2 rounded-lg border bg-white p-6 print:hidden">
+          <h2 className="text-sm font-semibold text-gray-700">Historial de cambios</h2>
+          <p className="text-xs text-gray-400">
+            Registro interno de modificaciones a esta orden; no aparece en el documento impreso.
+          </p>
+          <ul className="divide-y text-sm">
+            {orden.historial.map((h) => (
+              <li key={h.id} className="py-2">
+                <p>{h.descripcion}</p>
+                <p className="text-xs text-gray-400">
+                  {h.usuario.nombre} · {formatFechaHora(h.fecha)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

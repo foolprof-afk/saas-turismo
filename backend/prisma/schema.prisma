@@ -22,6 +22,14 @@ enum EstadoGeneral {
   INACTIVO
 }
 
+// Visibilidad de un servicio en el catálogo público del Front Office (Guatetur), independiente
+// de EstadoGeneral (que controla si el servicio está activo para uso interno del Back Office).
+// Un servicio puede estar ACTIVO internamente pero PRIVADO (aún no listo para publicarse).
+enum EstadoPublicacion {
+  PUBLICO
+  PRIVADO
+}
+
 enum EstadoReserva {
   PENDIENTE
   CONFIRMADA
@@ -162,6 +170,7 @@ model Usuario {
   listasPrecio            ListaPrecio[]   @relation("UsuarioListaPrecio")
   cotizacionesVendidas    Cotizacion[]    @relation("VendedorCotizacion")
   ordenesServicioEmitidas OrdenServicio[]
+  ordenesServicioHistorial OrdenServicioHistorial[]
 
   @@unique([agenciaId, email])
   @@map("usuarios")
@@ -207,8 +216,16 @@ model Cotizacion {
   pasajeroResponsable  String
   documentoResponsable String?
   telefonoResponsable  String?
+  // Correo del pasajero responsable. Obligatorio en el flujo del Front Office (Guatetur) para poder
+  // enviar la cotización generada por "Solicitar mi viaje"; opcional cuando la cotización se crea
+  // desde el Back Office tradicional.
+  emailResponsable     String?
   fechaServicio        DateTime
   notas                String?
+  // Origen de la cotización: "BACK_OFFICE" (creada por un vendedor interno) o "AUTOSERVICIO_WEB"
+  // (creada por un cliente final desde el catálogo público del Front Office, autenticado
+  // internamente con el usuario restringido usuario.web). Ver CotizacionesService.create.
+  origen               String           @default("BACK_OFFICE")
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -227,18 +244,24 @@ model Cotizacion {
 // (precioBase del servicio + el factor de la lista de precios en ese momento), para que el
 // documento de salida no cambie si luego se edita el servicio o la lista de precios.
 model CotizacionItem {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   cotizacionId   String
   servicioId     String
-  dia            Int     @default(1)
+  // Fecha calendario en la que se presta este servicio. Reemplaza al antiguo "dia" (número de
+  // día relativo a Cotizacion.fechaServicio): con un día relativo no se podían representar
+  // itinerarios con fechas salteadas (ej. un traslado el 1-oct y otro el 3-oct, sin servicio el
+  // día 2), que es justo el caso que se necesita poder cotizar. Ver migración
+  // cotizacion_item_fecha, que la calcula para los registros existentes como
+  // fechaServicio + (dia - 1) días.
+  fecha          DateTime @db.Date
   // Posición dentro del listado de items (permite reordenar servicios en la UI de forma
   // manual, ej. arrastrando, sin depender del orden de inserción en la base de datos).
-  orden          Int     @default(0)
+  orden          Int      @default(0)
   // Cantidad de pasajeros a facturar en esta línea específica. Por defecto toma
   // Cotizacion.cantidadPersonas, pero puede ser distinta (ej. un traslado solo para 2 de los
   // 4 pasajeros de la cotización).
-  cantidad       Int     @default(1)
-  precioUnitario Decimal @db.Decimal(12, 2)
+  cantidad       Int      @default(1)
+  precioUnitario Decimal  @db.Decimal(12, 2)
   monedaId       String
 
   cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
@@ -429,6 +452,10 @@ model Servicio {
   // Palabras clave opcionales (sin el símbolo #) para facilitar la búsqueda cuando la
   // agencia tiene muchos servicios; se muestran/capturan como hashtags en la UI.
   palabrasClave   String[]      @default([])
+  // Foto principal para el catálogo público (Front Office). Opcional: un servicio puede existir
+  // sin foto mientras se prepara su publicación.
+  fotoUrl            String?
+  estadoPublicacion  EstadoPublicacion @default(PRIVADO)
 
   agencia       Agencia        @relation(fields: [agenciaId], references: [id])
   proveedor     Proveedor      @relation(fields: [proveedorId], references: [id])
@@ -443,8 +470,31 @@ model Servicio {
   reservas           Reserva[]
   cotizacionItems    CotizacionItem[]
   ordenServicioItems OrdenServicioItem[]
+  // Servicios que este servicio recomienda como asociados/opcionales (ej. Tour Atitlán ->
+  // Traslado Antigua-Atitlán) y, a la inversa, servicios que recomiendan a este. Ambos lados se
+  // guardan explícitamente (no se infiere simetría): el operador decide la dirección.
+  asociaciones       ServicioAsociado[] @relation("AsociacionOrigen")
+  asociadoEn         ServicioAsociado[] @relation("AsociacionDestino")
 
   @@map("servicios")
+}
+
+// Relación genérica y parametrizable Servicio -> Servicios asociados/opcionales, configurada
+// desde el Back Office al editar un servicio (ver PRD Guatetur Front Office, sección 5). El
+// Front Office público solo consulta y muestra las asociaciones activas de un servicio bajo un
+// bloque tipo "También puedes agregar"; nunca se agregan automáticamente al carrito del cliente.
+model ServicioAsociado {
+  id                 String  @id @default(cuid())
+  servicioId         String
+  servicioAsociadoId String
+  orden              Int     @default(0)
+  activo             Boolean @default(true)
+
+  servicio         Servicio @relation("AsociacionOrigen", fields: [servicioId], references: [id], onDelete: Cascade)
+  servicioAsociado Servicio @relation("AsociacionDestino", fields: [servicioAsociadoId], references: [id], onDelete: Cascade)
+
+  @@unique([servicioId, servicioAsociadoId])
+  @@map("servicios_asociados")
 }
 
 // Tabla puente N:N Servicio <-> Impuesto
@@ -819,12 +869,29 @@ model OrdenServicio {
   notas        String?
   createdAt    DateTime            @default(now())
 
-  agencia   Agencia             @relation(fields: [agenciaId], references: [id])
-  proveedor Proveedor           @relation(fields: [proveedorId], references: [id])
-  usuario   Usuario             @relation(fields: [usuarioId], references: [id])
+  agencia   Agencia                  @relation(fields: [agenciaId], references: [id])
+  proveedor Proveedor                @relation(fields: [proveedorId], references: [id])
+  usuario   Usuario                  @relation(fields: [usuarioId], references: [id])
   items     OrdenServicioItem[]
+  historial OrdenServicioHistorial[]
 
   @@map("ordenes_servicio")
+}
+
+// Bitácora de cambios hechos a una orden de servicio ya emitida (agregar/quitar/modificar
+// cantidades de servicios), para uso interno únicamente: no aparece en el documento impreso o
+// descargado, solo en la vista de detalle de la orden dentro de la app.
+model OrdenServicioHistorial {
+  id              String   @id @default(cuid())
+  ordenServicioId String
+  usuarioId       String
+  descripcion     String
+  fecha           DateTime @default(now())
+
+  ordenServicio OrdenServicio @relation(fields: [ordenServicioId], references: [id], onDelete: Cascade)
+  usuario       Usuario       @relation(fields: [usuarioId], references: [id])
+
+  @@map("orden_servicio_historial")
 }
 
 // Linea de una orden de servicio. precioCosto queda congelado al crear la orden (tomado de

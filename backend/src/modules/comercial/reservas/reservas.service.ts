@@ -11,12 +11,14 @@ import {
   calcularMontoImpuesto,
   calcularSaldoPendiente,
   convertirAPrincipal,
+  convertirMonto,
   desglosePorMoneda,
   MonedaPrincipalInfo,
 } from '../../../common/utils/reserva-montos.util';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import { firmarEnlaceCliente, verificarEnlaceCliente } from '../../../common/utils/enlace-cliente-token.util';
+import { firmarEnlaceReserva, verificarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -87,6 +89,29 @@ export class ReservasService {
     const moneda = await this.prisma.moneda.findFirst({ where: { agenciaId, esPrincipal: true } });
     if (!moneda) return null;
     return { id: moneda.id, codigo: moneda.codigo, simbolo: moneda.simbolo, tasaCambio: Number(moneda.tasaCambio) };
+  }
+
+  /**
+   * Convierte un monto entre dos monedas de la agencia usando la tasaCambio oficial de cada
+   * una (configurada en el mantenedor de Monedas, relativa a la moneda principal; ver
+   * convertirMonto). Se usa para comparar un precio mínimo establecido en la moneda propia de
+   * un servicio/plantilla contra un monto ingresado en una moneda distinta elegida libremente
+   * por el vendedor, evitando que un precio mínimo quede mal aplicado por no convertirlo. Si
+   * alguna moneda no se especifica o no se encuentra, se retorna el monto sin convertir.
+   */
+  private async convertirEntreMonedas(
+    agenciaId: string,
+    monto: number,
+    monedaOrigenId: string | null | undefined,
+    monedaDestinoId: string | null | undefined,
+  ): Promise<number> {
+    if (!monedaOrigenId || !monedaDestinoId || monedaOrigenId === monedaDestinoId) return monto;
+    const [origen, destino] = await Promise.all([
+      this.prisma.moneda.findFirst({ where: { id: monedaOrigenId, agenciaId } }),
+      this.prisma.moneda.findFirst({ where: { id: monedaDestinoId, agenciaId } }),
+    ]);
+    if (!origen || !destino) return monto;
+    return convertirMonto(monto, Number(origen.tasaCambio), Number(destino.tasaCambio));
   }
 
   async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}, user?: AuthenticatedUser) {
@@ -382,6 +407,7 @@ export class ReservasService {
       }
 
       let precioEstablecido = 0;
+      let monedaOrigenId: string | null = null;
       if (dto.plantillaItinerarioId) {
         tipo = 'PLANTILLA';
         const plantillaEncontrada = await this.prisma.plantillaItinerario.findFirst({
@@ -397,6 +423,7 @@ export class ReservasService {
             (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
             0,
           ) * dto.pasajeros.length;
+        monedaOrigenId = plantillaEncontrada.dias[0]?.servicios[0]?.servicio.monedaId ?? null;
       } else {
         tipo = 'SERVICIO';
         const servicioEncontrado = await this.prisma.servicio.findFirst({
@@ -405,14 +432,25 @@ export class ReservasService {
         if (!servicioEncontrado) throw new NotFoundException('Servicio no encontrado');
         servicio = servicioEncontrado;
         precioEstablecido = Number(servicioEncontrado.precioBase) * dto.pasajeros.length;
+        monedaOrigenId = servicioEncontrado.monedaId;
       }
 
-      if (dto.precioLiquidado !== undefined && dto.precioLiquidado < precioEstablecido) {
+      // El precio establecido está en la moneda propia del servicio/plantilla; se convierte a
+      // la moneda elegida por el vendedor (dto.monedaId) usando la tasaCambio oficial de cada
+      // una antes de comparar, para no exigir (o permitir) un mínimo incorrecto cuando el
+      // vendedor cambia la moneda de la reserva.
+      const precioEstablecidoEnMonedaElegida = await this.convertirEntreMonedas(
+        agenciaId,
+        precioEstablecido,
+        monedaOrigenId,
+        dto.monedaId,
+      );
+      if (dto.precioLiquidado !== undefined && dto.precioLiquidado < precioEstablecidoEnMonedaElegida) {
         throw new BadRequestException(
-          `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+          `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecidoEnMonedaElegida.toFixed(2)})`,
         );
       }
-      total = dto.precioLiquidado ?? precioEstablecido;
+      total = dto.precioLiquidado ?? precioEstablecidoEnMonedaElegida;
       monedaId = dto.monedaId;
     }
 
@@ -520,10 +558,12 @@ export class ReservasService {
    * Actualiza fecha, hora, precio, moneda, pasajeros y (en reservas MULTIPLE) las líneas del
    * itinerario. Permitido mientras la reserva está PENDIENTE o CONFIRMADA; no se permite en
    * CANCELADA ni OPERADA. Una vez CONFIRMADA ya existe un Pago con un monto/moneda concretos,
-   * así que en ese estado no se permite cambiar precio, moneda ni las líneas de un itinerario
-   * MULTIPLE (eso dejaría el pago desalineado); solo fecha, hora y pasajeros. No permite cambiar
-   * el tipo de reserva ni el servicio o plantilla elegidos (eso es una decisión de creación, no
-   * de edición).
+   * así que en ese estado no se permite cambiar precio ni moneda. Para itinerarios MULTIPLE
+   * confirmados sí se permite reprogramar las fechas/horas de cada línea (útil para organizar
+   * los días sin afectar lo ya cobrado), pero no agregar/quitar líneas ni cambiar el servicio o
+   * el precio de cada una (eso dejaría el pago desalineado); ver validación más abajo. No permite
+   * cambiar el tipo de reserva ni el servicio o plantilla elegidos (eso es una decisión de
+   * creación, no de edición).
    */
   async actualizar(agenciaId: string, id: string, dto: UpdateReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
@@ -539,9 +579,27 @@ export class ReservasService {
       );
     }
     if (pagoRegistrado && reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
-      throw new BadRequestException(
-        'Esta reserva ya tiene un pago registrado: no se pueden modificar los servicios del itinerario',
-      );
+      // Confirmada: solo se permite reprogramar fecha/hora de cada línea, no el servicio ni el
+      // precio (eso dejaría el pago desalineado) ni agregar/quitar líneas.
+      const itinerarioActual = await this.prisma.itinerario.findFirst({
+        where: { reservaId: id },
+        include: { dias: { include: { servicios: true }, orderBy: { numeroDia: 'asc' } } },
+      });
+      const lineasActuales = (itinerarioActual?.dias ?? []).flatMap((dia) => dia.servicios);
+      if (lineasActuales.length !== dto.serviciosMultiples.length) {
+        throw new BadRequestException(
+          'Esta reserva ya tiene un pago registrado: no se pueden agregar ni quitar servicios del itinerario, solo reprogramar sus fechas y horas',
+        );
+      }
+      dto.serviciosMultiples.forEach((linea, i) => {
+        const actual = lineasActuales[i];
+        const precioCoincide = linea.precio === undefined || Number(linea.precio) === Number(actual.precio);
+        if (linea.servicioId !== actual.servicioId || !precioCoincide) {
+          throw new BadRequestException(
+            'Esta reserva ya tiene un pago registrado: no se puede cambiar el servicio ni el precio, solo la fecha y la hora',
+          );
+        }
+      });
     }
 
     const data: Prisma.ReservaUncheckedUpdateInput = {};
@@ -620,6 +678,7 @@ export class ReservasService {
 
       const cantidadPasajeros = dto.pasajeros?.length ?? (await this.prisma.pasajero.count({ where: { reservaId: id } }));
       let precioEstablecido = 0;
+      let monedaOrigenId: string | null = null;
       if (reserva.tipo === 'PLANTILLA' && reserva.plantillaItinerarioId) {
         const plantillaEncontrada = await this.prisma.plantillaItinerario.findFirst({
           where: { id: reserva.plantillaItinerarioId, agenciaId },
@@ -630,16 +689,27 @@ export class ReservasService {
             (acc, dia) => acc + dia.servicios.reduce((s, item) => s + Number(item.servicio.precioBase), 0),
             0,
           ) ?? 0) * cantidadPasajeros;
+        monedaOrigenId = plantillaEncontrada?.dias[0]?.servicios[0]?.servicio.monedaId ?? null;
       } else if (reserva.servicioId) {
         const servicioEncontrado = await this.prisma.servicio.findFirst({
           where: { id: reserva.servicioId, agenciaId },
         });
         precioEstablecido = Number(servicioEncontrado?.precioBase ?? 0) * cantidadPasajeros;
+        monedaOrigenId = servicioEncontrado?.monedaId ?? null;
       }
       if (dto.precioLiquidado !== undefined) {
-        if (dto.precioLiquidado < precioEstablecido) {
+        // Igual que en create(): el precio establecido está en la moneda propia del
+        // servicio/plantilla, hay que convertirlo a la moneda de la reserva antes de comparar.
+        const monedaDestinoId = dto.monedaId ?? reserva.monedaId;
+        const precioEstablecidoEnMonedaElegida = await this.convertirEntreMonedas(
+          agenciaId,
+          precioEstablecido,
+          monedaOrigenId,
+          monedaDestinoId,
+        );
+        if (dto.precioLiquidado < precioEstablecidoEnMonedaElegida) {
           throw new BadRequestException(
-            `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecido})`,
+            `El precio a liquidar no puede ser menor al precio establecido (${precioEstablecidoEnMonedaElegida.toFixed(2)})`,
           );
         }
         data.total = dto.precioLiquidado;
@@ -895,5 +965,59 @@ export class ReservasService {
     ]);
     if (!cliente) throw new NotFoundException('Cliente no encontrado');
     return { cliente: { nombre: cliente.nombre }, ...cuadre };
+  }
+
+  /**
+   * Genera un enlace público (sin login) a una reserva puntual, para que el vendedor lo
+   * comparta con el cliente (WhatsApp/correo). A diferencia del voucher/QR (pensado para el
+   * check-in del día, con expiración cercana a la fecha de servicio), este enlace dura 90 días
+   * y siempre refleja la versión más reciente de la reserva (el token no persiste datos, solo
+   * el id), para que un cliente que ya pasó de cotización a reserva pueda seguir entrando a
+   * verificar cualquier modificación posterior.
+   */
+  async generarEnlacePublico(agenciaId: string, id: string) {
+    const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
+    if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    const token = firmarEnlaceReserva({ reservaId: id, agenciaId });
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
+    return { url: `${frontendUrl}/reserva-cliente/${token}` };
+  }
+
+  /**
+   * Vista pública de una reserva, accedida vía el enlace generado en generarEnlacePublico. Sin
+   * `user` (sin restricción por vendedor): el cliente debe poder verla sin sesión. Reutiliza el
+   * mismo cálculo de montos/abonos/saldo que findOne para que coincida con lo que ve el
+   * vendedor en el back office.
+   */
+  async reservaPublica(token: string) {
+    const payload = verificarEnlaceReserva(token);
+    const reserva = await this.prisma.reserva.findFirst({
+      where: { id: payload.reservaId, agenciaId: payload.agenciaId },
+      include: {
+        cliente: true,
+        agencia: { select: { logoUrl: true, nombre: true } },
+        pasajeros: true,
+        voucher: true,
+        moneda: true,
+        pagos: { include: { moneda: true } },
+        itinerario: {
+          include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
+        },
+      },
+    });
+    if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    const montos = desglosePorMoneda(reserva);
+    const monedaPrincipal = await this.obtenerMonedaPrincipal(reserva.agenciaId);
+    const totalAbonado = calcularAbonado(reserva.pagos);
+    const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
+    return {
+      ...reserva,
+      montos,
+      totalPrincipal: convertirAPrincipal(montos, monedaPrincipal),
+      totalAbonado,
+      totalAbonadoPrincipal: convertirAPrincipal(totalAbonado, monedaPrincipal),
+      saldoPendiente,
+      saldoPendientePrincipal: convertirAPrincipal(saldoPendiente, monedaPrincipal),
+    };
   }
 }

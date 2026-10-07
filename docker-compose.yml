@@ -43,6 +43,13 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      # Usados solo por los Route Handlers app/api/catalogo/* (servidor, nunca expuestos al
+      # navegador) para autenticar al catálogo público como el usuario restringido usuario.web.
+      BACKEND_INTERNAL_URL: http://backend:3000
+      CATALOGO_WEB_EMAIL: ${CATALOGO_WEB_EMAIL:-usuario.web@guatetur.com}
+      CATALOGO_WEB_PASSWORD: ${CATALOGO_WEB_PASSWORD}
+      CATALOGO_WEB_AGENCIA_SLUG: ${CATALOGO_WEB_AGENCIA_SLUG:-guatetur}
     ports:
       - "3001:3000"
 

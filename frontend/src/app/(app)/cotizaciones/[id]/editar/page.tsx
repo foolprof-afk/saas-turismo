@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
 import { formatMonto } from "@/lib/moneda";
+import { hoyLocal } from "@/lib/fecha";
 
 interface ServicioOpcion {
   id: string;
@@ -32,7 +33,7 @@ interface Moneda {
 
 interface LineaServicio {
   servicioId: string;
-  dia: number;
+  fecha: string;
   cantidad: string;
   precioUnitario: string;
 }
@@ -48,7 +49,7 @@ interface CotizacionEditable {
   notas?: string | null;
   listaPrecioId?: string | null;
   monedaId?: string | null;
-  items: { servicioId: string; dia: number; cantidad: number; precioUnitario: string }[];
+  items: { servicioId: string; fecha: string; cantidad: number; precioUnitario: string }[];
 }
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
@@ -65,6 +66,7 @@ export default function EditarCotizacionPage() {
 
   const [cantidadPersonas, setCantidadPersonas] = useState("1");
   const [pasajeroResponsable, setPasajeroResponsable] = useState("");
+  const [fechaServicio, setFechaServicio] = useState(hoyLocal());
   const [documentoResponsable, setDocumentoResponsable] = useState("");
   const [telefonoResponsable, setTelefonoResponsable] = useState("");
   const [listaPrecioId, setListaPrecioId] = useState("");
@@ -88,6 +90,7 @@ export default function EditarCotizacionPage() {
         setEstado(c.estado);
         setCantidadPersonas(String(c.cantidadPersonas));
         setPasajeroResponsable(c.pasajeroResponsable);
+        setFechaServicio(c.fechaServicio.slice(0, 10));
         setDocumentoResponsable(c.documentoResponsable ?? "");
         setTelefonoResponsable(c.telefonoResponsable ?? "");
         setListaPrecioId(c.listaPrecioId ?? "");
@@ -96,7 +99,7 @@ export default function EditarCotizacionPage() {
         setLineas(
           c.items.map((item) => ({
             servicioId: item.servicioId,
-            dia: item.dia,
+            fecha: item.fecha.slice(0, 10),
             cantidad: String(item.cantidad),
             precioUnitario: item.precioUnitario,
           })),
@@ -111,19 +114,22 @@ export default function EditarCotizacionPage() {
   const monedaCotizacion = monedas.find((m) => m.id === monedaId);
 
   const agregarServicio = () =>
-    setLineas((s) => [...s, { servicioId: "", dia: s[s.length - 1]?.dia ?? 1, cantidad: "", precioUnitario: "" }]);
+    setLineas((s) => [
+      ...s,
+      { servicioId: "", fecha: s[s.length - 1]?.fecha ?? fechaServicio, cantidad: "", precioUnitario: "" },
+    ]);
   const quitarServicio = (i: number) => setLineas((s) => s.filter((_, idx) => idx !== i));
   const actualizarServicio = (i: number, id: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, servicioId: id, precioUnitario: "" } : x)));
-  const actualizarDia = (i: number, dia: number) =>
-    setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, dia } : x)));
+  const actualizarFecha = (i: number, fecha: string) =>
+    setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, fecha } : x)));
   const actualizarCantidad = (i: number, cantidad: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, cantidad } : x)));
   const actualizarPrecio = (i: number, precioUnitario: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, precioUnitario } : x)));
   const recalcularConLista = () => setLineas((s) => s.map((x) => ({ ...x, precioUnitario: "" })));
 
-  // Reordenar servicios arrastrando (cada línea conserva su propio "dia", así que el
+  // Reordenar servicios arrastrando (cada línea conserva su propia "fecha", así que el
   // agrupamiento por día se mantiene aunque se reordenen visualmente).
   const handleDragStart = (i: number) => setDragIndex(i);
   const handleDragOver = (e: DragEvent) => e.preventDefault();
@@ -171,6 +177,7 @@ export default function EditarCotizacionPage() {
       await api.patch(`/cotizaciones/${params.id}`, {
         cantidadPersonas: Number(cantidadPersonas),
         pasajeroResponsable,
+        fechaServicio,
         documentoResponsable: documentoResponsable || undefined,
         telefonoResponsable: telefonoResponsable || undefined,
         listaPrecioId: listaPrecioId || "",
@@ -178,7 +185,7 @@ export default function EditarCotizacionPage() {
         notas: notas || undefined,
         items: items.map((l) => ({
           servicioId: l.servicioId,
-          dia: l.dia || 1,
+          fecha: l.fecha || fechaServicio,
           cantidad: l.cantidad !== "" ? Number(l.cantidad) : undefined,
           precioUnitario: l.precioUnitario !== "" ? Number(l.precioUnitario) : undefined,
         })),
@@ -229,6 +236,23 @@ export default function EditarCotizacionPage() {
               onChange={(e) => setCantidadPersonas(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium">Fecha de ejecución del servicio</label>
+            <input
+              type="date"
+              required
+              value={fechaServicio}
+              onChange={(e) => setFechaServicio(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Fecha de referencia del paquete. Cada servicio abajo tiene su propia fecha; no
+              necesitan ser consecutivas si hay días libres entre un servicio y otro.
+            </p>
           </div>
         </div>
 
@@ -317,13 +341,12 @@ export default function EditarCotizacionPage() {
                       ⠿
                     </span>
                     <div>
-                      <label className="block text-xs text-gray-500">Día</label>
+                      <label className="block text-xs text-gray-500">Fecha</label>
                       <input
-                        type="number"
-                        min={1}
-                        value={linea.dia}
-                        onChange={(e) => actualizarDia(i, Number(e.target.value) || 1)}
-                        className="mt-1 w-16 rounded border px-2 py-2 text-sm"
+                        type="date"
+                        value={linea.fecha}
+                        onChange={(e) => actualizarFecha(i, e.target.value)}
+                        className="mt-1 w-36 rounded border px-2 py-2 text-sm"
                       />
                     </div>
                     <div className="flex-1">

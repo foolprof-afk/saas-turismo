@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 interface CotizacionItem {
   id: string;
-  dia: number;
+  fecha: string;
   cantidad: number;
   precioUnitario: string;
   servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
@@ -77,14 +77,18 @@ function totalesPorMoneda(cotizacion: CotizacionPublica) {
   return Array.from(porMoneda.values());
 }
 
+// Agrupa por fecha real (no por día relativo: puede haber huecos entre fechas de servicio).
+// "numeroDia" es solo una etiqueta cosmética (1, 2, 3... según el orden de las fechas distintas).
 function agruparPorDia(cotizacion: CotizacionPublica) {
-  const dias = new Map<number, CotizacionItem[]>();
+  const porFecha = new Map<string, CotizacionItem[]>();
   for (const item of cotizacion.items) {
-    const dia = item.dia || 1;
-    if (!dias.has(dia)) dias.set(dia, []);
-    dias.get(dia)!.push(item);
+    const fecha = item.fecha.slice(0, 10);
+    if (!porFecha.has(fecha)) porFecha.set(fecha, []);
+    porFecha.get(fecha)!.push(item);
   }
-  return Array.from(dias.entries()).sort((a, b) => a[0] - b[0]);
+  return Array.from(porFecha.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([fecha, items], idx) => ({ numeroDia: idx + 1, fecha, items }));
 }
 
 function horasDe(item: CotizacionItem): string | null {
@@ -188,20 +192,29 @@ export default function CotizacionClientePublicaPage() {
           <table className="w-full min-w-[500px] text-sm">
             <thead className="bg-gray-50 text-left text-gray-500">
               <tr>
-                <th className="px-3 py-2">Día</th>
+                <th className="px-3 py-2">Fecha</th>
                 <th className="px-3 py-2">Servicio</th>
                 <th className="px-3 py-2">Cant.</th>
                 <th className="px-3 py-2">Subtotal</th>
               </tr>
             </thead>
             <tbody>
-              {agruparPorDia(cotizacion).map(([dia, itemsDia]) =>
+              {agruparPorDia(cotizacion).map(({ numeroDia, fecha, items: itemsDia }) =>
                 itemsDia.map((item, idx) => {
                   const conv = itemEnMonedaCotizacion(item, cotizacion);
                   const horas = horasDe(item);
                   return (
                     <tr key={item.id} className="border-t align-top">
-                      <td className="px-3 py-2">{idx === 0 ? `Día ${dia}` : ""}</td>
+                      <td className="px-3 py-2">
+                        {idx === 0 ? (
+                          <>
+                            <p className="font-medium">Día {numeroDia}</p>
+                            <p className="text-xs text-gray-400">{formatFecha(fecha)}</p>
+                          </>
+                        ) : (
+                          ""
+                        )}
+                      </td>
                       <td className="px-3 py-2">
                         <p className="font-medium">{item.servicio.nombre}</p>
                         {item.servicio.descripcion && (

@@ -123,7 +123,7 @@ export default function EditarReservaPage() {
 
     const pagoRegistrado = reserva.estado === "CONFIRMADA";
 
-    if (reserva.tipo === "MULTIPLE" && !pagoRegistrado) {
+    if (reserva.tipo === "MULTIPLE") {
       for (const l of lineas) {
         if (!l.servicioId || !l.fecha) {
           setError("Completa servicio y fecha en cada línea del itinerario");
@@ -148,7 +148,7 @@ export default function EditarReservaPage() {
         precioLiquidado:
           reserva.tipo !== "MULTIPLE" && !pagoRegistrado && precioLiquidado ? Number(precioLiquidado) : undefined,
         serviciosMultiples:
-          reserva.tipo === "MULTIPLE" && !pagoRegistrado
+          reserva.tipo === "MULTIPLE"
             ? lineas.map((l) => ({
                 servicioId: l.servicioId,
                 fecha: l.fecha,
@@ -193,7 +193,7 @@ export default function EditarReservaPage() {
       {pagoRegistrado && (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {reserva.tipo === "MULTIPLE"
-            ? "Esta reserva ya tiene un pago registrado: solo se pueden modificar los pasajeros. Para cambiar el itinerario, cancela la reserva y crea una nueva."
+            ? "Esta reserva ya tiene un pago registrado: solo se pueden reprogramar las fechas/horas de cada servicio y los pasajeros. Para cambiar el servicio o el precio, cancela la reserva y crea una nueva."
             : "Esta reserva ya tiene un pago registrado: solo se pueden modificar la fecha, la hora y los pasajeros. Para cambiar el precio o la moneda, cancela la reserva y crea una nueva."}
         </p>
       )}
@@ -237,14 +237,12 @@ export default function EditarReservaPage() {
                       <input
                         type="date"
                         required
-                        disabled={pagoRegistrado}
                         value={l.fecha}
                         onChange={(e) => actualizarLinea(i, { fecha: e.target.value })}
                         className="rounded border px-3 py-2 text-sm disabled:bg-gray-100"
                       />
                       <input
                         type="time"
-                        disabled={pagoRegistrado}
                         value={l.horaInicio}
                         onChange={(e) => actualizarLinea(i, { horaInicio: e.target.value })}
                         className="rounded border px-3 py-2 text-sm disabled:bg-gray-100"

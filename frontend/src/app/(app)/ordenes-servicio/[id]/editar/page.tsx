@@ -1,46 +1,75 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatMonto } from "@/lib/moneda";
-
-interface Opcion {
-  id: string;
-  nombre: string;
-}
 
 interface ServicioOpcion {
   id: string;
   nombre: string;
-  proveedorId: string;
   precioCosto?: string | null;
   moneda: { codigo: string; simbolo: string };
 }
 
 interface LineaOrden {
+  id?: string;
   servicioId: string;
   cantidad: string;
   precioCosto: string;
   fechaServicio: string;
 }
 
-export default function NuevaOrdenServicioPage() {
+interface OrdenServicioEditable {
+  id: string;
+  codigoOrden: string;
+  estado: string;
+  notas?: string | null;
+  proveedor: { nombre: string };
+  items: {
+    id: string;
+    servicioId: string;
+    cantidad: number;
+    precioCosto: string;
+    fechaServicio: string;
+    servicio: { moneda: { codigo: string; simbolo: string } };
+  }[];
+}
+
+export default function EditarOrdenServicioPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [proveedores, setProveedores] = useState<Opcion[]>([]);
+  const [orden, setOrden] = useState<OrdenServicioEditable | null>(null);
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
 
-  const [proveedorId, setProveedorId] = useState("");
   const [notas, setNotas] = useState("");
   const [items, setItems] = useState<LineaOrden[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    api.get<Opcion[]>("/proveedores").then(setProveedores).catch(() => null);
     api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
-  }, []);
+    api
+      .get<OrdenServicioEditable>(`/ordenes-servicio/${params.id}`)
+      .then((o) => {
+        setOrden(o);
+        setNotas(o.notas ?? "");
+        setItems(
+          o.items.map((i) => ({
+            id: i.id,
+            servicioId: i.servicioId,
+            cantidad: String(i.cantidad),
+            precioCosto: i.precioCosto,
+            fechaServicio: i.fechaServicio.slice(0, 10),
+          })),
+        );
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudo cargar la orden"))
+      .finally(() => setCargando(false));
+  }, [params.id]);
 
   const agregarLinea = () => {
     const primero = servicios[0];
@@ -85,61 +114,63 @@ export default function NuevaOrdenServicioPage() {
     }
     setSaving(true);
     try {
-      const orden = await api.post<{ id: string }>("/ordenes-servicio", {
-        proveedorId,
+      await api.patch(`/ordenes-servicio/${params.id}`, {
         notas: notas || undefined,
         items: items.map((l) => ({
+          id: l.id,
           servicioId: l.servicioId,
           cantidad: Number(l.cantidad),
           fechaServicio: l.fechaServicio,
           precioCosto: l.precioCosto !== "" ? Number(l.precioCosto) : undefined,
         })),
       });
-      router.push(`/ordenes-servicio/${orden.id}`);
+      router.push(`/ordenes-servicio/${params.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear la orden de servicio");
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar la orden de servicio");
     } finally {
       setSaving(false);
     }
   };
 
+  if (cargando) return <p className="text-sm text-gray-400">Cargando...</p>;
+
+  if (orden && orden.estado === "ANULADA") {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <p className="text-sm text-red-600">Esta orden está anulada y ya no se puede modificar.</p>
+        <Link href={`/ordenes-servicio/${orden.id}`} className="text-sm text-blue-600 hover:underline">
+          Volver a la orden
+        </Link>
+      </div>
+    );
+  }
+
+  if (!orden) {
+    return <p className="text-sm text-red-600">{error ?? "Orden no encontrada"}</p>;
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-semibold">Nueva orden de servicio</h1>
+      <h1 className="text-2xl font-semibold">Editar orden {orden.codigoOrden}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-white p-6">
         <div>
           <label className="block text-sm font-medium">Proveedor</label>
-          <select
-            required
-            value={proveedorId}
-            onChange={(e) => setProveedorId(e.target.value)}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm sm:w-1/2"
-          >
-            <option value="">Seleccionar...</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
+          <p className="mt-1 text-sm text-gray-700">{orden.proveedor.nombre}</p>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Servicios a solicitar</h2>
+            <h2 className="text-sm font-semibold text-gray-700">Servicios solicitados</h2>
             <button
               type="button"
               onClick={agregarLinea}
-              disabled={!proveedorId || servicios.length === 0}
+              disabled={servicios.length === 0}
               className="rounded border px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
             >
               + Agregar servicio
             </button>
           </div>
-          {!proveedorId && (
-            <p className="text-sm text-gray-400">Selecciona un proveedor para agregar servicios a la orden.</p>
-          )}
 
           {items.map((linea, index) => {
             const servicio = servicios.find((s) => s.id === linea.servicioId);
@@ -216,13 +247,21 @@ export default function NuevaOrdenServicioPage() {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {saving ? "Creando..." : "Crear orden de servicio"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? "Guardando..." : "Guardar cambios"}
+          </button>
+          <Link
+            href={`/ordenes-servicio/${orden.id}`}
+            className="rounded border px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Cancelar
+          </Link>
+        </div>
       </form>
     </div>
   );

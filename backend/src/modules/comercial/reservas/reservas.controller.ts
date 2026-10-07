@@ -40,6 +40,12 @@ export class ReservasController {
     return this.reservasService.generarEnlaceCliente(user.agenciaId, filtros.clienteId, filtros);
   }
 
+  @Get(':id/enlace')
+  @Roles('admin', 'vendedor')
+  generarEnlace(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.reservasService.generarEnlacePublico(user.agenciaId, id);
+  }
+
   @Get(':id')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.reservasService.findOne(user.agenciaId, id, user);

@@ -11,11 +11,12 @@ import { AuthenticatedUser } from '../../../common/decorators/current-user.decor
 import { convertirMonto } from '../../../common/utils/reserva-montos.util';
 import { firmarEnlaceCotizacion, verificarEnlaceCotizacion } from '../../../common/utils/enlace-cotizacion-token.util';
 
-const MS_POR_DIA = 24 * 60 * 60 * 1000;
-
 export interface FiltrosCotizacion {
   estado?: string;
-  codigoCotizacion?: string;
+  // Búsqueda libre: hace match (contains, insensitive) contra el código de cotización, el
+  // nombre del pasajero responsable o su teléfono, para que el mismo cuadro de búsqueda del
+  // listado sirva tanto para "COT-XXXXXXXX" como para el nombre o el número del cliente.
+  q?: string;
   vendedorId?: string;
   clienteId?: string;
   fechaInicio?: string;
@@ -30,7 +31,7 @@ const INCLUDE_COTIZACION = {
   reserva: { select: { id: true, codigoReserva: true } },
   items: {
     include: { servicio: true, moneda: true },
-    orderBy: [{ dia: 'asc' }, { orden: 'asc' }] as Prisma.CotizacionItemOrderByWithRelationInput[],
+    orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] as Prisma.CotizacionItemOrderByWithRelationInput[],
   },
 };
 
@@ -48,8 +49,13 @@ export class CotizacionesService {
   ): Prisma.CotizacionWhereInput {
     const where: Prisma.CotizacionWhereInput = { agenciaId };
 
-    if (filtros.codigoCotizacion) {
-      where.codigoCotizacion = { contains: filtros.codigoCotizacion, mode: 'insensitive' };
+    if (filtros.q) {
+      const q = filtros.q.trim();
+      where.OR = [
+        { codigoCotizacion: { contains: q, mode: 'insensitive' } },
+        { pasajeroResponsable: { contains: q, mode: 'insensitive' } },
+        { telefonoResponsable: { contains: q, mode: 'insensitive' } },
+      ];
     }
     if (filtros.estado) where.estado = filtros.estado as Prisma.EnumEstadoCotizacionFilter['equals'];
     if (filtros.vendedorId) {
@@ -61,7 +67,7 @@ export class CotizacionesService {
       where.vendedorId = { in: vendedorIdsPermitidos };
     }
     if (filtros.clienteId) where.clienteId = filtros.clienteId;
-    if (!filtros.codigoCotizacion && (filtros.fechaInicio || filtros.fechaFin)) {
+    if (!filtros.q && (filtros.fechaInicio || filtros.fechaFin)) {
       where.fechaServicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
         ...(filtros.fechaFin ? { lte: new Date(filtros.fechaFin) } : {}),
@@ -137,11 +143,15 @@ export class CotizacionesService {
 
   /**
    * Valida que la moneda exista y pertenezca a la agencia. Es la moneda en la que se le
-   * presenta el total al cliente; cada línea conserva su propia moneda de origen y se
-   * convierte al vuelo con convertirMonto (ver totalConvertido en findOne).
+   * presenta el total al cliente; cada línea conserva su propia moneda de origen (visible
+   * individualmente en cada item) y se convierte al vuelo con convertirMonto (ver
+   * totalConvertido en findOne). Si no se especifica monedaId, se usa por defecto la moneda
+   * principal de la agencia (Moneda.esPrincipal) en lugar de dejar la cotización sin moneda.
    */
   private async resolverMoneda(agenciaId: string, monedaId?: string) {
-    if (!monedaId) return null;
+    if (!monedaId) {
+      return this.prisma.moneda.findFirst({ where: { agenciaId, esPrincipal: true } });
+    }
     const moneda = await this.prisma.moneda.findFirst({ where: { id: monedaId, agenciaId } });
     if (!moneda) throw new NotFoundException('Moneda no encontrada');
     return moneda;
@@ -149,13 +159,16 @@ export class CotizacionesService {
 
   private async construirItems(
     agenciaId: string,
-    items: { servicioId: string; dia?: number; precioUnitario?: number; cantidad?: number }[],
+    items: { servicioId: string; fecha?: string; precioUnitario?: number; cantidad?: number }[],
     factor: number,
     cantidadPersonas: number,
+    // Fecha por defecto para los items que no especifican la suya propia (p. ej. al crear una
+    // cotización desde cero, antes de ajustar fecha por servicio).
+    fechaServicioDefault: Date,
   ) {
     const itemsData: {
       servicioId: string;
-      dia: number;
+      fecha: Date;
       orden: number;
       cantidad: number;
       precioUnitario: number;
@@ -166,7 +179,7 @@ export class CotizacionesService {
       if (!servicio) throw new NotFoundException(`Servicio no encontrado: ${item.servicioId}`);
       itemsData.push({
         servicioId: servicio.id,
-        dia: item.dia ?? 1,
+        fecha: item.fecha ? new Date(item.fecha) : fechaServicioDefault,
         orden,
         cantidad: item.cantidad ?? cantidadPersonas,
         precioUnitario: item.precioUnitario ?? Number(servicio.precioBase) * factor,
@@ -180,8 +193,24 @@ export class CotizacionesService {
     const listaPrecio = await this.resolverListaPrecio(agenciaId, user, dto.listaPrecioId);
     const moneda = await this.resolverMoneda(agenciaId, dto.monedaId);
     const factor = 1 + (listaPrecio ? Number(listaPrecio.porcentajeAdicional) : 0) / 100;
-    const itemsData = await this.construirItems(agenciaId, dto.items, factor, dto.cantidadPersonas);
+    const itemsData = await this.construirItems(
+      agenciaId,
+      dto.items,
+      factor,
+      dto.cantidadPersonas,
+      new Date(dto.fechaServicio),
+    );
     const cliente = await this.resolverClientePropio(agenciaId, vendedorId);
+
+    // 'catalogo_web' = usuario interno restringido (usuario.web) usado por el catálogo público
+    // del Front Office; cualquier otro rol que llegue a crear una cotización lo hace desde el
+    // Back Office tradicional (ver CotizacionesController.create y PRD Guatetur Front Office).
+    const origen = user.rol === 'catalogo_web' ? 'AUTOSERVICIO_WEB' : 'BACK_OFFICE';
+    if (origen === 'AUTOSERVICIO_WEB' && (!dto.emailResponsable || !dto.telefonoResponsable)) {
+      throw new BadRequestException(
+        'El autoservicio web requiere correo electrónico y teléfono del responsable antes de solicitar la cotización',
+      );
+    }
 
     const cotizacion = await this.prisma.cotizacion.create({
       data: {
@@ -195,8 +224,10 @@ export class CotizacionesService {
         pasajeroResponsable: dto.pasajeroResponsable,
         documentoResponsable: dto.documentoResponsable,
         telefonoResponsable: dto.telefonoResponsable,
-        fechaServicio: new Date(),
+        emailResponsable: dto.emailResponsable,
+        fechaServicio: new Date(dto.fechaServicio),
         notas: dto.notas,
+        origen,
         items: { create: itemsData },
       },
     });
@@ -253,6 +284,7 @@ export class CotizacionesService {
         dto.items,
         factor,
         dto.cantidadPersonas ?? cotizacion.cantidadPersonas,
+        dto.fechaServicio ? new Date(dto.fechaServicio) : cotizacion.fechaServicio,
       );
       await this.prisma.cotizacionItem.deleteMany({ where: { cotizacionId: id } });
       data.items = { create: itemsData };
@@ -323,7 +355,7 @@ export class CotizacionesService {
     const reserva = await this.reservasService.create(agenciaId, cotizacion.vendedorId, {
       serviciosMultiples: cotizacion.items.map((item) => ({
         servicioId: item.servicioId,
-        fecha: new Date(cotizacion.fechaServicio.getTime() + (item.dia - 1) * MS_POR_DIA).toISOString(),
+        fecha: item.fecha.toISOString(),
         precio: Number(item.precioUnitario) * item.cantidad,
       })),
       pasajeros: [

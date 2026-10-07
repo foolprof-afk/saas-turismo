@@ -9,7 +9,7 @@ import { formatMonto } from "@/lib/moneda";
 
 interface CotizacionItem {
   id: string;
-  dia: number;
+  fecha: string;
   cantidad: number;
   precioUnitario: string;
   servicio: { nombre: string; descripcion?: string | null; duracionMin?: number | null };
@@ -84,14 +84,20 @@ function horasDe(item: CotizacionItem): string | null {
   return item.servicio.duracionMin ? (item.servicio.duracionMin / 60).toFixed(1) : null;
 }
 
+// Agrupa los items por fecha real (no por número de día relativo: las fechas de servicio
+// pueden tener huecos, ej. traslado el 1-oct y otro traslado el 3-oct sin nada el 2-oct). El
+// "numeroDia" que se devuelve es solo una etiqueta cosmética (1, 2, 3... según el orden de las
+// fechas distintas), no implica que las fechas sean consecutivas.
 function agruparPorDia(cotizacion: CotizacionDetalle) {
-  const dias = new Map<number, CotizacionItem[]>();
+  const porFecha = new Map<string, CotizacionItem[]>();
   for (const item of cotizacion.items) {
-    const dia = item.dia || 1;
-    if (!dias.has(dia)) dias.set(dia, []);
-    dias.get(dia)!.push(item);
+    const fecha = item.fecha.slice(0, 10);
+    if (!porFecha.has(fecha)) porFecha.set(fecha, []);
+    porFecha.get(fecha)!.push(item);
   }
-  return Array.from(dias.entries()).sort((a, b) => a[0] - b[0]);
+  return Array.from(porFecha.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([fecha, items], idx) => ({ numeroDia: idx + 1, fecha, items }));
 }
 
 function totalesPorMoneda(cotizacion: CotizacionDetalle) {
@@ -271,7 +277,7 @@ export default function CotizacionDetallePage() {
 
     const colX = {
       dia: marginX,
-      servicio: marginX + 15,
+      servicio: marginX + 28,
       horas: marginX + 100,
       cantidad: marginX + 118,
       unitario: marginX + 138,
@@ -281,7 +287,7 @@ export default function CotizacionDetallePage() {
     const dibujarEncabezadoTabla = () => {
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
-      doc.text("Día", colX.dia, y);
+      doc.text("Fecha", colX.dia, y);
       doc.text("Servicio", colX.servicio, y);
       doc.text("Horas", colX.horas, y);
       doc.text("Cant.", colX.cantidad, y);
@@ -296,20 +302,20 @@ export default function CotizacionDetallePage() {
     saltoDePaginaSiNecesario(15);
     dibujarEncabezadoTabla();
 
-    agruparPorDia(cotizacion).forEach(([dia, itemsDia]) => {
+    agruparPorDia(cotizacion).forEach(({ numeroDia, fecha, items: itemsDia }) => {
       itemsDia.forEach((item, idx) => {
         const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
         const nombreLineas = doc.splitTextToSize(limpiarPdf(item.servicio.nombre), colX.horas - colX.servicio - 3);
-        const descLineas = item.servicio.descripcion
-          ? doc.splitTextToSize(limpiarPdf(item.servicio.descripcion), colX.horas - colX.servicio - 3)
-          : [];
-        const alturaFila = (nombreLineas.length + descLineas.length) * 4.5 + 2;
+        const alturaFila = nombreLineas.length * 4.5 + 2;
 
         saltoDePaginaSiNecesario(alturaFila + 5);
         if (idx === 0) {
           doc.setFont("helvetica", "bold");
-          doc.text(`Día ${dia}`, colX.dia, y);
+          doc.text(`Día ${numeroDia}`, colX.dia, y);
+          doc.setFontSize(7);
+          doc.text(formatFecha(fecha), colX.dia, y + 4);
+          doc.setFontSize(9);
           doc.setFont("helvetica", "normal");
         }
         doc.setFontSize(9);
@@ -319,13 +325,6 @@ export default function CotizacionDetallePage() {
         doc.text(`${conv.simbolo}${formatMonto(conv.precioUnitario)}`, colX.unitario, y);
         doc.text(`${conv.simbolo}${formatMonto(conv.subtotal)}`, colX.subtotal, y);
         y += nombreLineas.length * 4.5;
-        if (descLineas.length) {
-          doc.setFontSize(8);
-          doc.setTextColor(120);
-          doc.text(descLineas, colX.servicio, y);
-          doc.setTextColor(0);
-          y += descLineas.length * 4.5;
-        }
         y += 2;
       });
     });
@@ -364,8 +363,8 @@ export default function CotizacionDetallePage() {
     `Responsable: ${cotizacion.pasajeroResponsable} (${cotizacion.cantidadPersonas} personas)`,
     `Fecha: ${formatFecha(cotizacion.fechaServicio)}`,
     "",
-    ...agruparPorDia(cotizacion).flatMap(([dia, itemsDia]) => [
-      `Día ${dia}:`,
+    ...agruparPorDia(cotizacion).flatMap(({ numeroDia, fecha, items: itemsDia }) => [
+      `Día ${numeroDia} (${formatFecha(fecha)}):`,
       ...itemsDia.map((item) => {
         const conv = itemEnMonedaCotizacion(item, cotizacion);
         const horas = horasDe(item);
@@ -559,7 +558,7 @@ export default function CotizacionDetallePage() {
         <table className="w-full min-w-[640px] text-sm">
           <thead className="text-left text-gray-500">
             <tr>
-              <th className="py-1">Día</th>
+              <th className="py-1">Fecha</th>
               <th className="py-1">Servicio</th>
               <th className="py-1">Horas</th>
               <th className="py-1">Cantidad</th>
@@ -568,12 +567,21 @@ export default function CotizacionDetallePage() {
             </tr>
           </thead>
           <tbody>
-            {agruparPorDia(cotizacion).map(([dia, itemsDia]) =>
+            {agruparPorDia(cotizacion).map(({ numeroDia, fecha, items: itemsDia }) =>
               itemsDia.map((item, idx) => {
                 const conv = itemEnMonedaCotizacion(item, cotizacion);
                 return (
                   <tr key={item.id} className="border-t align-top">
-                    <td className="py-2">{idx === 0 ? `Día ${dia}` : ""}</td>
+                    <td className="py-2">
+                      {idx === 0 ? (
+                        <>
+                          <p className="font-medium">Día {numeroDia}</p>
+                          <p className="text-xs text-gray-400">{formatFecha(fecha)}</p>
+                        </>
+                      ) : (
+                        ""
+                      )}
+                    </td>
                     <td className="py-2">
                       <p className="font-medium">{item.servicio.nombre}</p>
                       {item.servicio.descripcion && (

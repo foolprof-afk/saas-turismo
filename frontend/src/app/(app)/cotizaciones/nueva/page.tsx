@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
 import { formatMonto } from "@/lib/moneda";
+import { hoyLocal } from "@/lib/fecha";
 
 interface ServicioOpcion {
   id: string;
@@ -18,7 +19,7 @@ interface ServicioOpcion {
 
 interface LineaServicio {
   servicioId: string;
-  dia: number;
+  fecha: string;
   cantidad: string;
   precioUnitario: string;
 }
@@ -59,7 +60,7 @@ interface CotizacionParaCopiar {
   listaPrecio?: { id: string } | null;
   moneda?: { id: string } | null;
   items: {
-    dia: number;
+    fecha: string;
     cantidad: number;
     precioUnitario: string;
     servicio: { id: string };
@@ -68,6 +69,17 @@ interface CotizacionParaCopiar {
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
   return (monto * tasaDestino) / tasaOrigen;
+}
+
+// Suma días (puede ser 0) a una fecha "YYYY-MM-DD" sin usar el constructor local de Date (que
+// interpretaría la fecha en UTC y podría desfasarse un día según la zona horaria del navegador).
+// Se usa solo para convertir el "numeroDia" relativo de una plantilla de itinerario en una fecha
+// real al cargarla sobre la fecha base de la cotización.
+function sumarDias(fechaBase: string, dias: number): string {
+  const [anio, mes, dia] = fechaBase.split("-").map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  fecha.setUTCDate(fecha.getUTCDate() + dias);
+  return fecha.toISOString().slice(0, 10);
 }
 
 export default function NuevaCotizacionPage() {
@@ -83,12 +95,15 @@ export default function NuevaCotizacionPage() {
 
   const [cantidadPersonas, setCantidadPersonas] = useState("1");
   const [pasajeroResponsable, setPasajeroResponsable] = useState("");
+  const [fechaServicio, setFechaServicio] = useState(hoyLocal());
   const [documentoResponsable, setDocumentoResponsable] = useState("");
   const [telefonoResponsable, setTelefonoResponsable] = useState("");
   const [listaPrecioId, setListaPrecioId] = useState("");
   const [monedaId, setMonedaId] = useState("");
   const [notas, setNotas] = useState("");
-  const [lineas, setLineas] = useState<LineaServicio[]>([{ servicioId: "", dia: 1, cantidad: "", precioUnitario: "" }]);
+  const [lineas, setLineas] = useState<LineaServicio[]>([
+    { servicioId: "", fecha: hoyLocal(), cantidad: "", precioUnitario: "" },
+  ]);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,7 +136,7 @@ export default function NuevaCotizacionPage() {
         setLineas(
           c.items.map((item) => ({
             servicioId: item.servicio.id,
-            dia: item.dia,
+            fecha: item.fecha.slice(0, 10),
             cantidad: String(item.cantidad),
             precioUnitario: item.precioUnitario,
           })),
@@ -136,12 +151,15 @@ export default function NuevaCotizacionPage() {
   const monedaCotizacion = monedas.find((m) => m.id === monedaId);
 
   const agregarServicio = () =>
-    setLineas((s) => [...s, { servicioId: "", dia: s[s.length - 1]?.dia ?? 1, cantidad: "", precioUnitario: "" }]);
+    setLineas((s) => [
+      ...s,
+      { servicioId: "", fecha: s[s.length - 1]?.fecha ?? fechaServicio, cantidad: "", precioUnitario: "" },
+    ]);
   const quitarServicio = (i: number) => setLineas((s) => s.filter((_, idx) => idx !== i));
   const actualizarServicio = (i: number, id: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, servicioId: id, precioUnitario: "" } : x)));
-  const actualizarDia = (i: number, dia: number) =>
-    setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, dia } : x)));
+  const actualizarFecha = (i: number, fecha: string) =>
+    setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, fecha } : x)));
   const actualizarCantidad = (i: number, cantidad: string) =>
     setLineas((s) => s.map((x, idx) => (idx === i ? { ...x, cantidad } : x)));
   const actualizarPrecio = (i: number, precioUnitario: string) =>
@@ -150,8 +168,14 @@ export default function NuevaCotizacionPage() {
   // Carga los servicios de una plantilla de itinerario como líneas de la cotización, una por
   // cada servicio de cada día. La cantidad siempre inicia en 1 (independiente de
   // cantidadPersonas): la plantilla define el paquete por persona y el usuario ajusta la
-  // cantidad si corresponde. El precio unitario se calcula ya convertido a la moneda de la
-  // cotización (si se seleccionó una), igual que se convierte el total estimado.
+  // cantidad si corresponde. El precio unitario se guarda en la moneda PROPIA del servicio
+  // (igual que al seleccionar un servicio manualmente): el backend siempre tagea cada item con
+  // servicio.monedaId (ver CotizacionesService.construirItems), así que si aquí se guardara ya
+  // convertido a la moneda de la cotización quedaría un item cuyo precioUnitario está en una
+  // moneda pero cuyo monedaId indica otra, provocando que cualquier vista (totalEstimado,
+  // detalle, cotización pública) lo vuelva a convertir y se divida dos veces entre la tasa de
+  // cambio. La conversión a la moneda de la cotización se hace una sola vez, al vuelo, en
+  // totalEstimado/display (ver convertirMonto más abajo).
   const cargarPlantilla = async (id: string) => {
     if (!id) return;
     const hayServiciosCargados = lineas.some((l) => l.servicioId);
@@ -164,12 +188,13 @@ export default function NuevaCotizacionPage() {
       const detalle = await api.get<PlantillaDetalle>(`/plantillas-itinerario/${id}`);
       const nuevasLineas: LineaServicio[] = detalle.dias.flatMap((dia) =>
         dia.servicios.map(({ servicio }) => {
-          let precio = Number(servicio.precioBase) * factor;
-          if (monedaCotizacion) {
-            const monedaServicio = monedas.find((m) => m.id === servicio.monedaId);
-            if (monedaServicio) precio = convertirMonto(precio, Number(monedaServicio.tasaCambio), Number(monedaCotizacion.tasaCambio));
-          }
-          return { servicioId: servicio.id, dia: dia.numeroDia, cantidad: "1", precioUnitario: precio.toFixed(2) };
+          const precio = Number(servicio.precioBase) * factor;
+          return {
+            servicioId: servicio.id,
+            fecha: sumarDias(fechaServicio, dia.numeroDia - 1),
+            cantidad: "1",
+            precioUnitario: precio.toFixed(2),
+          };
         }),
       );
       if (nuevasLineas.length > 0) setLineas(nuevasLineas);
@@ -181,7 +206,7 @@ export default function NuevaCotizacionPage() {
     }
   };
 
-  // Reordenar servicios arrastrando (cada línea conserva su propio "dia", así que el
+  // Reordenar servicios arrastrando (cada línea conserva su propia "fecha", así que el
   // agrupamiento por día se mantiene aunque se reordenen visualmente).
   const handleDragStart = (i: number) => setDragIndex(i);
   const handleDragOver = (e: DragEvent) => e.preventDefault();
@@ -229,6 +254,7 @@ export default function NuevaCotizacionPage() {
       const cotizacion = await api.post<{ id: string }>("/cotizaciones", {
         cantidadPersonas: Number(cantidadPersonas),
         pasajeroResponsable,
+        fechaServicio,
         documentoResponsable: documentoResponsable || undefined,
         telefonoResponsable: telefonoResponsable || undefined,
         listaPrecioId: listaPrecioId || undefined,
@@ -236,7 +262,7 @@ export default function NuevaCotizacionPage() {
         notas: notas || undefined,
         items: items.map((l) => ({
           servicioId: l.servicioId,
-          dia: l.dia || 1,
+          fecha: l.fecha || fechaServicio,
           cantidad: l.cantidad !== "" ? Number(l.cantidad) : undefined,
           precioUnitario: l.precioUnitario !== "" ? Number(l.precioUnitario) : undefined,
         })),
@@ -280,6 +306,23 @@ export default function NuevaCotizacionPage() {
               onChange={(e) => setCantidadPersonas(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium">Fecha de ejecución del servicio</label>
+            <input
+              type="date"
+              required
+              value={fechaServicio}
+              onChange={(e) => setFechaServicio(e.target.value)}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Fecha de referencia del paquete. Cada servicio abajo tiene su propia fecha; no
+              necesitan ser consecutivas si hay días libres entre un servicio y otro.
+            </p>
           </div>
         </div>
 
@@ -381,13 +424,12 @@ export default function NuevaCotizacionPage() {
                       ⠿
                     </span>
                     <div>
-                      <label className="block text-xs text-gray-500">Día</label>
+                      <label className="block text-xs text-gray-500">Fecha</label>
                       <input
-                        type="number"
-                        min={1}
-                        value={linea.dia}
-                        onChange={(e) => actualizarDia(i, Number(e.target.value) || 1)}
-                        className="mt-1 w-16 rounded border px-2 py-2 text-sm"
+                        type="date"
+                        value={linea.fecha}
+                        onChange={(e) => actualizarFecha(i, e.target.value)}
+                        className="mt-1 w-36 rounded border px-2 py-2 text-sm"
                       />
                     </div>
                     <div className="flex-1">

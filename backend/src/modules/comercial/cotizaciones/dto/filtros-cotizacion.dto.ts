@@ -11,9 +11,11 @@ export class FiltrosCotizacionDto {
   @IsIn(['PENDIENTE', 'CONFIRMADA', 'CANCELADA'])
   estado?: string;
 
+  // Búsqueda libre por código de cotización, nombre del pasajero responsable o teléfono (ver
+  // CotizacionesService.construirWhere).
   @IsOptional()
   @IsString()
-  codigoCotizacion?: string;
+  q?: string;
 
   @IsOptional()
   @IsString()

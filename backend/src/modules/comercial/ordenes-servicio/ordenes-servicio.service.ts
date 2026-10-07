@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateOrdenServicioDto, OrdenServicioItemDto } from './dto/create-orden-servicio.dto';
+import { UpdateOrdenServicioDto } from './dto/update-orden-servicio.dto';
 import { FiltrosOrdenServicioDto } from './dto/filtros-orden-servicio.dto';
 
 const INCLUDE_ORDEN = {
@@ -10,6 +11,7 @@ const INCLUDE_ORDEN = {
   usuario: { select: { nombre: true, cliente: { select: { logoUrl: true } } } },
   agencia: { select: { nombre: true, razonSocial: true, rutONit: true, logoUrl: true } },
   items: { include: { servicio: true, moneda: true } },
+  historial: { include: { usuario: { select: { nombre: true } } }, orderBy: { fecha: 'desc' } },
 } satisfies Prisma.OrdenServicioInclude;
 
 /**
@@ -56,21 +58,20 @@ export class OrdenesServicioService {
   }
 
   /**
-   * Valida que cada item pertenezca a un servicio de la agencia y del proveedor seleccionado
-   * (una orden se emite a UN proveedor; no tendría sentido mezclar servicios de otros), y
-   * congela precioCosto/monedaId tomándolos del servicio salvo que se haya indicado un
-   * precioCosto manual para esa orden puntual.
+   * Valida que cada item pertenezca a un servicio de la agencia, y congela precioCosto/monedaId
+   * tomándolos del servicio salvo que se haya indicado un precioCosto manual para esa orden
+   * puntual. No se exige que el servicio esté asignado al proveedor de la orden: un mismo
+   * servicio puede ser ejecutado por más de un proveedor, así que el proveedor de la orden es
+   * independiente del proveedorId "por defecto" que tenga cada Servicio (ver Servicio.proveedorId,
+   * que solo sirve como referencia/precio costo por defecto).
    */
-  private async construirItems(agenciaId: string, proveedorId: string, items: OrdenServicioItemDto[]) {
+  private async construirItems(agenciaId: string, items: OrdenServicioItemDto[]) {
     const servicioIds = items.map((i) => i.servicioId);
     const servicios = await this.prisma.servicio.findMany({ where: { id: { in: servicioIds }, agenciaId } });
 
     return items.map((item) => {
       const servicio = servicios.find((s) => s.id === item.servicioId);
       if (!servicio) throw new NotFoundException(`Servicio ${item.servicioId} no encontrado`);
-      if (servicio.proveedorId !== proveedorId) {
-        throw new BadRequestException(`El servicio "${servicio.nombre}" no pertenece al proveedor seleccionado`);
-      }
       const precioCosto = item.precioCosto ?? (servicio.precioCosto !== null ? Number(servicio.precioCosto) : null);
       if (precioCosto === null) {
         throw new BadRequestException(
@@ -91,7 +92,7 @@ export class OrdenesServicioService {
     const proveedor = await this.prisma.proveedor.findFirst({ where: { id: dto.proveedorId, agenciaId } });
     if (!proveedor) throw new NotFoundException('Proveedor no encontrado');
 
-    const items = await this.construirItems(agenciaId, proveedor.id, dto.items);
+    const items = await this.construirItems(agenciaId, dto.items);
 
     return this.prisma.ordenServicio.create({
       data: {
@@ -104,6 +105,77 @@ export class OrdenesServicioService {
       },
       include: INCLUDE_ORDEN,
     });
+  }
+
+  /**
+   * Modifica las líneas/notas de una orden ya emitida, registrando en OrdenServicioHistorial
+   * cada línea agregada, quitada o con cantidad/fecha/precio modificados (con el usuario que
+   * hizo el cambio), para uso interno. El documento impreso/descargado solo lee items/notas
+   * actuales, nunca el historial (ver frontend).
+   */
+  async actualizar(agenciaId: string, id: string, usuarioId: string, dto: UpdateOrdenServicioDto) {
+    const orden = await this.prisma.ordenServicio.findFirst({
+      where: { id, agenciaId },
+      include: { items: { include: { servicio: true } } },
+    });
+    if (!orden) throw new NotFoundException('Orden de servicio no encontrada');
+    if (orden.estado === 'ANULADA') throw new BadRequestException('No se puede modificar una orden anulada');
+
+    const nuevosItems = await this.construirItems(agenciaId, dto.items);
+
+    const servicioIds = Array.from(new Set(dto.items.map((i) => i.servicioId)));
+    const servicios = await this.prisma.servicio.findMany({ where: { id: { in: servicioIds }, agenciaId } });
+    const nombrePorId = new Map(servicios.map((s) => [s.id, s.nombre]));
+
+    const idsEnviados = new Set(dto.items.filter((i) => i.id).map((i) => i.id as string));
+    const historial: { usuarioId: string; descripcion: string }[] = [];
+
+    for (const item of orden.items) {
+      if (!idsEnviados.has(item.id)) {
+        historial.push({ usuarioId, descripcion: `Se quitó "${item.servicio.nombre}" (cantidad ${item.cantidad})` });
+      }
+    }
+
+    dto.items.forEach((linea) => {
+      const nombre = nombrePorId.get(linea.servicioId) ?? linea.servicioId;
+      const actual = linea.id ? orden.items.find((i) => i.id === linea.id) : undefined;
+      if (!actual) {
+        historial.push({ usuarioId, descripcion: `Se agregó "${nombre}" (cantidad ${linea.cantidad})` });
+        return;
+      }
+      if (actual.cantidad !== linea.cantidad) {
+        historial.push({
+          usuarioId,
+          descripcion: `Se cambió la cantidad de "${nombre}" de ${actual.cantidad} a ${linea.cantidad}`,
+        });
+      }
+      const fechaActual = actual.fechaServicio.toISOString().slice(0, 10);
+      if (linea.fechaServicio.slice(0, 10) !== fechaActual) {
+        historial.push({
+          usuarioId,
+          descripcion: `Se cambió la fecha de "${nombre}" de ${fechaActual} a ${linea.fechaServicio.slice(0, 10)}`,
+        });
+      }
+      const precioNuevo = linea.precioCosto ?? Number(actual.precioCosto);
+      if (Number(actual.precioCosto) !== precioNuevo) {
+        historial.push({
+          usuarioId,
+          descripcion: `Se cambió el precio costo de "${nombre}" de ${actual.precioCosto} a ${precioNuevo}`,
+        });
+      }
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.ordenServicio.update({
+        where: { id },
+        data: { notas: dto.notas, items: { deleteMany: {}, create: nuevosItems } },
+      }),
+      ...(historial.length
+        ? [this.prisma.ordenServicioHistorial.createMany({ data: historial.map((h) => ({ ...h, ordenServicioId: id })) })]
+        : []),
+    ]);
+
+    return this.findOne(agenciaId, id);
   }
 
   async anular(agenciaId: string, id: string) {

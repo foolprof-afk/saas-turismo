@@ -13,12 +13,12 @@ export class ServiciosController {
 
   @Get()
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
-    return this.serviciosService.findAll(user.agenciaId, pagination.skip, pagination.limit);
+    return this.serviciosService.findAll(user.agenciaId, pagination.skip, pagination.limit, user.rol);
   }
 
   @Get(':id')
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.serviciosService.findOne(user.agenciaId, id);
+    return this.serviciosService.findOne(user.agenciaId, id, user.rol);
   }
 
   @Post()

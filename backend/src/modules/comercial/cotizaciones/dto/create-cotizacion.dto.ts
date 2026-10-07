@@ -2,6 +2,8 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
+  IsEmail,
   IsInt,
   IsNumber,
   IsOptional,
@@ -15,12 +17,13 @@ export class CotizacionItemDto {
   @IsString()
   servicioId: string;
 
-  // Día del itinerario (1 = fechaServicio, 2 = fechaServicio + 1 día, etc.) para poder
-  // organizar cotizaciones de varios días con uno o más servicios por día.
+  // Fecha calendario en la que se presta este servicio. Si no se envía, se usa
+  // CreateCotizacionDto.fechaServicio (o la fechaServicio ya guardada, al actualizar). Permite
+  // itinerarios con fechas salteadas (ej. un traslado el 1-oct y otro el 3-oct, sin nada el
+  // día 2), que es justo lo que no se podía representar con un número de día relativo.
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  dia?: number;
+  @IsDateString()
+  fecha?: string;
 
   // Precio manual para esta línea, en la moneda del servicio. Si se envía, sobreescribe el
   // precioBase * factor de lista de precios calculado por defecto (ver construirItems).
@@ -49,6 +52,11 @@ export class CreateCotizacionDto {
   @IsString()
   pasajeroResponsable: string;
 
+  // Fecha en que inicia la ejecución del servicio. Se usa como fecha por defecto para los
+  // items que no envían su propia "fecha" (ver CotizacionItemDto.fecha).
+  @IsDateString()
+  fechaServicio: string;
+
   @IsOptional()
   @IsString()
   documentoResponsable?: string;
@@ -56,6 +64,12 @@ export class CreateCotizacionDto {
   @IsOptional()
   @IsString()
   telefonoResponsable?: string;
+
+  // Requerido por el flujo del Front Office (Guatetur) para poder enviar la cotización generada
+  // por "Solicitar mi viaje"; opcional en el Back Office tradicional (ver CotizacionesController).
+  @IsOptional()
+  @IsEmail()
+  emailResponsable?: string;
 
   @IsOptional()
   @IsString()

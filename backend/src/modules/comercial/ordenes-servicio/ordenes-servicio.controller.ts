@@ -4,6 +4,7 @@ import { CurrentUser, AuthenticatedUser } from '../../../common/decorators/curre
 import { assertPermiso } from '../../../common/utils/permisos.util';
 import { OrdenesServicioService } from './ordenes-servicio.service';
 import { CreateOrdenServicioDto } from './dto/create-orden-servicio.dto';
+import { UpdateOrdenServicioDto } from './dto/update-orden-servicio.dto';
 import { FiltrosOrdenServicioDto } from './dto/filtros-orden-servicio.dto';
 
 @Controller('ordenes-servicio')
@@ -27,6 +28,16 @@ export class OrdenesServicioController {
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateOrdenServicioDto) {
     assertPermiso(user, 'ordenes-servicio', 'escribir');
     return this.ordenesServicioService.create(user.agenciaId, user.userId, dto);
+  }
+
+  @Patch(':id')
+  actualizar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateOrdenServicioDto,
+  ) {
+    assertPermiso(user, 'ordenes-servicio', 'escribir');
+    return this.ordenesServicioService.actualizar(user.agenciaId, id, user.userId, dto);
   }
 
   @Patch(':id/anular')

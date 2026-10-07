@@ -156,7 +156,6 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
     dia.servicios.forEach((s) => {
       const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${formatMonto(s.precio)} ${s.moneda.codigo})` : "";
       lineas.push(`${fecha} ${s.horaInicio} — ${s.servicio.nombre}${precio}`);
-      if (s.servicio.descripcion) lineas.push(`  ${s.servicio.descripcion}`);
     });
   });
   return lineas;
@@ -180,6 +179,10 @@ export default function ReservaDetallePage() {
   const [linksPago, setLinksPago] = useState<LinkPago[]>([]);
   const [generandoLink, setGenerandoLink] = useState(false);
   const [linkCopiadoId, setLinkCopiadoId] = useState<string | null>(null);
+  const [generandoEnlace, setGenerandoEnlace] = useState(false);
+  const [enlace, setEnlace] = useState<string | null>(null);
+  const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
+  const [enlaceCopiado, setEnlaceCopiado] = useState(false);
 
   const [formaPagoId, setFormaPagoId] = useState("");
   const [referenciaExterna, setReferenciaExterna] = useState("");
@@ -290,6 +293,34 @@ export default function ReservaDetallePage() {
     }
   };
 
+  // Enlace público de la reserva (distinto del voucher/QR, que expira cerca de la fecha de
+  // servicio): dura 90 días y siempre muestra la versión más reciente, para que el cliente que
+  // ya pasó de cotización a reserva pueda seguir entrando a revisar modificaciones.
+  const handleGenerarEnlace = async () => {
+    setGenerandoEnlace(true);
+    setErrorEnlace(null);
+    try {
+      const res = await api.get<{ url: string }>(`/reservas/${params.id}/enlace`);
+      setEnlace(res.url);
+      setEnlaceCopiado(false);
+    } catch (err) {
+      setErrorEnlace(err instanceof ApiError ? err.message : "No se pudo generar el enlace");
+    } finally {
+      setGenerandoEnlace(false);
+    }
+  };
+
+  const copiarEnlace = async () => {
+    if (!enlace) return;
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setEnlaceCopiado(true);
+      setTimeout(() => setEnlaceCopiado(false), 1500);
+    } catch {
+      setErrorEnlace("No se pudo copiar el enlace");
+    }
+  };
+
   const handleCancelar = async () => {
     if (!confirm("¿Cancelar esta reserva?")) return;
     setCancelando(true);
@@ -322,7 +353,7 @@ export default function ReservaDetallePage() {
     const { limpiarPdf } = await import("@/lib/pdfTexto");
 
     const lineas: string[] = [];
-    lineas.push(`Cliente: ${reserva.cliente?.nombre ?? ""}`);
+    lineas.push(`Agencia: ${reserva.cliente?.nombre ?? ""}`);
     lineas.push(
       `Fecha: ${formatFecha(reserva.fechaServicioInicio)}${
         reserva.horaServicio ? " " + reserva.horaServicio : ""
@@ -354,8 +385,23 @@ export default function ReservaDetallePage() {
     const logoSizeMm = 20;
     const qrSizeMm = 30;
     const lineHeightMm = 5;
+
+    // Para reservas largas (muchos pasajeros/itinerario/pagos), el alto del documento debe
+    // calcularse sobre las líneas ya envueltas (wrap) al ancho de 70mm, no sobre la cantidad de
+    // líneas "lógicas": una línea larga de itinerario puede ocupar 2-3 líneas reales al imprimir.
+    // Si se estimara con lineas.length (sin wrap), el alto del PDF podía quedar corto y el texto
+    // final se cortaba fuera de la página. Por eso se mide primero con un documento temporal (el
+    // tamaño de página no afecta splitTextToSize, que depende solo de la fuente) y se cachean las
+    // líneas ya envueltas para no recalcularlas al dibujar. Así el documento siempre queda en una
+    // sola página, alargada lo necesario, sin paginar ni cortar contenido — pensado para
+    // impresoras térmicas o para el PDF que recibe el cliente por WhatsApp.
+    const docMedicion = new jsPDF({ unit: "mm", format: [80, 100] });
+    docMedicion.setFontSize(9);
+    const lineasEnvueltas = lineas.map((linea) => docMedicion.splitTextToSize(limpiarPdf(linea), 70) as string[]);
+    const totalLineasReales = lineasEnvueltas.reduce((acc, wrapped) => acc + wrapped.length, 0);
+
     const alturaMm =
-      30 + lineas.length * lineHeightMm + (reserva.voucher ? qrSizeMm + 10 : 0) + (logo ? logoSizeMm + 5 : 0);
+      30 + totalLineasReales * lineHeightMm + (reserva.voucher ? qrSizeMm + 10 : 0) + (logo ? logoSizeMm + 5 : 0);
 
     const doc = new jsPDF({ unit: "mm", format: [80, Math.max(alturaMm, 100)] });
     let y = 10;
@@ -367,8 +413,7 @@ export default function ReservaDetallePage() {
     doc.text(`Reserva ${reserva.codigoReserva}`, 5, y);
     y += 7;
     doc.setFontSize(9);
-    lineas.forEach((linea) => {
-      const wrapped = doc.splitTextToSize(limpiarPdf(linea), 70);
+    lineasEnvueltas.forEach((wrapped) => {
       doc.text(wrapped, 5, y);
       y += wrapped.length * lineHeightMm;
     });
@@ -463,6 +508,60 @@ export default function ReservaDetallePage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border bg-white p-5 print:hidden">
+        <h2 className="text-sm font-semibold text-gray-500">Enlace para el cliente</h2>
+        <p className="mt-1 text-xs text-gray-500">
+          Genera un enlace público (sin login) con esta reserva, para que el cliente pueda consultar cualquier
+          modificación posterior (fecha, servicios, pagos) sin que tengas que reenviarle nada.
+        </p>
+        <button
+          onClick={handleGenerarEnlace}
+          disabled={generandoEnlace}
+          className="mt-2 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {generandoEnlace ? "Generando..." : "Generar enlace"}
+        </button>
+        {errorEnlace && <p className="mt-2 text-xs text-red-600">{errorEnlace}</p>}
+        {enlace && (
+          <div className="mt-3 space-y-2">
+            <input
+              readOnly
+              value={enlace}
+              onClick={(e) => e.currentTarget.select()}
+              className="w-full rounded border px-2 py-1 text-xs font-mono"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={copiarEnlace}
+                className="rounded border px-3 py-1 text-xs font-medium hover:bg-gray-50"
+              >
+                {enlaceCopiado ? "Copiado" : "Copiar enlace"}
+              </button>
+              {primerTelefono && (
+                <a
+                  href={`https://wa.me/${primerTelefono.replace(/\D/g, "")}?text=${encodeURIComponent(
+                    `Hola, aquí está el enlace de tu reserva ${reserva.codigoReserva}: ${enlace}`,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  Enviar por WhatsApp
+                </a>
+              )}
+              <a
+                href={`mailto:?subject=${encodeURIComponent(
+                  `Reserva ${reserva.codigoReserva}`,
+                )}&body=${encodeURIComponent(`Hola, aquí está el enlace de tu reserva: ${enlace}`)}`}
+                className="rounded border px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+              >
+                Enviar por correo
+              </a>
+            </div>
+          </div>
+        )}
       </div>
 
       {reserva.estado !== "CANCELADA" && saldoPendienteTotal(reserva) > 0.01 && (
@@ -764,7 +863,7 @@ export default function ReservaDetallePage() {
           </div>
         )}
         <p className="text-center text-sm font-bold">Reserva {reserva.codigoReserva}</p>
-        <p>Cliente: {reserva.cliente?.nombre}</p>
+        <p>Agencia: {reserva.cliente?.nombre}</p>
         <p>
           Fecha: {formatFecha(reserva.fechaServicioInicio)}
           {reserva.horaServicio ? ` ${reserva.horaServicio}` : ""}
