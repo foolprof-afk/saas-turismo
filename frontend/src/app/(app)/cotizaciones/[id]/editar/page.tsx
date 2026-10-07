@@ -182,7 +182,7 @@ export default function EditarCotizacionPage() {
         telefonoResponsable: telefonoResponsable || undefined,
         listaPrecioId: listaPrecioId || "",
         monedaId: monedaId || "",
-        notas: notas || undefined,
+        notas,
         items: items.map((l) => ({
           servicioId: l.servicioId,
           fecha: l.fecha || fechaServicio,
