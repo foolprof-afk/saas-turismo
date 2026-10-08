@@ -5,12 +5,28 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatMonto } from "@/lib/moneda";
+import { BuscadorServicio } from "@/components/buscador-servicio";
 
 interface ServicioOpcion {
   id: string;
   nombre: string;
   precioCosto?: string | null;
-  moneda: { codigo: string; simbolo: string };
+  moneda: { codigo: string; simbolo: string; tasaCambio: string };
+}
+
+interface Moneda {
+  id: string;
+  codigo: string;
+  simbolo: string;
+  tasaCambio: string;
+  esPrincipal: boolean;
+}
+
+// Misma convención de tasaCambio que en el resto del sistema (ver reserva-montos.util.ts en el
+// backend): tasaCambio = cuántas unidades de esa moneda equivalen a 1 unidad de la moneda
+// principal. Convertir de origen a destino es monto * tasaDestino / tasaOrigen.
+function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
+  return (monto * tasaDestino) / tasaOrigen;
 }
 
 interface LineaOrden {
@@ -42,6 +58,7 @@ export default function EditarOrdenServicioPage() {
   const router = useRouter();
   const [orden, setOrden] = useState<OrdenServicioEditable | null>(null);
   const [servicios, setServicios] = useState<ServicioOpcion[]>([]);
+  const [monedas, setMonedas] = useState<Moneda[]>([]);
 
   const [notas, setNotas] = useState("");
   const [items, setItems] = useState<LineaOrden[]>([]);
@@ -52,6 +69,7 @@ export default function EditarOrdenServicioPage() {
 
   useEffect(() => {
     api.get<ServicioOpcion[]>("/servicios?limit=500").then(setServicios).catch(() => null);
+    api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
     api
       .get<OrdenServicioEditable>(`/ordenes-servicio/${params.id}`)
       .then((o) => {
@@ -104,6 +122,29 @@ export default function EditarOrdenServicioPage() {
     }
     return Array.from(porMoneda.entries()).map(([codigo, v]) => ({ codigo, ...v }));
   };
+
+  const monedaPrincipal = monedas.find((m) => m.esPrincipal);
+
+  // Cada línea queda en la moneda propia del servicio (igual que en cotizaciones), ya que una
+  // orden puede incluir servicios contratados en monedas distintas. Este total adicional
+  // convierte todo a la moneda predeterminada (principal) de la agencia usando su tasaCambio,
+  // para tener una referencia única de cuánto representa la orden en conjunto.
+  const totalConvertidoPrincipal = () => {
+    if (!monedaPrincipal) return null;
+    let total = 0;
+    for (const item of items) {
+      const servicio = servicios.find((s) => s.id === item.servicioId);
+      if (!servicio || item.precioCosto === "") continue;
+      const monto = Number(item.precioCosto) * (Number(item.cantidad) || 0);
+      total += convertirMonto(monto, Number(servicio.moneda.tasaCambio), Number(monedaPrincipal.tasaCambio));
+    }
+    return total;
+  };
+
+  const totales = totalPorMoneda();
+  const hayOtraMoneda = monedaPrincipal
+    ? totales.some((t) => t.codigo !== monedaPrincipal.codigo)
+    : false;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -179,17 +220,13 @@ export default function EditarOrdenServicioPage() {
                 key={index}
                 className="grid grid-cols-1 gap-3 rounded border p-3 sm:grid-cols-[1fr_140px_100px_140px_auto]"
               >
-                <select
+                <BuscadorServicio
+                  required
+                  servicios={servicios.map((s) => ({ id: s.id, nombre: s.nombre, etiqueta: s.moneda.codigo }))}
                   value={linea.servicioId}
-                  onChange={(e) => cambiarServicioDeLinea(index, e.target.value)}
+                  onChange={(sid) => cambiarServicioDeLinea(index, sid)}
                   className="rounded border px-2 py-1.5 text-sm"
-                >
-                  {servicios.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}
-                    </option>
-                  ))}
-                </select>
+                />
                 <input
                   type="date"
                   required
@@ -226,11 +263,17 @@ export default function EditarOrdenServicioPage() {
 
         {items.length > 0 && (
           <div className="text-right text-sm font-semibold">
-            {totalPorMoneda().map((t) => (
+            {totales.map((t) => (
               <div key={t.codigo}>
                 Total {t.codigo}: {t.simbolo} {formatMonto(t.total)}
               </div>
             ))}
+            {hayOtraMoneda && monedaPrincipal && (
+              <div className="mt-1 text-xs font-normal text-gray-500">
+                Total convertido a {monedaPrincipal.codigo} (moneda predeterminada): {monedaPrincipal.simbolo}{" "}
+                {formatMonto(totalConvertidoPrincipal() ?? 0)}
+              </div>
+            )}
           </div>
         )}
 

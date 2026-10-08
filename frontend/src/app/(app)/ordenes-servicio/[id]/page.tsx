@@ -14,7 +14,22 @@ interface OrdenServicioItem {
   precioCosto: string;
   fechaServicio: string;
   servicio: { nombre: string; descripcion?: string | null };
-  moneda: { codigo: string; simbolo: string };
+  moneda: { codigo: string; simbolo: string; tasaCambio: string };
+}
+
+interface Moneda {
+  id: string;
+  codigo: string;
+  simbolo: string;
+  tasaCambio: string;
+  esPrincipal: boolean;
+}
+
+// Misma convención de tasaCambio que en el resto del sistema (ver reserva-montos.util.ts en el
+// backend): tasaCambio = cuántas unidades de esa moneda equivalen a 1 unidad de la moneda
+// principal. Convertir de origen a destino es monto * tasaDestino / tasaOrigen.
+function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
+  return (monto * tasaDestino) / tasaOrigen;
 }
 
 interface OrdenServicioDetalle {
@@ -40,10 +55,25 @@ function totalPorMoneda(orden: OrdenServicioDetalle) {
   return Array.from(porMoneda.entries()).map(([codigo, v]) => ({ codigo, ...v }));
 }
 
+// Convierte el total de la orden (potencialmente en varias monedas, una por cada servicio) a la
+// moneda predeterminada (principal) de la agencia, para tener una referencia única de cuánto
+// representa la orden en conjunto. Es solo informativo para uso interno, por eso no aparece en
+// el documento imprimible que se le entrega al proveedor.
+function totalConvertidoPrincipal(orden: OrdenServicioDetalle, monedaPrincipal: Moneda | undefined) {
+  if (!monedaPrincipal) return null;
+  let total = 0;
+  for (const item of orden.items) {
+    const monto = Number(item.precioCosto) * item.cantidad;
+    total += convertirMonto(monto, Number(item.moneda.tasaCambio), Number(monedaPrincipal.tasaCambio));
+  }
+  return total;
+}
+
 export default function OrdenServicioDetallePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [orden, setOrden] = useState<OrdenServicioDetalle | null>(null);
+  const [monedas, setMonedas] = useState<Moneda[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState(false);
 
@@ -56,6 +86,7 @@ export default function OrdenServicioDetallePage() {
 
   useEffect(() => {
     cargar();
+    api.get<Moneda[]>("/monedas").then(setMonedas).catch(() => null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
@@ -92,6 +123,10 @@ export default function OrdenServicioDetallePage() {
   }
 
   const totales = totalPorMoneda(orden);
+  const monedaPrincipal = monedas.find((m) => m.esPrincipal);
+  const hayOtraMoneda = monedaPrincipal
+    ? totales.some((t) => t.codigo !== monedaPrincipal.codigo)
+    : false;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -137,6 +172,13 @@ export default function OrdenServicioDetallePage() {
       <Link href="/ordenes-servicio" className="text-sm text-blue-600 hover:underline print:hidden">
         ← Volver al listado
       </Link>
+
+      {hayOtraMoneda && monedaPrincipal && (
+        <p className="text-sm text-gray-500 print:hidden">
+          Total convertido a {monedaPrincipal.codigo} (moneda predeterminada, solo referencia interna):{" "}
+          {monedaPrincipal.simbolo} {formatMonto(totalConvertidoPrincipal(orden, monedaPrincipal) ?? 0)}
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600 print:hidden">{error}</p>}
 

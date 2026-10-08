@@ -5,7 +5,13 @@ import { useEffect, useRef, useState } from "react";
 interface ServicioOpcion {
   id: string;
   nombre: string;
-  precioBase: string;
+  // No se usa para renderizar nada en este componente (es puramente informativo para el
+  // llamador); se deja opcional porque hay listas de servicios (ej. órdenes de servicio, que
+  // muestran precioCosto en vez de precioBase) que no tienen este campo.
+  precioBase?: string;
+  // Texto corto que se muestra junto al nombre en la lista filtrada (ej. el código de moneda
+  // del servicio), útil cuando los servicios mostrados pueden estar en distintas monedas.
+  etiqueta?: string;
   palabrasClave?: string[];
 }
 
@@ -83,6 +89,7 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
               className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
             >
               {s.nombre}
+              {s.etiqueta && <span className="ml-1 text-xs text-gray-400">({s.etiqueta})</span>}
               {s.palabrasClave && s.palabrasClave.length > 0 && (
                 <span className="ml-1 text-xs text-gray-400">
                   {s.palabrasClave.map((p) => `#${p}`).join(" ")}
