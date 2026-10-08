@@ -291,6 +291,16 @@ export default function ReservaDetallePage() {
     }
   };
 
+  const handleCancelarLink = async (id: string) => {
+    setError(null);
+    try {
+      await api.post(`/reservas/${params.id}/links-pago/${id}/cancelar`, {});
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cancelar el link de pago");
+    }
+  };
+
   const copiarLink = async (id: string, url: string) => {
     try {
       await navigator.clipboard.writeText(url);
@@ -739,7 +749,17 @@ export default function ReservaDetallePage() {
                   <span>
                     {l.moneda.simbolo}
                     {formatMonto(l.monto)} {l.moneda.codigo} —{" "}
-                    <span className={l.estado === "PAGADO" ? "text-green-700" : "text-amber-700"}>{l.estado}</span>
+                    <span
+                      className={
+                        l.estado === "PAGADO"
+                          ? "text-green-700"
+                          : l.estado === "CANCELADO"
+                            ? "text-gray-400"
+                            : "text-amber-700"
+                      }
+                    >
+                      {l.estado}
+                    </span>
                   </span>
                   {l.estado === "PENDIENTE" && l.urlPago && (
                     <span className="flex items-center gap-3">
@@ -749,6 +769,13 @@ export default function ReservaDetallePage() {
                         className="text-blue-600 hover:underline"
                       >
                         {linkCopiadoId === l.id ? "¡Copiado!" : "Copiar link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelarLink(l.id)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Cancelar
                       </button>
                       <a href={l.urlPago} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                         Abrir

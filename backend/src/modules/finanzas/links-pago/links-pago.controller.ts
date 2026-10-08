@@ -25,4 +25,14 @@ export class LinksPagoController {
   ) {
     return this.linksPagoService.generar(user.agenciaId, reservaId, dto);
   }
+
+  @Post(':id/cancelar')
+  @Roles('admin', 'vendedor', 'finanzas')
+  cancelar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('reservaId') reservaId: string,
+    @Param('id') id: string,
+  ) {
+    return this.linksPagoService.cancelar(user.agenciaId, reservaId, id);
+  }
 }

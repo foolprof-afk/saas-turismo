@@ -112,6 +112,21 @@ export class LinksPagoService {
   }
 
   /**
+   * Cancela manualmente un link de pago que quedó PENDIENTE pero ya no corresponde cobrarlo
+   * (ej. el cliente pagó por otro medio y se registró un abono manual, o el checkout quedó
+   * abandonado). Solo se puede cancelar un link que nunca se pagó: uno ya PAGADO no se toca acá
+   * para no perder el registro contable (eso se maneja aparte, como reembolso/ajuste).
+   */
+  async cancelar(agenciaId: string, reservaId: string, id: string) {
+    const link = await this.prisma.linkPago.findFirst({ where: { id, reservaId, agenciaId } });
+    if (!link) throw new NotFoundException('Link de pago no encontrado');
+    if (link.estado !== 'PENDIENTE') {
+      throw new BadRequestException('Solo se puede cancelar un link de pago que esté pendiente');
+    }
+    return this.prisma.linkPago.update({ where: { id }, data: { estado: 'CANCELADO' } });
+  }
+
+  /**
    * Procesa el webhook de confirmación de pago de una pasarela: verifica la firma, ubica el
    * LinkPago correspondiente y registra el Pago automáticamente (mismo patrón transaccional que
    * ReservasService.confirmar). Es idempotente: si el link ya está PAGADO, no hace nada más.
