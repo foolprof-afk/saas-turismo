@@ -97,6 +97,42 @@ export function convertirAPrincipal(
   };
 }
 
+interface ReservaConMonedaYCotizacion {
+  moneda: MonedaInfo | null;
+  monedaId: string | null;
+  cotizacion?: { moneda?: MonedaInfo | null; monedaId?: string | null } | null;
+}
+
+/**
+ * Determina en qué moneda mostrarle al cliente un único total consolidado (en vez del desglose
+ * por moneda, que es información interna). Usa Reserva.monedaId cuando está definido; para
+ * reservas MULTIPLE, donde cada servicio puede estar en una moneda distinta y por eso
+ * Reserva.monedaId queda null (ver modelo Reserva), se recurre a la moneda que el vendedor eligió
+ * al armar la cotización de origen (Cotizacion.monedaId): es la referencia con la que el cliente
+ * negoció el precio, así que convertir todo a esa moneda es lo que coincide con lo que el cliente
+ * espera ver. Si ninguna de las dos está disponible, no hay a qué moneda consolidar y se retorna
+ * null (el llamador debe caer de vuelta al desglose por moneda).
+ */
+export function monedaReservaDe(reserva: ReservaConMonedaYCotizacion): MonedaPrincipalInfo | null {
+  if (reserva.moneda && reserva.monedaId) {
+    return {
+      id: reserva.monedaId,
+      codigo: reserva.moneda.codigo,
+      simbolo: reserva.moneda.simbolo,
+      tasaCambio: Number(reserva.moneda.tasaCambio),
+    };
+  }
+  if (reserva.cotizacion?.moneda && reserva.cotizacion.monedaId) {
+    return {
+      id: reserva.cotizacion.monedaId,
+      codigo: reserva.cotizacion.moneda.codigo,
+      simbolo: reserva.cotizacion.moneda.simbolo,
+      tasaCambio: Number(reserva.cotizacion.moneda.tasaCambio),
+    };
+  }
+  return null;
+}
+
 /**
  * Convierte un monto entre dos monedas cualquiera de la misma agencia usando su tasaCambio
  * respecto a la moneda principal (ver convertirAPrincipal para la explicación de la

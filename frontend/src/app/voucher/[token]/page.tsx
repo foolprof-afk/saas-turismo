@@ -29,6 +29,9 @@ interface ReservaPublica {
   montos: MontoPorMoneda[];
   totalAbonado: MontoPorMoneda[];
   saldoPendiente: MontoPorMoneda[];
+  totalEnMonedaReserva: MontoPorMoneda | null;
+  totalAbonadoEnMonedaReserva: MontoPorMoneda | null;
+  saldoPendienteEnMonedaReserva: MontoPorMoneda | null;
   pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
@@ -58,8 +61,11 @@ function montosTexto(montos: MontoPorMoneda[]): string {
   return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
 }
 
-function montoTexto(reserva: ReservaPublica): string {
-  return montosTexto(reserva.montos);
+// Muestra un único total: si la reserva (o su cotización de origen, para reservas de varios
+// servicios en distintas monedas) tiene una moneda de referencia, se convierte todo a esa
+// moneda; si no hay ninguna moneda de referencia, se cae de vuelta al desglose por moneda.
+function montoTexto(monto: MontoPorMoneda | null, montos: MontoPorMoneda[]): string {
+  return monto ? montosTexto([monto]) : montosTexto(montos);
 }
 
 // Notas propias de la reserva; si no tiene, se usan las de la cotización de origen.
@@ -138,16 +144,20 @@ export default function VoucherPublicoPage() {
             {reserva.horaServicio ? ` — ${reserva.horaServicio}` : ""}
           </p>
           <p className="text-sm">
-            <span className="text-gray-500">Total:</span> {montoTexto(reserva)}
+            <span className="text-gray-500">Total:</span>{" "}
+            {montoTexto(reserva.totalEnMonedaReserva, reserva.montos)}
           </p>
           {reserva.totalAbonado.length > 0 && (
             <>
               <p className="text-sm">
-                <span className="text-gray-500">Abonado:</span> {montosTexto(reserva.totalAbonado)}
+                <span className="text-gray-500">Abonado:</span>{" "}
+                {montoTexto(reserva.totalAbonadoEnMonedaReserva, reserva.totalAbonado)}
               </p>
               <p className="text-sm">
                 <span className="text-gray-500">Saldo pendiente:</span>{" "}
-                <span className="font-medium text-amber-700">{montosTexto(reserva.saldoPendiente)}</span>
+                <span className="font-medium text-amber-700">
+                  {montoTexto(reserva.saldoPendienteEnMonedaReserva, reserva.saldoPendiente)}
+                </span>
               </p>
             </>
           )}

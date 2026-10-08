@@ -13,6 +13,7 @@ import {
   convertirAPrincipal,
   convertirMonto,
   desglosePorMoneda,
+  monedaReservaDe,
   MonedaPrincipalInfo,
 } from '../../../common/utils/reserva-montos.util';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
@@ -1012,8 +1013,9 @@ export class ReservasService {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
         // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
-        // origen.
-        cotizacion: { select: { notas: true } },
+        // origen. moneda/monedaId se incluyen para poder consolidar el total en una sola moneda
+        // cuando la reserva es MULTIPLE (ver monedaReservaDe).
+        cotizacion: { select: { notas: true, monedaId: true, moneda: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
@@ -1023,15 +1025,9 @@ export class ReservasService {
     const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
     // Para el enlace público el cliente no debe ver una lista de montos en varias monedas (eso
     // es información interna de desglose): se convierte todo a la moneda que quedó asignada a la
-    // reserva (Reserva.monedaId), usando la misma tasaCambio con la que se valorizó cada línea.
-    const monedaReserva: MonedaPrincipalInfo | null = reserva.moneda
-      ? {
-          id: reserva.monedaId!,
-          codigo: reserva.moneda.codigo,
-          simbolo: reserva.moneda.simbolo,
-          tasaCambio: Number(reserva.moneda.tasaCambio),
-        }
-      : null;
+    // reserva (Reserva.monedaId) o, si es MULTIPLE y no tiene una propia, a la moneda elegida en
+    // la cotización de origen.
+    const monedaReserva = monedaReservaDe(reserva);
     return {
       ...reserva,
       montos,

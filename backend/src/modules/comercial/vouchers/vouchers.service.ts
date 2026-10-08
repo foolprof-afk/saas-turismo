@@ -6,6 +6,7 @@ import {
   calcularSaldoPendiente,
   convertirAPrincipal,
   desglosePorMoneda,
+  monedaReservaDe,
 } from '../../../common/utils/reserva-montos.util';
 import { QrTokenService } from './qr-token.service';
 
@@ -69,8 +70,9 @@ export class VouchersService {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
         // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
-        // origen.
-        cotizacion: { select: { notas: true } },
+        // origen. moneda/monedaId se incluyen para poder consolidar el total en una sola moneda
+        // cuando la reserva es MULTIPLE (ver monedaReservaDe).
+        cotizacion: { select: { notas: true, monedaId: true, moneda: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
@@ -88,6 +90,10 @@ export class VouchersService {
       : null;
     const totalAbonado = calcularAbonado(reserva.pagos);
     const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
+    // Igual que en el enlace público de reservas: el cliente no debe ver un desglose por moneda
+    // (eso es información interna), se consolida todo en la moneda de la reserva o, si es
+    // MULTIPLE y no tiene una propia, en la moneda elegida en la cotización de origen.
+    const monedaReserva = monedaReservaDe(reserva);
     return {
       ...reserva,
       montos,
@@ -96,6 +102,9 @@ export class VouchersService {
       totalAbonadoPrincipal: convertirAPrincipal(totalAbonado, monedaPrincipal),
       saldoPendiente,
       saldoPendientePrincipal: convertirAPrincipal(saldoPendiente, monedaPrincipal),
+      totalEnMonedaReserva: convertirAPrincipal(montos, monedaReserva),
+      totalAbonadoEnMonedaReserva: convertirAPrincipal(totalAbonado, monedaReserva),
+      saldoPendienteEnMonedaReserva: convertirAPrincipal(saldoPendiente, monedaReserva),
     };
   }
 }
