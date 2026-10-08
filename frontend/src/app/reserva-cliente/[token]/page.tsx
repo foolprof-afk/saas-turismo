@@ -29,6 +29,9 @@ interface ReservaPublica {
   montos: MontoPorMoneda[];
   totalAbonado: MontoPorMoneda[];
   saldoPendiente: MontoPorMoneda[];
+  totalEnMonedaReserva: MontoPorMoneda | null;
+  totalAbonadoEnMonedaReserva: MontoPorMoneda | null;
+  saldoPendienteEnMonedaReserva: MontoPorMoneda | null;
   pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
@@ -60,6 +63,11 @@ function logoDe(reserva: ReservaPublica): string | undefined {
 function montosTexto(montos: MontoPorMoneda[]): string {
   if (!montos || montos.length === 0) return "-";
   return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
+}
+
+function montoTexto(monto: MontoPorMoneda | null): string {
+  if (!monto) return "-";
+  return `${monto.monedaSimbolo} ${formatMonto(monto.total)} ${monto.monedaCodigo}`;
 }
 
 export default function ReservaClientePublicaPage() {
@@ -123,11 +131,23 @@ export default function ReservaClientePublicaPage() {
 
         <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5 text-center">
           <h2 className="mb-1 text-sm font-semibold text-blue-700">Total</h2>
-          <p className="text-2xl font-bold text-blue-800">{montosTexto(reserva.montos)}</p>
+          <p className="text-2xl font-bold text-blue-800">
+            {reserva.totalEnMonedaReserva ? montoTexto(reserva.totalEnMonedaReserva) : montosTexto(reserva.montos)}
+          </p>
           {reserva.totalAbonado.length > 0 && (
             <div className="mt-3 space-y-1 border-t border-blue-200 pt-3 text-sm">
-              <p className="text-blue-700">Abonado: {montosTexto(reserva.totalAbonado)}</p>
-              <p className="font-medium text-amber-700">Saldo pendiente: {montosTexto(reserva.saldoPendiente)}</p>
+              <p className="text-blue-700">
+                Abonado:{" "}
+                {reserva.totalAbonadoEnMonedaReserva
+                  ? montoTexto(reserva.totalAbonadoEnMonedaReserva)
+                  : montosTexto(reserva.totalAbonado)}
+              </p>
+              <p className="font-medium text-amber-700">
+                Saldo pendiente:{" "}
+                {reserva.saldoPendienteEnMonedaReserva
+                  ? montoTexto(reserva.saldoPendienteEnMonedaReserva)
+                  : montosTexto(reserva.saldoPendiente)}
+              </p>
             </div>
           )}
         </div>

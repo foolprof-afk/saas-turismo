@@ -1010,6 +1010,17 @@ export class ReservasService {
     const monedaPrincipal = await this.obtenerMonedaPrincipal(reserva.agenciaId);
     const totalAbonado = calcularAbonado(reserva.pagos);
     const saldoPendiente = calcularSaldoPendiente(montos, totalAbonado);
+    // Para el enlace público el cliente no debe ver una lista de montos en varias monedas (eso
+    // es información interna de desglose): se convierte todo a la moneda que quedó asignada a la
+    // reserva (Reserva.monedaId), usando la misma tasaCambio con la que se valorizó cada línea.
+    const monedaReserva: MonedaPrincipalInfo | null = reserva.moneda
+      ? {
+          id: reserva.monedaId!,
+          codigo: reserva.moneda.codigo,
+          simbolo: reserva.moneda.simbolo,
+          tasaCambio: Number(reserva.moneda.tasaCambio),
+        }
+      : null;
     return {
       ...reserva,
       montos,
@@ -1018,6 +1029,9 @@ export class ReservasService {
       totalAbonadoPrincipal: convertirAPrincipal(totalAbonado, monedaPrincipal),
       saldoPendiente,
       saldoPendientePrincipal: convertirAPrincipal(saldoPendiente, monedaPrincipal),
+      totalEnMonedaReserva: convertirAPrincipal(montos, monedaReserva),
+      totalAbonadoEnMonedaReserva: convertirAPrincipal(totalAbonado, monedaReserva),
+      saldoPendienteEnMonedaReserva: convertirAPrincipal(saldoPendiente, monedaReserva),
     };
   }
 }
