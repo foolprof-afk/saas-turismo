@@ -35,6 +35,8 @@ interface ReservaPublica {
   pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
+  notas?: string | null;
+  cotizacion?: { notas?: string | null } | null;
   // "cliente" es la identidad comercial/agencia bajo la cual se vendió la reserva (no el
   // pasajero final, ver Cliente en el schema): de cara al pasajero que recibe este enlace, esto
   // es "la agencia" que emite la reserva, así que se rotula como tal en pantalla.
@@ -68,6 +70,11 @@ function montosTexto(montos: MontoPorMoneda[]): string {
 function montoTexto(monto: MontoPorMoneda | null): string {
   if (!monto) return "-";
   return `${monto.monedaSimbolo} ${formatMonto(monto.total)} ${monto.monedaCodigo}`;
+}
+
+// Notas propias de la reserva; si no tiene, se usan las de la cotización de origen.
+function notasDe(reserva: ReservaPublica): string | null {
+  return reserva.notas || reserva.cotizacion?.notas || null;
 }
 
 export default function ReservaClientePublicaPage() {
@@ -167,6 +174,13 @@ export default function ReservaClientePublicaPage() {
             </p>
           </div>
         </div>
+
+        {notasDe(reserva) && (
+          <div className="rounded-lg border bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
+            <p className="whitespace-pre-line text-sm text-gray-700">{notasDe(reserva)}</p>
+          </div>
+        )}
 
         <div className="rounded-lg border bg-white p-5">
           <h2 className="mb-2 text-sm font-semibold text-gray-500">Pasajeros ({reserva.pasajeros.length})</h2>

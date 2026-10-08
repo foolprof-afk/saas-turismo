@@ -32,6 +32,8 @@ interface ReservaPublica {
   pagos: Pago[];
   fechaServicioInicio: string;
   horaServicio?: string | null;
+  notas?: string | null;
+  cotizacion?: { notas?: string | null } | null;
   cliente: { nombre: string; logoUrl?: string | null };
   agencia?: { logoUrl?: string | null } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
@@ -58,6 +60,11 @@ function montosTexto(montos: MontoPorMoneda[]): string {
 
 function montoTexto(reserva: ReservaPublica): string {
   return montosTexto(reserva.montos);
+}
+
+// Notas propias de la reserva; si no tiene, se usan las de la cotización de origen.
+function notasDe(reserva: ReservaPublica): string | null {
+  return reserva.notas || reserva.cotizacion?.notas || null;
 }
 
 export default function VoucherPublicoPage() {
@@ -148,6 +155,13 @@ export default function VoucherPublicoPage() {
             <span className="text-gray-500">Cantidad de personas:</span> {reserva.pasajeros.length}
           </p>
         </div>
+
+        {notasDe(reserva) && (
+          <div className="rounded-lg border bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
+            <p className="whitespace-pre-line text-sm text-gray-700">{notasDe(reserva)}</p>
+          </div>
+        )}
 
         <div className="rounded-lg border bg-white p-5">
           <h2 className="mb-2 text-sm font-semibold text-gray-500">Pasajeros ({reserva.pasajeros.length})</h2>

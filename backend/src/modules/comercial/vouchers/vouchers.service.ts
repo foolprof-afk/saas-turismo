@@ -68,6 +68,9 @@ export class VouchersService {
         itinerario: {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
+        // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
+        // origen.
+        cotizacion: { select: { notas: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');

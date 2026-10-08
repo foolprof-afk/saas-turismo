@@ -116,4 +116,10 @@ export class CreateReservaDto {
   @ValidateNested({ each: true })
   @Type(() => PasajeroDto)
   pasajeros: PasajeroDto[];
+
+  // Notas internas/importantes de la reserva (instrucciones especiales, acuerdos, etc.).
+  // Se muestran también en el enlace público, el PDF y el voucher.
+  @IsOptional()
+  @IsString()
+  notas?: string;
 }

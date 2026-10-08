@@ -38,6 +38,8 @@ interface ReservaDetalle {
   saldoPendientePrincipal: MontoPorMoneda | null;
   fechaServicioInicio: string;
   horaServicio?: string | null;
+  notas?: string | null;
+  cotizacion?: { notas?: string | null } | null;
   cliente: { nombre: string; email?: string; logoUrl?: string | null };
   agencia?: { logoUrl?: string | null } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
@@ -159,6 +161,12 @@ function itinerarioLineas(reserva: ReservaDetalle): string[] {
     });
   });
   return lineas;
+}
+
+// Notas propias de la reserva; si no tiene, se usan las de la cotización de origen (muchas
+// reservas nacen de una cotización que ya documentaba acuerdos/instrucciones especiales).
+function notasDe(reserva: ReservaDetalle): string | null {
+  return reserva.notas || reserva.cotizacion?.notas || null;
 }
 
 function pagosLineas(pagos: Pago[]): string[] {
@@ -379,6 +387,11 @@ export default function ReservaDetallePage() {
       lineas.push("");
       lineas.push("Pagos registrados:");
       pagosLineas(pagos).forEach((l) => lineas.push(l));
+    }
+    const notas = notasDe(reserva);
+    if (notas) {
+      lineas.push("");
+      lineas.push(`Notas: ${notas}`);
     }
 
     const logo = logoDe(reserva);
@@ -823,6 +836,13 @@ export default function ReservaDetallePage() {
         </div>
       </div>
 
+      {notasDe(reserva) && (
+        <div className="rounded-lg border bg-white p-5 print:hidden">
+          <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
+          <p className="whitespace-pre-line text-sm text-gray-700">{notasDe(reserva)}</p>
+        </div>
+      )}
+
       {reserva.itinerario && (
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Itinerario</h2>
@@ -896,6 +916,12 @@ export default function ReservaDetallePage() {
             {pagosLineas(pagos).map((l, i) => (
               <p key={i}>{l}</p>
             ))}
+          </>
+        )}
+        {notasDe(reserva) && (
+          <>
+            <p className="mt-2 font-bold">Notas:</p>
+            <p className="whitespace-pre-line">{notasDe(reserva)}</p>
           </>
         )}
         {reserva.voucher && (

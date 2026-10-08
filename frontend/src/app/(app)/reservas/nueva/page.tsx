@@ -57,6 +57,7 @@ export default function NuevaReservaPage() {
   const [pasajeros, setPasajeros] = useState<Pasajero[]>([{ nombre: "", telefono: "", tipo: "ADULTO" }]);
   const [responsableIndex, setResponsableIndex] = useState(0);
   const [lineas, setLineas] = useState<LineaServicio[]>([{ servicioId: "", fecha: "", horaInicio: "", precio: "" }]);
+  const [notas, setNotas] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -201,6 +202,7 @@ export default function NuevaReservaPage() {
         monedaId: tipoReserva !== "multiple" ? monedaId : undefined,
         precioLiquidado: tipoReserva !== "multiple" && precioLiquidado ? Number(precioLiquidado) : undefined,
         pasajeros: pasajerosPayload,
+        notas: notas || undefined,
       });
       router.push(`/reservas/${reserva.id}`);
     } catch (err) {
@@ -473,6 +475,17 @@ export default function NuevaReservaPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Notas (opcional)</label>
+          <textarea
+            value={notas}
+            onChange={(e) => setNotas(e.target.value)}
+            rows={3}
+            placeholder="Instrucciones especiales, acuerdos con el cliente, etc."
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
         </div>
 
         <p className="text-xs text-gray-400">

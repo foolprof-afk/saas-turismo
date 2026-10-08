@@ -299,6 +299,9 @@ export class ReservasService {
         itinerario: {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
+        // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
+        // origen (muchas reservas nacen de una cotización que ya documentaba acuerdos/instrucciones).
+        cotizacion: { select: { notas: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
@@ -479,6 +482,7 @@ export class ReservasService {
           monedaId: monedaId ?? undefined,
           plantillaItinerarioId: dto.plantillaItinerarioId,
           servicioId: dto.servicioId,
+          notas: dto.notas,
           pasajeros: { create: pasajerosData },
         },
       });
@@ -603,6 +607,10 @@ export class ReservasService {
     }
 
     const data: Prisma.ReservaUncheckedUpdateInput = {};
+    // Las notas no afectan pagos ni montos: se pueden editar en cualquier estado no
+    // cancelado/operado. Se asigna directo (sin "|| undefined") para no perder un borrado
+    // explícito de las notas (enviar "" debe limpiar el campo, no dejarlo intacto).
+    if (dto.notas !== undefined) data.notas = dto.notas;
     let fechaInicio = reserva.fechaServicioInicio;
     let fechaFin = reserva.fechaServicioFin;
 
@@ -1003,6 +1011,9 @@ export class ReservasService {
         itinerario: {
           include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
         },
+        // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
+        // origen.
+        cotizacion: { select: { notas: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');

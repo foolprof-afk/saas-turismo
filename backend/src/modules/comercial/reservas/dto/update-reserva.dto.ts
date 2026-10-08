@@ -44,4 +44,9 @@ export class UpdateReservaDto {
   @ValidateNested({ each: true })
   @Type(() => PasajeroDto)
   pasajeros?: PasajeroDto[];
+
+  // Notas internas/importantes de la reserva. Editable en cualquier estado (no afecta pagos).
+  @IsOptional()
+  @IsString()
+  notas?: string;
 }
