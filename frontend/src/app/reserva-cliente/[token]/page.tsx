@@ -246,8 +246,8 @@ export default function ReservaClientePublicaPage() {
           </div>
         )}
 
-        <div className="rounded-lg border bg-white p-5 text-sm text-gray-700">
-          <h2 className="mb-2 font-semibold text-gray-800">Condiciones de reserva</h2>
+        <div className="rounded-lg border bg-white p-5 text-xs text-gray-400">
+          <h2 className="mb-2 text-xs font-semibold text-gray-400">Condiciones de reserva</h2>
           <p className="mb-2">
             Tu reservación se confirma con el anticipo o pago correspondiente y está sujeta a disponibilidad.
           </p>
@@ -267,7 +267,7 @@ export default function ReservaClientePublicaPage() {
                 href={reserva.cliente.urlTerminosCondiciones}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all text-blue-600 hover:underline"
+                className="break-all text-gray-400 underline hover:text-gray-600"
               >
                 {reserva.cliente.urlTerminosCondiciones}
               </a>
