@@ -128,14 +128,35 @@ function montosTexto(montos: MontoPorMoneda[]): string {
 }
 
 function abonadoTexto(reserva: ReservaDetalle): string {
-  return montosTexto(reserva.totalAbonado);
+  const montos = reserva.totalAbonado;
+  if (!montos || montos.length === 0) return "-";
+  const base = montosTexto(montos);
+  const p = reserva.totalAbonadoPrincipal;
+  const mostrarEquivalente = p && (montos.length > 1 || montos[0]?.monedaId !== p.monedaId);
+  return mostrarEquivalente ? `${base} (≈ ${p!.monedaSimbolo}${formatMonto(p!.total)} ${p!.monedaCodigo})` : base;
 }
 
+// El saldo pendiente se calcula por moneda (ver calcularSaldoPendiente en
+// reserva-montos.util.ts): resta lo abonado del total dentro de cada moneda, pero NO convierte
+// entre monedas distintas. Si el total está en una moneda (p. ej. GTQ) y el abono se hizo en
+// otra (p. ej. USD), el desglose por moneda no "neta" entre ellas: se vería el total completo
+// sin reducir en GTQ más un saldo negativo confuso en USD, en vez del saldo real restante. En
+// ese caso (más de una moneda involucrada) se usa el equivalente ya convertido a la moneda
+// principal de la agencia (saldoPendientePrincipal), que sí resta correctamente lo abonado del
+// total sin importar en qué moneda se pagó.
 function saldoTexto(reserva: ReservaDetalle): string {
+  if (!reserva.saldoPendiente || reserva.saldoPendiente.length === 0) return "-";
+  if (reserva.saldoPendiente.length > 1 && reserva.saldoPendientePrincipal) {
+    const p = reserva.saldoPendientePrincipal;
+    return `${p.monedaSimbolo} ${formatMonto(p.total)} ${p.monedaCodigo}`;
+  }
   return montosTexto(reserva.saldoPendiente);
 }
 
 function saldoPendienteTotal(reserva: ReservaDetalle): number {
+  if (reserva.saldoPendiente.length > 1 && reserva.saldoPendientePrincipal) {
+    return Math.max(reserva.saldoPendientePrincipal.total, 0);
+  }
   return reserva.saldoPendiente.reduce((acc, s) => acc + Math.max(s.total, 0), 0);
 }
 
