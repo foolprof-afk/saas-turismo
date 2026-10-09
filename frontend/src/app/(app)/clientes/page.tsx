@@ -12,6 +12,7 @@ interface Cliente {
   pais?: string | null;
   notas?: string | null;
   logoUrl?: string | null;
+  urlTerminosCondiciones?: string | null;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -35,6 +36,7 @@ export default function ClientesPage() {
   const [pais, setPais] = useState("");
   const [notas, setNotas] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [urlTerminosCondiciones, setUrlTerminosCondiciones] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,6 +62,7 @@ export default function ClientesPage() {
     setPais("");
     setNotas("");
     setLogoUrl(undefined);
+    setUrlTerminosCondiciones("");
   };
 
   const editar = (c: Cliente) => {
@@ -71,6 +74,7 @@ export default function ClientesPage() {
     setPais(c.pais ?? "");
     setNotas(c.notas ?? "");
     setLogoUrl(c.logoUrl ?? undefined);
+    setUrlTerminosCondiciones(c.urlTerminosCondiciones ?? "");
   };
 
   const eliminar = async (id: string) => {
@@ -96,6 +100,7 @@ export default function ClientesPage() {
         pais: pais || undefined,
         notas: notas || undefined,
         logoUrl: logoUrl || null,
+        urlTerminosCondiciones: urlTerminosCondiciones || null,
       };
       if (editingId) {
         await api.put(`/clientes/${editingId}`, data);
@@ -200,6 +205,21 @@ export default function ClientesPage() {
               </button>
             </div>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">URL de términos y condiciones (opcional)</label>
+          <p className="mt-1 text-xs text-gray-500">
+            Se muestra como enlace en la sección &quot;Condiciones de reserva&quot; del enlace público de
+            reservas y cotizaciones de este cliente.
+          </p>
+          <input
+            type="url"
+            placeholder="https://ejemplo.com/terminos-y-condiciones"
+            value={urlTerminosCondiciones}
+            onChange={(e) => setUrlTerminosCondiciones(e.target.value)}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm"
+          />
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

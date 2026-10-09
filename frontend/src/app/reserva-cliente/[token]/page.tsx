@@ -40,7 +40,7 @@ interface ReservaPublica {
   // "cliente" es la identidad comercial/agencia bajo la cual se vendió la reserva (no el
   // pasajero final, ver Cliente en el schema): de cara al pasajero que recibe este enlace, esto
   // es "la agencia" que emite la reserva, así que se rotula como tal en pantalla.
-  cliente: { nombre: string; logoUrl?: string | null };
+  cliente: { nombre: string; logoUrl?: string | null; urlTerminosCondiciones?: string | null };
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   pasajeros: { nombre: string; telefono?: string | null; tipo: string; esResponsable?: boolean }[];
   itinerario?: {
@@ -245,6 +245,35 @@ export default function ReservaClientePublicaPage() {
             </ul>
           </div>
         )}
+
+        <div className="rounded-lg border bg-white p-5 text-sm text-gray-700">
+          <h2 className="mb-2 font-semibold text-gray-800">Condiciones de reserva</h2>
+          <p className="mb-2">
+            Tu reservación se confirma con el anticipo o pago correspondiente y está sujeta a disponibilidad.
+          </p>
+          <p className="mb-2">
+            Los pagos de reservas confirmadas son no reembolsables, salvo las excepciones legales o condiciones
+            especiales informadas. Puedes solicitar cambios de fecha sujetos a disponibilidad y posibles
+            diferencias de tarifa.
+          </p>
+          <p className="mb-2">
+            Los horarios e itinerarios pueden modificarse por clima, seguridad o circunstancias operativas.
+          </p>
+          <p className="mb-2">Al confirmar tu reserva, aceptas los términos y condiciones aplicables.</p>
+          {reserva.cliente?.urlTerminosCondiciones && (
+            <p>
+              <span className="font-semibold">Consulta nuestras políticas completas:</span>{" "}
+              <a
+                href={reserva.cliente.urlTerminosCondiciones}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-blue-600 hover:underline"
+              >
+                {reserva.cliente.urlTerminosCondiciones}
+              </a>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

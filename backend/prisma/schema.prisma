@@ -167,9 +167,9 @@ model Usuario {
 
   // Listas de precio a las que este usuario tiene acceso al crear cotizaciones/reservas
   // (ver ListaPrecio). Si solo tiene una, es la unica que puede usar.
-  listasPrecio            ListaPrecio[]   @relation("UsuarioListaPrecio")
-  cotizacionesVendidas    Cotizacion[]    @relation("VendedorCotizacion")
-  ordenesServicioEmitidas OrdenServicio[]
+  listasPrecio             ListaPrecio[]            @relation("UsuarioListaPrecio")
+  cotizacionesVendidas     Cotizacion[]             @relation("VendedorCotizacion")
+  ordenesServicioEmitidas  OrdenServicio[]
   ordenesServicioHistorial OrdenServicioHistorial[]
 
   @@unique([agenciaId, email])
@@ -298,17 +298,19 @@ model LogActividad {
 // ----------------------------------------------------------------------------
 
 model Cliente {
-  id        String   @id @default(cuid())
-  agenciaId String
-  usuarioId String?  @unique // vincula este cliente al usuario/agente que vende bajo este nombre comercial
-  nombre    String
-  documento String?
-  email     String?
-  telefono  String?
-  pais      String?
-  notas     String?
-  logoUrl   String? // opcional: si se define, se muestra en el voucher en vez del logo de la agencia
-  createdAt DateTime @default(now())
+  id                     String   @id @default(cuid())
+  agenciaId              String
+  usuarioId              String?  @unique // vincula este cliente al usuario/agente que vende bajo este nombre comercial
+  nombre                 String
+  documento              String?
+  email                  String?
+  telefono               String?
+  pais                   String?
+  notas                  String?
+  logoUrl                String? // opcional: si se define, se muestra en el voucher en vez del logo de la agencia
+  urlTerminosCondiciones String? // opcional: enlace a las políticas de reserva de este cliente; se muestra
+  // en el enlace público de reservas y cotizaciones junto al texto fijo de "Condiciones de reserva"
+  createdAt              DateTime @default(now())
 
   agencia            Agencia      @relation(fields: [agenciaId], references: [id])
   usuario            Usuario?     @relation(fields: [usuarioId], references: [id])
@@ -434,31 +436,31 @@ model TipoServicio {
 }
 
 model Servicio {
-  id              String        @id @default(cuid())
-  agenciaId       String
-  proveedorId     String
-  tipoServicioId  String
-  nombre          String
-  descripcion     String?
-  capacidadMax    Int?
-  duracionMin     Int?
-  precioBase      Decimal       @db.Decimal(12, 2)
+  id                String            @id @default(cuid())
+  agenciaId         String
+  proveedorId       String
+  tipoServicioId    String
+  nombre            String
+  descripcion       String?
+  capacidadMax      Int?
+  duracionMin       Int?
+  precioBase        Decimal           @db.Decimal(12, 2)
   // Precio que la agencia paga al proveedor por este servicio (opcional). Sirve de valor por
   // defecto al armar una OrdenServicio, para no tener que digitarlo cada vez (ver
   // OrdenesServicioService.construirItems); cada línea de la orden lo congela igual que
   // CotizacionItem congela precioUnitario.
-  precioCosto     Decimal?      @db.Decimal(12, 2)
-  monedaId        String
-  rutaId          String?
-  puntoRecogidaId String?
-  estado          EstadoGeneral @default(ACTIVO)
+  precioCosto       Decimal?          @db.Decimal(12, 2)
+  monedaId          String
+  rutaId            String?
+  puntoRecogidaId   String?
+  estado            EstadoGeneral     @default(ACTIVO)
   // Palabras clave opcionales (sin el símbolo #) para facilitar la búsqueda cuando la
   // agencia tiene muchos servicios; se muestran/capturan como hashtags en la UI.
-  palabrasClave   String[]      @default([])
+  palabrasClave     String[]          @default([])
   // Foto principal para el catálogo público (Front Office). Opcional: un servicio puede existir
   // sin foto mientras se prepara su publicación.
-  fotoUrl            String?
-  estadoPublicacion  EstadoPublicacion @default(PRIVADO)
+  fotoUrl           String?
+  estadoPublicacion EstadoPublicacion @default(PRIVADO)
 
   agencia       Agencia        @relation(fields: [agenciaId], references: [id])
   proveedor     Proveedor      @relation(fields: [proveedorId], references: [id])
@@ -476,8 +478,8 @@ model Servicio {
   // Servicios que este servicio recomienda como asociados/opcionales (ej. Tour Atitlán ->
   // Traslado Antigua-Atitlán) y, a la inversa, servicios que recomiendan a este. Ambos lados se
   // guardan explícitamente (no se infiere simetría): el operador decide la dirección.
-  asociaciones       ServicioAsociado[] @relation("AsociacionOrigen")
-  asociadoEn         ServicioAsociado[] @relation("AsociacionDestino")
+  asociaciones       ServicioAsociado[]            @relation("AsociacionOrigen")
+  asociadoEn         ServicioAsociado[]            @relation("AsociacionDestino")
 
   @@map("servicios")
 }
