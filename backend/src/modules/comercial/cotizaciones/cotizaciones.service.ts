@@ -10,6 +10,7 @@ import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import { convertirMonto } from '../../../common/utils/reserva-montos.util';
 import { firmarEnlaceCotizacion, verificarEnlaceCotizacion } from '../../../common/utils/enlace-cotizacion-token.util';
+import { firmarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
 
 export interface FiltrosCotizacion {
   estado?: string;
@@ -336,7 +337,7 @@ export class CotizacionesService {
    * cotizacion.cantidadPersonas) porque las líneas MULTIPLE no se multiplican automáticamente
    * por pasajero (a diferencia de reservas de tipo SERVICIO/PLANTILLA).
    */
-  async confirmar(agenciaId: string, id: string, user: AuthenticatedUser) {
+  async confirmar(agenciaId: string, id: string, user?: AuthenticatedUser) {
     const cotizacion = await this.prisma.cotizacion.findFirst({
       where: { id, agenciaId },
       include: { items: true },
@@ -392,7 +393,10 @@ export class CotizacionesService {
 
   /**
    * Vista pública de una cotización, accedida vía el enlace/QR generado en generarEnlacePublico.
-   * Sin `user` (sin restricción por vendedor): el cliente debe poder verla sin sesión.
+   * Sin `user` (sin restricción por vendedor): el cliente debe poder verla sin sesión. Si ya tiene
+   * una reserva asociada (confirmada ahora o antes, incluso desde el Back Office), se incluye
+   * `urlReserva` con un enlace público ya firmado a esa reserva, para que el cliente pueda
+   * seguirla sin tener que generarlo manualmente.
    */
   async cotizacionPublica(token: string) {
     const payload = verificarEnlaceCotizacion(token);
@@ -401,6 +405,41 @@ export class CotizacionesService {
       include: { ...INCLUDE_COTIZACION, agencia: { select: { logoUrl: true, nombre: true } } },
     });
     if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
-    return cotizacion;
+    const urlReserva = cotizacion.reservaId
+      ? this.construirUrlReservaPublica(cotizacion.reservaId, payload.agenciaId)
+      : null;
+    return { ...cotizacion, urlReserva };
+  }
+
+  private construirUrlReservaPublica(reservaId: string, agenciaId: string): string {
+    const tokenReserva = firmarEnlaceReserva({ reservaId, agenciaId });
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
+    return `${frontendUrl}/reserva-cliente/${tokenReserva}`;
+  }
+
+  /**
+   * Confirma una cotización desde su enlace público: el cliente marca el check de aceptación de
+   * las condiciones de reserva (Cliente.urlTerminosCondiciones + texto fijo, ver
+   * reserva-cliente/cotizacion-cliente) y la cotización se transforma en una reserva real, igual
+   * que al confirmar desde el Back Office (ver `confirmar`). `aceptaCondiciones` se valida en el
+   * servidor (no basta con que el frontend deshabilite el botón) y queda registrado en
+   * Cotizacion.condicionesAceptadas/condicionesAceptadasEn como evidencia de consentimiento.
+   */
+  async confirmarPublica(token: string, aceptaCondiciones: boolean) {
+    if (!aceptaCondiciones) {
+      throw new BadRequestException('Debes aceptar las condiciones de reserva para confirmar');
+    }
+    const payload = verificarEnlaceCotizacion(token);
+    const existente = await this.prisma.cotizacion.findFirst({
+      where: { id: payload.cotizacionId, agenciaId: payload.agenciaId },
+    });
+    if (!existente) throw new NotFoundException('Cotización no encontrada');
+
+    await this.prisma.cotizacion.update({
+      where: { id: existente.id },
+      data: { condicionesAceptadas: true, condicionesAceptadasEn: new Date() },
+    });
+    await this.confirmar(payload.agenciaId, existente.id);
+    return this.cotizacionPublica(token);
   }
 }

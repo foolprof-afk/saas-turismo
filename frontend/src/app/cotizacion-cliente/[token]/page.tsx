@@ -28,6 +28,7 @@ interface CotizacionPublica {
   moneda?: { codigo: string; simbolo: string; tasaCambio: string } | null;
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   items: CotizacionItem[];
+  urlReserva?: string | null;
 }
 
 function logoDe(cotizacion: CotizacionPublica): string | undefined {
@@ -99,6 +100,9 @@ export default function CotizacionClientePublicaPage() {
   const params = useParams<{ token: string }>();
   const [cotizacion, setCotizacion] = useState<CotizacionPublica | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aceptaCondiciones, setAceptaCondiciones] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_URL}/cotizacion-cliente/publico/${params.token}`)
@@ -112,6 +116,27 @@ export default function CotizacionClientePublicaPage() {
       .then(setCotizacion)
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo validar el enlace"));
   }, [params.token]);
+
+  async function handleConfirmar() {
+    setConfirmError(null);
+    setConfirmando(true);
+    try {
+      const res = await fetch(`${API_URL}/cotizacion-cliente/publico/${params.token}/confirmar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aceptaCondiciones }),
+      });
+      const body = await res.json().catch(() => ({ message: "No se pudo confirmar la cotización" }));
+      if (!res.ok) {
+        throw new Error(body.message ?? "No se pudo confirmar la cotización");
+      }
+      setCotizacion(body);
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "No se pudo confirmar la cotización");
+    } finally {
+      setConfirmando(false);
+    }
+  }
 
   if (error) {
     return (
@@ -239,6 +264,52 @@ export default function CotizacionClientePublicaPage() {
           <div className="rounded-lg border bg-white p-5">
             <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
             <p className="text-sm text-gray-700">{cotizacion.notas}</p>
+          </div>
+        )}
+
+        {cotizacion.estado === "CONFIRMADA" ? (
+          <div className="rounded-lg border-2 border-green-200 bg-green-50 p-5 text-center">
+            <p className="text-sm font-semibold text-green-700">Cotización confirmada</p>
+            <p className="mt-1 text-xs text-green-600">
+              Esta cotización ya fue confirmada y transformada en una reserva.
+            </p>
+            {cotizacion.urlReserva && (
+              <a
+                href={cotizacion.urlReserva}
+                className="mt-3 inline-block rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
+                Ver mi reserva
+              </a>
+            )}
+          </div>
+        ) : cotizacion.estado === "CANCELADA" ? (
+          <div className="rounded-lg border-2 border-gray-200 bg-gray-50 p-5 text-center">
+            <p className="text-sm font-semibold text-gray-600">Cotización cancelada</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Esta cotización ya no está disponible para confirmar. Contacta a tu vendedor si crees que esto es un
+              error.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5">
+            <label className="flex items-start gap-2 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={aceptaCondiciones}
+                onChange={(e) => setAceptaCondiciones(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>He leído y acepto las condiciones de reserva descritas abajo.</span>
+            </label>
+            {confirmError && <p className="mt-2 text-xs text-red-600">{confirmError}</p>}
+            <button
+              type="button"
+              disabled={!aceptaCondiciones || confirmando}
+              onClick={handleConfirmar}
+              className="mt-3 w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {confirmando ? "Confirmando..." : "Confirmar cotización"}
+            </button>
           </div>
         )}
 

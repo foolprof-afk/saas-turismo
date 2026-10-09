@@ -203,31 +203,36 @@ enum EstadoCotizacion {
 // transformar en una Reserva real con "confirmar" (ver CotizacionesService.confirmar), que
 // reutiliza ReservasService.create con tipo MULTIPLE a partir de los items de la cotizacion.
 model Cotizacion {
-  id                   String           @id @default(cuid())
-  agenciaId            String
-  clienteId            String
-  vendedorId           String
-  listaPrecioId        String?
-  monedaId             String?
-  reservaId            String?          @unique
-  codigoCotizacion     String           @unique
-  estado               EstadoCotizacion @default(PENDIENTE)
-  cantidadPersonas     Int
-  pasajeroResponsable  String
-  documentoResponsable String?
-  telefonoResponsable  String?
+  id                     String           @id @default(cuid())
+  agenciaId              String
+  clienteId              String
+  vendedorId             String
+  listaPrecioId          String?
+  monedaId               String?
+  reservaId              String?          @unique
+  codigoCotizacion       String           @unique
+  estado                 EstadoCotizacion @default(PENDIENTE)
+  cantidadPersonas       Int
+  pasajeroResponsable    String
+  documentoResponsable   String?
+  telefonoResponsable    String?
   // Correo del pasajero responsable. Obligatorio en el flujo del Front Office (Guatetur) para poder
   // enviar la cotización generada por "Solicitar mi viaje"; opcional cuando la cotización se crea
   // desde el Back Office tradicional.
-  emailResponsable     String?
-  fechaServicio        DateTime
-  notas                String?
+  emailResponsable       String?
+  fechaServicio          DateTime
+  notas                  String?
   // Origen de la cotización: "BACK_OFFICE" (creada por un vendedor interno) o "AUTOSERVICIO_WEB"
   // (creada por un cliente final desde el catálogo público del Front Office, autenticado
   // internamente con el usuario restringido usuario.web). Ver CotizacionesService.create.
-  origen               String           @default("BACK_OFFICE")
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  origen                 String           @default("BACK_OFFICE")
+  // Registra que el cliente marcó el check de aceptación de las condiciones de reserva al
+  // confirmar la cotización desde el enlace público (ver CotizacionesService.confirmarPublica).
+  // Queda como evidencia de consentimiento; no se usa para restringir nada en el sistema.
+  condicionesAceptadas   Boolean          @default(false)
+  condicionesAceptadasEn DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   agencia     Agencia          @relation(fields: [agenciaId], references: [id])
   cliente     Cliente          @relation(fields: [clienteId], references: [id])
