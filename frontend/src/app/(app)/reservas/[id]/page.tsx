@@ -160,6 +160,47 @@ function saldoPendienteTotal(reserva: ReservaDetalle): number {
   return reserva.saldoPendiente.reduce((acc, s) => acc + Math.max(s.total, 0), 0);
 }
 
+// Convierte un monto entre dos monedas vía su tasaCambio respecto a la principal (misma
+// convención que el backend: ver convertirMonto en reserva-montos.util.ts).
+function convertirMontoFrontend(monto: number, tasaOrigen: number, tasaDestino: number): number {
+  return (monto * tasaDestino) / tasaOrigen;
+}
+
+// Saldo pendiente TOTAL de la reserva (todas sus monedas, ya consolidado por el backend en
+// saldoPendientePrincipal) convertido a la moneda en la que se va a hacer este pago/link, en vez
+// de usar solo el saldo de esa moneda en particular: fraccionar por moneda subestima lo que
+// realmente falta cuando el total o los abonos previos están repartidos en más de una moneda (ver
+// el mismo criterio aplicado en el backend, ReservasService.saldoPendienteConvertido). Si no hay
+// moneda principal configurada, cae de vuelta al saldo de esa moneda en particular, si existe.
+function saldoConsolidadoEn(
+  reserva: ReservaDetalle | null,
+  principal: Moneda | undefined,
+  destino: Moneda | undefined,
+): number | undefined {
+  if (!reserva || !destino) return undefined;
+  if (!principal || !reserva.saldoPendientePrincipal) {
+    return reserva.saldoPendiente.find((s) => s.monedaId === destino.id)?.total;
+  }
+  return convertirMontoFrontend(reserva.saldoPendientePrincipal.total, Number(principal.tasaCambio), Number(destino.tasaCambio));
+}
+
+// Texto del saldo pendiente consolidado (todas las monedas) en la moneda del pago/link que se
+// está armando, mostrando también el equivalente en la moneda principal de la agencia cuando es
+// distinta: el total/saldo siempre debe verse tanto en la moneda de la reserva (o del pago, en
+// este caso) como en la moneda principal.
+function saldoConsolidadoTexto(
+  reserva: ReservaDetalle | null,
+  principal: Moneda | undefined,
+  destino: Moneda | undefined,
+): string | null {
+  const monto = saldoConsolidadoEn(reserva, principal, destino);
+  if (monto === undefined || !destino) return null;
+  const base = `${destino.simbolo}${formatMonto(monto)} ${destino.codigo}`;
+  if (!principal || principal.id === destino.id || !reserva?.saldoPendientePrincipal) return base;
+  const p = reserva.saldoPendientePrincipal;
+  return `${base} (≈ ${p.monedaSimbolo}${formatMonto(p.total)} ${p.monedaCodigo})`;
+}
+
 function monedaPrincipalDe(monedas: Moneda[]): Moneda | undefined {
   return monedas.find((m) => m.esPrincipal);
 }
@@ -232,11 +273,16 @@ export default function ReservaDetallePage() {
   const requiereMonedaManual = reserva?.total === null;
   const principal = monedaPrincipalDe(monedas);
   const monedaEfectivaId = monedaPagoId || reserva?.monedaId || "";
-  const saldoEnMonedaEfectiva = reserva?.saldoPendiente.find((s) => s.monedaId === monedaEfectivaId);
   const monedaPagoSeleccionada = monedas.find((m) => m.id === monedaEfectivaId);
+  // Saldo pendiente TOTAL de la reserva (todas sus monedas), convertido a la moneda del pago que
+  // se está armando — no el saldo fraccionado de esa sola moneda (ver saldoConsolidadoEn). Se usa
+  // como sugerencia de monto por defecto y para calcular el impuesto; nunca bloquea el envío: se
+  // permite cobrar más (impuestos u otros cargos adicionales no reflejados en los servicios).
+  const saldoConsolidadoEnMonedaEfectiva = saldoConsolidadoEn(reserva, principal, monedaPagoSeleccionada);
+  const saldoConsolidadoTextoEfectivo = saldoConsolidadoTexto(reserva, principal, monedaPagoSeleccionada);
   const tipoCambioPago = tipoCambioTexto(monedaPagoSeleccionada, principal);
   const impuestoPct = formaPagoSeleccionada?.config?.impuestoPorcentaje ?? 0;
-  const montoParaImpuesto = monto ? Number(monto) : saldoEnMonedaEfectiva?.total;
+  const montoParaImpuesto = monto ? Number(monto) : saldoConsolidadoEnMonedaEfectiva;
   const impuestoCalculado =
     impuestoPct && montoParaImpuesto ? Math.round(montoParaImpuesto * (impuestoPct / 100) * 100) / 100 : 0;
 
@@ -608,15 +654,24 @@ export default function ReservaDetallePage() {
         )}
       </div>
 
-      {reserva.estado !== "CANCELADA" && saldoPendienteTotal(reserva) > 0.01 && (
+      {reserva.estado !== "CANCELADA" && (
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">
             {pagos.length > 0 ? "Registrar abono" : "Confirmar reserva"}
           </h2>
           {pagos.length > 0 && (
             <p className="mb-3 text-xs text-gray-500">
-              Saldo pendiente: <span className="font-medium text-amber-700">{saldoTexto(reserva)}</span>. Puedes
-              registrar un pago total o un abono parcial.
+              {saldoPendienteTotal(reserva) > 0.01 ? (
+                <>
+                  Saldo pendiente: <span className="font-medium text-amber-700">{saldoTexto(reserva)}</span>. Puedes
+                  registrar un pago total o un abono parcial.
+                </>
+              ) : (
+                <>
+                  Esta reserva ya está pagada por completo (saldo: {saldoTexto(reserva)}). Aun así puedes registrar
+                  un cobro adicional (p. ej. impuestos u otros cargos no reflejados en los servicios).
+                </>
+              )}
             </p>
           )}
           <form onSubmit={handleConfirmar} className="space-y-3">
@@ -655,16 +710,24 @@ export default function ReservaDetallePage() {
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
                   placeholder={
-                    saldoEnMonedaEfectiva ? formatMonto(saldoEnMonedaEfectiva.total) : "0.00"
+                    saldoConsolidadoEnMonedaEfectiva !== undefined && saldoConsolidadoEnMonedaEfectiva > 0
+                      ? formatMonto(saldoConsolidadoEnMonedaEfectiva)
+                      : "0.00"
                   }
                   className="mt-1 w-full rounded border px-3 py-2 text-sm"
                 />
+                {/* Saldo consolidado: suma el saldo pendiente de TODAS las monedas de la reserva
+                    (no solo el de la moneda de este pago) para no subestimar lo que falta cuando
+                    hay servicios/abonos en más de una moneda. Se permite ingresar un monto mayor:
+                    el cobro puede incluir impuestos u otros cargos adicionales no reflejados en
+                    los servicios de la reserva. */}
                 <p className="mt-1 text-xs text-gray-400">
-                  Déjalo vacío para pagar el saldo pendiente completo
-                  {saldoEnMonedaEfectiva
-                    ? ` (${saldoEnMonedaEfectiva.monedaSimbolo}${formatMonto(saldoEnMonedaEfectiva.total)} ${saldoEnMonedaEfectiva.monedaCodigo})`
-                    : ""}
-                  .
+                  {saldoConsolidadoEnMonedaEfectiva !== undefined && saldoConsolidadoEnMonedaEfectiva > 0
+                    ? `Déjalo vacío para pagar el saldo pendiente completo${
+                        saldoConsolidadoTextoEfectivo ? ` (${saldoConsolidadoTextoEfectivo})` : ""
+                      }. `
+                    : "Esta reserva ya no tiene saldo pendiente. "}
+                  Puedes ingresar un monto mayor si corresponde a impuestos u otros cargos adicionales.
                 </p>
               </div>
               <div>
@@ -745,15 +808,22 @@ export default function ReservaDetallePage() {
         </div>
       )}
 
-      {reserva.estado !== "CANCELADA" && saldoPendienteTotal(reserva) > 0.01 && pasarelasPago.some((p) => p.activo) && (
+      {reserva.estado !== "CANCELADA" && pasarelasPago.some((p) => p.activo) && (
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Link de pago</h2>
           <p className="mb-3 text-xs text-gray-500">
-            Usa el monto y la moneda indicados arriba (o déjalos vacíos para el saldo pendiente completo
-            {saldoEnMonedaEfectiva
-              ? ` — ${saldoEnMonedaEfectiva.monedaSimbolo}${formatMonto(saldoEnMonedaEfectiva.total)} ${saldoEnMonedaEfectiva.monedaCodigo}`
-              : ""}
-            ).
+            {saldoConsolidadoEnMonedaEfectiva !== undefined && saldoConsolidadoEnMonedaEfectiva > 0 ? (
+              <>
+                Usa el monto y la moneda indicados arriba (o déjalos vacíos para el saldo pendiente completo
+                {saldoConsolidadoTextoEfectivo ? ` — ${saldoConsolidadoTextoEfectivo}` : ""}
+                ).
+              </>
+            ) : (
+              <>
+                Esta reserva ya no tiene saldo pendiente: indica manualmente el monto y la moneda si quieres
+                generar un link por un cargo adicional (p. ej. impuestos u otros cobros).
+              </>
+            )}
           </p>
           <button
             onClick={handleGenerarLink}

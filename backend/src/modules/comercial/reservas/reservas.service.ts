@@ -15,6 +15,7 @@ import {
   desglosePorMoneda,
   monedaReservaDe,
   MonedaPrincipalInfo,
+  MontoPorMoneda,
 } from '../../../common/utils/reserva-montos.util';
 import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad.util';
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
@@ -90,6 +91,28 @@ export class ReservasService {
     const moneda = await this.prisma.moneda.findFirst({ where: { agenciaId, esPrincipal: true } });
     if (!moneda) return null;
     return { id: moneda.id, codigo: moneda.codigo, simbolo: moneda.simbolo, tasaCambio: Number(moneda.tasaCambio) };
+  }
+
+  /**
+   * Convierte el saldo pendiente TOTAL de una reserva (ya desglosado por moneda por
+   * calcularSaldoPendiente, sin fraccionar artificialmente) a una moneda de destino específica,
+   * pasando por la moneda principal de la agencia como puente (misma convención que
+   * convertirAPrincipal/convertirMonto). Se usa para sugerir el monto por defecto de un pago y
+   * para no comparar solo contra el saldo de la moneda del pago en particular cuando los
+   * servicios o abonos previos están repartidos en más de una moneda (eso subestimaría el saldo
+   * real: ver el comentario en `confirmar`). Si no hay moneda principal configurada, no hay cómo
+   * convertir entre monedas y se cae de vuelta al saldo de esa moneda en particular, si existe.
+   */
+  private saldoPendienteConvertido(
+    saldo: MontoPorMoneda[],
+    monedaPrincipal: MonedaPrincipalInfo | null,
+    destino: MonedaPrincipalInfo,
+  ): number | undefined {
+    if (!monedaPrincipal) {
+      return saldo.find((s) => s.monedaId === destino.id)?.total;
+    }
+    const totalPrincipal = convertirAPrincipal(saldo, monedaPrincipal)?.total ?? 0;
+    return convertirMonto(totalPrincipal, monedaPrincipal.tasaCambio, destino.tasaCambio);
   }
 
   /**
@@ -852,9 +875,16 @@ export class ReservasService {
       );
     }
 
-    // Saldo pendiente = total de la reserva menos lo ya abonado (PAGADO), por moneda. El monto
-    // de este pago no puede superar el saldo pendiente de su moneda; si no se indica monto, se
-    // usa por defecto el saldo pendiente completo (pago total).
+    // Saldo pendiente = total de la reserva (todas sus monedas) menos lo ya abonado (PAGADO).
+    // Se calcula sobre el total completo de la reserva, no fraccionado por moneda: si los
+    // servicios o los abonos previos están repartidos en más de una moneda, comparar solo contra
+    // el saldo de la moneda de este pago en particular subestima lo que realmente falta (ver
+    // saldoPendienteConvertido). Si no se indica monto, se usa por defecto ese saldo completo,
+    // convertido a la moneda elegida para este pago.
+    //
+    // No se valida que el monto no supere el saldo pendiente: se permite cobrar de más (p. ej.
+    // impuestos, propinas u otros cargos adicionales no reflejados en los servicios de la
+    // reserva), así que un abono excedente es válido y no debe bloquearse.
     const montosReserva = desglosePorMoneda(reserva);
     const abonadoActual = calcularAbonado(reserva.pagos);
     const saldoActual = calcularSaldoPendiente(montosReserva, abonadoActual);
@@ -866,13 +896,18 @@ export class ReservasService {
         'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
       );
     }
+    const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
+    if (!monedaPago) throw new NotFoundException('Moneda no encontrada');
 
-    const saldoEnMoneda = saldoActual.find((s) => s.monedaId === monedaPagoId);
-    if (saldoEnMoneda && saldoEnMoneda.total <= 0.01) {
-      throw new BadRequestException('Esta reserva ya está pagada por completo en esa moneda');
-    }
+    const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+    const saldoPendienteEnMonedaPago = this.saldoPendienteConvertido(saldoActual, monedaPrincipal, {
+      id: monedaPago.id,
+      codigo: monedaPago.codigo,
+      simbolo: monedaPago.simbolo,
+      tasaCambio: Number(monedaPago.tasaCambio),
+    });
 
-    const monto = dto.monto ?? saldoEnMoneda?.total;
+    const monto = dto.monto ?? saldoPendienteEnMonedaPago;
     if (monto === undefined) {
       throw new BadRequestException(
         'Esta reserva incluye servicios en distintas monedas: indica el monto y la moneda de este pago',
@@ -880,29 +915,6 @@ export class ReservasService {
     }
     if (monto <= 0) {
       throw new BadRequestException('El monto del pago debe ser mayor a cero');
-    }
-
-    // Si la moneda del pago coincide con alguna de las monedas de la reserva se compara el
-    // saldo directo; si no, se convierte a la moneda principal de la agencia (si existe) para
-    // poder comparar. Si no hay nada contra qué comparar, se omite la validación.
-    if (saldoEnMoneda) {
-      if (monto > saldoEnMoneda.total + 0.01) {
-        throw new BadRequestException(
-          `El monto del pago (${monto}) supera el saldo pendiente (${saldoEnMoneda.total.toFixed(2)} ${saldoEnMoneda.monedaCodigo})`,
-        );
-      }
-    } else if (saldoActual.length > 0) {
-      const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
-      const monedaPago = await this.prisma.moneda.findFirst({ where: { id: monedaPagoId, agenciaId } });
-      if (monedaPrincipal && monedaPago) {
-        const saldoPrincipal = convertirAPrincipal(saldoActual, monedaPrincipal)?.total ?? 0;
-        const montoPrincipal = (monto * monedaPrincipal.tasaCambio) / Number(monedaPago.tasaCambio);
-        if (montoPrincipal > saldoPrincipal + 0.01) {
-          throw new BadRequestException(
-            `El monto del pago (equivalente a ${montoPrincipal.toFixed(2)} ${monedaPrincipal.codigo}) supera el saldo pendiente (${saldoPrincipal.toFixed(2)} ${monedaPrincipal.codigo})`,
-          );
-        }
-      }
     }
 
     const montoImpuesto = calcularMontoImpuesto(config.impuestoPorcentaje, monto);
