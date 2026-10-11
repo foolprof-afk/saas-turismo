@@ -9,6 +9,7 @@ import {
   monedaReservaDe,
 } from '../../../common/utils/reserva-montos.util';
 import { QrTokenService } from './qr-token.service';
+import { LinksCortosService } from '../../links-cortos/links-cortos.service';
 
 const VOUCHER_EXPIRA_HORAS_MARGEN = 24;
 
@@ -17,6 +18,7 @@ export class VouchersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly qrTokenService: QrTokenService,
+    private readonly linksCortosService: LinksCortosService,
   ) {}
 
   /**
@@ -35,7 +37,10 @@ export class VouchersService {
     );
 
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
-    const url = `${frontendUrl}/voucher/${token}`;
+    const validoHasta = new Date(fechaServicioFin.getTime() + VOUCHER_EXPIRA_HORAS_MARGEN * 3600 * 1000);
+    // Se acorta con la misma validez que el token del QR (validoHasta), tanto para el link de
+    // texto como para lo que se codifica en el propio QR (un QR más corto además escanea mejor).
+    const url = await this.linksCortosService.acortar(`${frontendUrl}/voucher/${token}`, validoHasta);
     const qrDataUrl = await QRCode.toDataURL(url);
 
     return this.prisma.voucher.create({
@@ -44,7 +49,7 @@ export class VouchersService {
         codigo: codigoReserva,
         qrUrl: qrDataUrl,
         url,
-        validoHasta: new Date(fechaServicioFin.getTime() + VOUCHER_EXPIRA_HORAS_MARGEN * 3600 * 1000),
+        validoHasta,
       },
     });
   }

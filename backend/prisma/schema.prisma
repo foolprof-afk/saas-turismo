@@ -923,3 +923,18 @@ model OrdenServicioItem {
 
   @@map("orden_servicio_items")
 }
+
+// URLs cortas para los enlaces públicos que se comparten con clientes (reserva-cliente, voucher,
+// cotizacion-cliente, cuadre-cliente), cuyo token autoverificable (HMAC/JWT) es largo. destino
+// guarda la URL completa original (con el token); el código corto solo redirige a ella, no
+// reemplaza su verificación de firma/expiración. No lleva agenciaId: es infraestructura genérica,
+// sin datos propios más allá del destino al que redirige.
+model LinkCorto {
+  id       String    @id @default(cuid())
+  codigo   String    @unique
+  destino  String
+  expiraEn DateTime?
+  creadoEn DateTime  @default(now())
+
+  @@map("links_cortos")
+}

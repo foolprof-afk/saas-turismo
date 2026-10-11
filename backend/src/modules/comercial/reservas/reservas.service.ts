@@ -21,6 +21,7 @@ import { resolverVendedorIdsPermitidos } from '../../../common/utils/visibilidad
 import { AuthenticatedUser } from '../../../common/decorators/current-user.decorator';
 import { firmarEnlaceCliente, verificarEnlaceCliente } from '../../../common/utils/enlace-cliente-token.util';
 import { firmarEnlaceReserva, verificarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
+import { LinksCortosService } from '../../links-cortos/links-cortos.service';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -42,6 +43,7 @@ export class ReservasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vouchersService: VouchersService,
+    private readonly linksCortosService: LinksCortosService,
   ) {}
 
   /**
@@ -960,7 +962,12 @@ export class ReservasService {
       fechaFin: filtros.fechaFin,
     });
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
-    const url = `${frontendUrl}/cuadre-cliente/${token}`;
+    // Se acorta con la misma validez que el token (30 días, ver enlace-cliente-token.util), para
+    // que el link corto no quede "vivo" más tiempo del que el token de destino sigue siendo válido.
+    const url = await this.linksCortosService.acortar(
+      `${frontendUrl}/cuadre-cliente/${token}`,
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    );
 
     return {
       url,
@@ -1001,7 +1008,12 @@ export class ReservasService {
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
     const token = firmarEnlaceReserva({ reservaId: id, agenciaId });
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
-    return { url: `${frontendUrl}/reserva-cliente/${token}` };
+    // Se acorta con la misma validez que el token (90 días, ver enlace-reserva-token.util).
+    const url = await this.linksCortosService.acortar(
+      `${frontendUrl}/reserva-cliente/${token}`,
+      new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    );
+    return { url };
   }
 
   /**

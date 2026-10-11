@@ -11,6 +11,7 @@ import { AuthenticatedUser } from '../../../common/decorators/current-user.decor
 import { convertirMonto } from '../../../common/utils/reserva-montos.util';
 import { firmarEnlaceCotizacion, verificarEnlaceCotizacion } from '../../../common/utils/enlace-cotizacion-token.util';
 import { firmarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
+import { LinksCortosService } from '../../links-cortos/links-cortos.service';
 
 export interface FiltrosCotizacion {
   estado?: string;
@@ -41,6 +42,7 @@ export class CotizacionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reservasService: ReservasService,
+    private readonly linksCortosService: LinksCortosService,
   ) {}
 
   private construirWhere(
@@ -388,7 +390,12 @@ export class CotizacionesService {
     if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
     const token = firmarEnlaceCotizacion({ cotizacionId: id, agenciaId });
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
-    return { url: `${frontendUrl}/cotizacion-cliente/${token}` };
+    // Se acorta con la misma validez que el token (90 días, ver enlace-cotizacion-token.util).
+    const url = await this.linksCortosService.acortar(
+      `${frontendUrl}/cotizacion-cliente/${token}`,
+      new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+    );
+    return { url };
   }
 
   /**
