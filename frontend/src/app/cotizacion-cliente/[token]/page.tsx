@@ -117,6 +117,12 @@ export default function CotizacionClientePublicaPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo validar el enlace"));
   }, [params.token]);
 
+  // Título de la pestaña: así se identifica fácil entre varios enlaces abiertos a la vez (ej.
+  // varias cotizaciones de distintos clientes).
+  useEffect(() => {
+    if (cotizacion) document.title = `Cotización - ${cotizacion.pasajeroResponsable}`;
+  }, [cotizacion]);
+
   async function handleConfirmar() {
     setConfirmError(null);
     setConfirmando(true);

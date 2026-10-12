@@ -95,6 +95,14 @@ export default function ReservaClientePublicaPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "No se pudo validar el enlace"));
   }, [params.token]);
 
+  // Título de la pestaña: así se identifica fácil entre varios enlaces abiertos a la vez (ej.
+  // varias reservas de distintos clientes).
+  useEffect(() => {
+    if (!reserva) return;
+    const responsable = reserva.pasajeros.find((p) => p.esResponsable)?.nombre;
+    document.title = responsable ? `Reserva - ${responsable}` : `Reserva ${reserva.codigoReserva}`;
+  }, [reserva]);
+
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
