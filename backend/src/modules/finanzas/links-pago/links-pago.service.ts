@@ -96,13 +96,18 @@ export class LinksPagoService {
 
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
     const config = (pasarela.config as Record<string, unknown>) ?? {};
-    const successUrl = (config.successUrl as string) || `${frontendUrl}/reservas/${reservaId}`;
-    const cancelUrl = (config.cancelUrl as string) || `${frontendUrl}/reservas/${reservaId}`;
 
     const linkPago = await this.prisma.linkPago.create({
       data: { agenciaId, reservaId, pasarelaPagoId: pasarela.id, monedaId, monto, urlPago: '', estado: 'PENDIENTE' },
     });
     try {
+      // El cliente vuelve del checkout a una página pública (sin login) que consulta el estado
+      // real del LinkPago, confirmado por el webhook del proveedor (ver PagoClienteController).
+      // No se usa /reservas/:id (backoffice) porque requiere sesión: el cliente que paga nunca
+      // está logueado y antes quedaba atrapado sin ningún mensaje de éxito/fallo.
+      const successUrl = (config.successUrl as string) || `${frontendUrl}/pago-cliente/${linkPago.id}?resultado=exitoso`;
+      const cancelUrl = (config.cancelUrl as string) || `${frontendUrl}/pago-cliente/${linkPago.id}?resultado=cancelado`;
+
       const { referenciaExterna, urlPago } = await provider.crearCheckout({
         urlBase: pasarela.urlBase ?? '',
         config,
@@ -118,6 +123,28 @@ export class LinksPagoService {
       await this.prisma.linkPago.delete({ where: { id: linkPago.id } });
       throw err;
     }
+  }
+
+  /**
+   * Estado público de un link de pago, consultado por PagoClienteController desde la página a la
+   * que el cliente vuelve tras pagar/cancelar en el checkout del proveedor. No filtra por
+   * agenciaId (como sí hacen los endpoints del backoffice): el id es un cuid no adivinable y el
+   * cliente que consulta esto nunca tiene sesión. Solo expone lo mínimo para mostrar un mensaje
+   * de confirmación, no el detalle de la reserva (eso ya se comparte, si corresponde, por el
+   * enlace reserva-cliente).
+   */
+  async obtenerPublico(id: string) {
+    const linkPago = await this.prisma.linkPago.findUnique({
+      where: { id },
+      include: { moneda: { select: { codigo: true, simbolo: true } }, reserva: { select: { codigoReserva: true } } },
+    });
+    if (!linkPago) throw new NotFoundException('Link de pago no encontrado');
+    return {
+      estado: linkPago.estado,
+      monto: linkPago.monto,
+      moneda: linkPago.moneda,
+      reserva: linkPago.reserva,
+    };
   }
 
   /** Si la agencia solo tiene una pasarela activa, se usa por defecto sin tener que elegirla. */
