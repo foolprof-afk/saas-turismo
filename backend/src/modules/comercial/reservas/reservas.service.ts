@@ -1040,9 +1040,14 @@ export class ReservasService {
         // origen. moneda/monedaId se incluyen para poder consolidar el total en una sola moneda
         // cuando la reserva es MULTIPLE (ver monedaReservaDe).
         cotizacion: { select: { notas: true, monedaId: true, moneda: true } },
+        // Último link de pago vigente (si hay más de uno PENDIENTE, p. ej. se generó uno nuevo sin
+        // cancelar el anterior, se muestra el más reciente): así el cliente ve un botón para pagar
+        // directamente desde su enlace de reserva, sin que el vendedor tenga que reenviárselo aparte.
+        linksPago: { where: { estado: 'PENDIENTE' }, orderBy: { createdAt: 'desc' }, take: 1, include: { moneda: true } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    const { linksPago, ...reservaSinLinksPago } = reserva;
     const montos = desglosePorMoneda(reserva);
     const monedaPrincipal = await this.obtenerMonedaPrincipal(reserva.agenciaId);
     const totalAbonado = calcularAbonado(reserva.pagos);
@@ -1053,7 +1058,14 @@ export class ReservasService {
     // la cotización de origen.
     const monedaReserva = monedaReservaDe(reserva);
     return {
-      ...reserva,
+      ...reservaSinLinksPago,
+      linkPagoPendiente: linksPago[0]
+        ? {
+            monto: linksPago[0].monto,
+            moneda: { codigo: linksPago[0].moneda.codigo, simbolo: linksPago[0].moneda.simbolo },
+            urlPago: linksPago[0].urlPago,
+          }
+        : null,
       montos,
       totalPrincipal: convertirAPrincipal(montos, monedaPrincipal),
       totalAbonado,
