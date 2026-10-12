@@ -174,7 +174,7 @@ export default function ReservaClientePublicaPage() {
           )}
         </div>
 
-        {reserva.linkPagoPendiente && (
+        {reserva.linkPagoPendiente && reserva.linkPagoPendiente.urlPago && Number(reserva.linkPagoPendiente.monto) > 0 && (
           <div className="rounded-lg border-2 border-green-200 bg-green-50 p-5 text-center">
             <h2 className="mb-1 text-sm font-semibold text-green-700">Pago pendiente</h2>
             <p className="mb-3 text-xl font-bold text-green-800">

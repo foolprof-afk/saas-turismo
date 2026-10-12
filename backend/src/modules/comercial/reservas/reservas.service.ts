@@ -1043,7 +1043,14 @@ export class ReservasService {
         // Último link de pago vigente (si hay más de uno PENDIENTE, p. ej. se generó uno nuevo sin
         // cancelar el anterior, se muestra el más reciente): así el cliente ve un botón para pagar
         // directamente desde su enlace de reserva, sin que el vendedor tenga que reenviárselo aparte.
-        linksPago: { where: { estado: 'PENDIENTE' }, orderBy: { createdAt: 'desc' }, take: 1, include: { moneda: true } },
+        // urlPago/monto > 0 excluye el registro a medio crear (ver LinksPagoService.generar: se crea
+        // con urlPago '' y se completa recién cuando el proveedor confirma el checkout).
+        linksPago: {
+          where: { estado: 'PENDIENTE', urlPago: { not: '' }, monto: { gt: 0 } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { moneda: true },
+        },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
