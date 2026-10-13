@@ -11,7 +11,7 @@ interface ServicioOpcion {
   id: string;
   nombre: string;
   precioCosto?: string | null;
-  moneda: { codigo: string; simbolo: string; tasaCambio: string };
+  moneda: { id: string; codigo: string; simbolo: string; tasaCambio: string };
 }
 
 interface Moneda {
@@ -34,6 +34,7 @@ interface LineaOrden {
   servicioId: string;
   cantidad: string;
   precioCosto: string;
+  monedaId: string;
   fechaServicio: string;
 }
 
@@ -49,6 +50,7 @@ interface OrdenServicioEditable {
     cantidad: number;
     precioCosto: string;
     fechaServicio: string;
+    moneda: { id: string; codigo: string; simbolo: string };
     servicio: { moneda: { codigo: string; simbolo: string } };
   }[];
 }
@@ -81,6 +83,7 @@ export default function EditarOrdenServicioPage() {
             servicioId: i.servicioId,
             cantidad: String(i.cantidad),
             precioCosto: i.precioCosto,
+            monedaId: i.moneda.id,
             fechaServicio: i.fechaServicio.slice(0, 10),
           })),
         );
@@ -94,7 +97,13 @@ export default function EditarOrdenServicioPage() {
     if (!primero) return;
     setItems([
       ...items,
-      { servicioId: primero.id, cantidad: "1", precioCosto: primero.precioCosto ?? "", fechaServicio: "" },
+      {
+        servicioId: primero.id,
+        cantidad: "1",
+        precioCosto: primero.precioCosto ?? "",
+        monedaId: primero.moneda.id,
+        fechaServicio: "",
+      },
     ]);
   };
 
@@ -102,41 +111,49 @@ export default function EditarOrdenServicioPage() {
     setItems(items.map((l, i) => (i === index ? { ...l, ...cambios } : l)));
   };
 
+  // Cambiar de servicio recarga el precio costo y la moneda por defecto del nuevo servicio
+  // (ambos siguen siendo editables manualmente después).
   const cambiarServicioDeLinea = (index: number, servicioId: string) => {
     const servicio = servicios.find((s) => s.id === servicioId);
-    actualizarLinea(index, { servicioId, precioCosto: servicio?.precioCosto ?? "" });
+    actualizarLinea(index, {
+      servicioId,
+      precioCosto: servicio?.precioCosto ?? "",
+      monedaId: servicio?.moneda.id ?? "",
+    });
   };
 
   const quitarLinea = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
   };
 
+  // Cada línea puede quedar en una moneda distinta a la del servicio (el vendedor la puede
+  // cambiar manualmente), así que los totales se agrupan por item.monedaId, no por la moneda
+  // del servicio.
   const totalPorMoneda = () => {
     const porMoneda = new Map<string, { total: number; simbolo: string }>();
     for (const item of items) {
-      const servicio = servicios.find((s) => s.id === item.servicioId);
-      if (!servicio || item.precioCosto === "") continue;
-      const entry = porMoneda.get(servicio.moneda.codigo) ?? { total: 0, simbolo: servicio.moneda.simbolo };
+      const moneda = monedas.find((m) => m.id === item.monedaId);
+      if (!moneda || item.precioCosto === "") continue;
+      const entry = porMoneda.get(moneda.codigo) ?? { total: 0, simbolo: moneda.simbolo };
       entry.total += Number(item.precioCosto) * (Number(item.cantidad) || 0);
-      porMoneda.set(servicio.moneda.codigo, entry);
+      porMoneda.set(moneda.codigo, entry);
     }
     return Array.from(porMoneda.entries()).map(([codigo, v]) => ({ codigo, ...v }));
   };
 
   const monedaPrincipal = monedas.find((m) => m.esPrincipal);
 
-  // Cada línea queda en la moneda propia del servicio (igual que en cotizaciones), ya que una
-  // orden puede incluir servicios contratados en monedas distintas. Este total adicional
-  // convierte todo a la moneda predeterminada (principal) de la agencia usando su tasaCambio,
-  // para tener una referencia única de cuánto representa la orden en conjunto.
+  // Este total adicional convierte todo a la moneda predeterminada (principal) de la agencia
+  // usando su tasaCambio, para tener una referencia única de cuánto representa la orden en
+  // conjunto, sin importar en qué moneda quedó cada línea.
   const totalConvertidoPrincipal = () => {
     if (!monedaPrincipal) return null;
     let total = 0;
     for (const item of items) {
-      const servicio = servicios.find((s) => s.id === item.servicioId);
-      if (!servicio || item.precioCosto === "") continue;
+      const moneda = monedas.find((m) => m.id === item.monedaId);
+      if (!moneda || item.precioCosto === "") continue;
       const monto = Number(item.precioCosto) * (Number(item.cantidad) || 0);
-      total += convertirMonto(monto, Number(servicio.moneda.tasaCambio), Number(monedaPrincipal.tasaCambio));
+      total += convertirMonto(monto, Number(moneda.tasaCambio), Number(monedaPrincipal.tasaCambio));
     }
     return total;
   };
@@ -163,6 +180,7 @@ export default function EditarOrdenServicioPage() {
           cantidad: Number(l.cantidad),
           fechaServicio: l.fechaServicio,
           precioCosto: l.precioCosto !== "" ? Number(l.precioCosto) : undefined,
+          monedaId: l.monedaId || undefined,
         })),
       });
       router.push(`/ordenes-servicio/${params.id}`);
@@ -214,48 +232,62 @@ export default function EditarOrdenServicioPage() {
           </div>
 
           {items.map((linea, index) => {
-            const servicio = servicios.find((s) => s.id === linea.servicioId);
             return (
-              <div
-                key={index}
-                className="grid grid-cols-1 gap-3 rounded border p-3 sm:grid-cols-[1fr_140px_100px_140px_auto]"
-              >
+              <div key={index} className="space-y-2 rounded border p-3">
                 <BuscadorServicio
                   required
                   servicios={servicios.map((s) => ({ id: s.id, nombre: s.nombre, etiqueta: s.moneda.codigo }))}
                   value={linea.servicioId}
                   onChange={(sid) => cambiarServicioDeLinea(index, sid)}
-                  className="rounded border px-2 py-1.5 text-sm"
+                  className="w-full rounded border px-3 py-2.5 text-base"
                 />
-                <input
-                  type="date"
-                  required
-                  value={linea.fechaServicio}
-                  onChange={(e) => actualizarLinea(index, { fechaServicio: e.target.value })}
-                  className="rounded border px-2 py-1.5 text-sm"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={linea.cantidad}
-                  onChange={(e) => actualizarLinea(index, { cantidad: e.target.value })}
-                  placeholder="Cant."
-                  className="rounded border px-2 py-1.5 text-sm"
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={linea.precioCosto}
-                  onChange={(e) => actualizarLinea(index, { precioCosto: e.target.value })}
-                  placeholder={`Precio costo ${servicio?.moneda.codigo ?? ""}`}
-                  className="rounded border px-2 py-1.5 text-sm"
-                />
-                <button type="button" onClick={() => quitarLinea(index)} className="text-sm text-red-600 hover:underline">
-                  Quitar
-                </button>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[140px_100px_110px_140px_auto]">
+                  <input
+                    type="date"
+                    required
+                    value={linea.fechaServicio}
+                    onChange={(e) => actualizarLinea(index, { fechaServicio: e.target.value })}
+                    className="rounded border px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={linea.cantidad}
+                    onChange={(e) => actualizarLinea(index, { cantidad: e.target.value })}
+                    placeholder="Cant."
+                    className="rounded border px-2 py-1.5 text-sm"
+                  />
+                  <select
+                    required
+                    value={linea.monedaId}
+                    onChange={(e) => actualizarLinea(index, { monedaId: e.target.value })}
+                    className="rounded border px-2 py-1.5 text-sm"
+                  >
+                    {monedas.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.codigo}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={linea.precioCosto}
+                    onChange={(e) => actualizarLinea(index, { precioCosto: e.target.value })}
+                    placeholder="Precio costo"
+                    className="rounded border px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => quitarLinea(index)}
+                    className="col-span-2 text-sm text-red-600 hover:underline sm:col-span-1 sm:self-center"
+                  >
+                    Quitar
+                  </button>
+                </div>
               </div>
             );
           })}

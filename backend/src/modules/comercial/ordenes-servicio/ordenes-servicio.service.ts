@@ -59,15 +59,22 @@ export class OrdenesServicioService {
 
   /**
    * Valida que cada item pertenezca a un servicio de la agencia, y congela precioCosto/monedaId
-   * tomándolos del servicio salvo que se haya indicado un precioCosto manual para esa orden
-   * puntual. No se exige que el servicio esté asignado al proveedor de la orden: un mismo
-   * servicio puede ser ejecutado por más de un proveedor, así que el proveedor de la orden es
-   * independiente del proveedorId "por defecto" que tenga cada Servicio (ver Servicio.proveedorId,
-   * que solo sirve como referencia/precio costo por defecto).
+   * tomándolos del servicio salvo que se haya indicado un precioCosto y/o monedaId manual para
+   * esa orden puntual (p. ej. el mismo servicio se pactó en otra moneda con este proveedor). No
+   * se exige que el servicio esté asignado al proveedor de la orden: un mismo servicio puede ser
+   * ejecutado por más de un proveedor, así que el proveedor de la orden es independiente del
+   * proveedorId "por defecto" que tenga cada Servicio (ver Servicio.proveedorId, que solo sirve
+   * como referencia/precio costo por defecto).
    */
   private async construirItems(agenciaId: string, items: OrdenServicioItemDto[]) {
     const servicioIds = items.map((i) => i.servicioId);
-    const servicios = await this.prisma.servicio.findMany({ where: { id: { in: servicioIds }, agenciaId } });
+    const monedaIds = Array.from(new Set(items.filter((i) => i.monedaId).map((i) => i.monedaId as string)));
+    const [servicios, monedas] = await Promise.all([
+      this.prisma.servicio.findMany({ where: { id: { in: servicioIds }, agenciaId } }),
+      monedaIds.length
+        ? this.prisma.moneda.findMany({ where: { id: { in: monedaIds }, agenciaId } })
+        : Promise.resolve([]),
+    ]);
 
     return items.map((item) => {
       const servicio = servicios.find((s) => s.id === item.servicioId);
@@ -78,11 +85,17 @@ export class OrdenesServicioService {
           `El servicio "${servicio.nombre}" no tiene precio costo definido; indícalo manualmente en la orden`,
         );
       }
+      let monedaId = servicio.monedaId;
+      if (item.monedaId) {
+        const moneda = monedas.find((m) => m.id === item.monedaId);
+        if (!moneda) throw new NotFoundException(`Moneda ${item.monedaId} no encontrada`);
+        monedaId = moneda.id;
+      }
       return {
         servicioId: servicio.id,
         cantidad: item.cantidad,
         precioCosto,
-        monedaId: servicio.monedaId,
+        monedaId,
         fechaServicio: new Date(item.fechaServicio),
       };
     });

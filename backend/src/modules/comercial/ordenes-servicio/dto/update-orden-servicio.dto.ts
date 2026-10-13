@@ -33,6 +33,12 @@ export class UpdateOrdenServicioItemDto {
   @IsNumber()
   @Min(0)
   precioCosto?: number;
+
+  // Sobreescribe la moneda del servicio para esta orden puntual (ver OrdenesServicioService.
+  // construirItems). Si no se envía, se usa Servicio.monedaId.
+  @IsOptional()
+  @IsString()
+  monedaId?: string;
 }
 
 /**
