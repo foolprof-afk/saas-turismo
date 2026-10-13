@@ -69,11 +69,11 @@ export class OrdenesServicioService {
   private async construirItems(agenciaId: string, items: OrdenServicioItemDto[]) {
     const servicioIds = items.map((i) => i.servicioId);
     const monedaIds = Array.from(new Set(items.filter((i) => i.monedaId).map((i) => i.monedaId as string)));
+    // in: [] simplemente no matchea nada, así que llamar siempre a findMany evita tener que
+    // ramificar con una promesa resuelta a mano (y el problema de tipos que eso traía).
     const [servicios, monedas] = await Promise.all([
       this.prisma.servicio.findMany({ where: { id: { in: servicioIds }, agenciaId } }),
-      monedaIds.length
-        ? this.prisma.moneda.findMany({ where: { id: { in: monedaIds }, agenciaId } })
-        : Promise.resolve([]),
+      this.prisma.moneda.findMany({ where: { id: { in: monedaIds }, agenciaId } }),
     ]);
 
     return items.map((item) => {
