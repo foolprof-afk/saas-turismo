@@ -613,21 +613,36 @@ export class ReservasService {
         'Esta reserva ya tiene un pago registrado: no se puede cambiar el precio ni la moneda',
       );
     }
+    // Se obtienen una sola vez las líneas actuales del itinerario MULTIPLE (con el nombre del
+    // servicio), tanto para la validación de "confirmada" de abajo como para el diff línea por
+    // línea que registra el historial más adelante (ver cambios.push en el bloque MULTIPLE).
+    let lineasActualesMultiple: {
+      servicioId: string;
+      fecha: Date;
+      horaInicio: string;
+      precio: Prisma.Decimal | null;
+      servicio: { nombre: string };
+    }[] = [];
+    if (reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
+      const itinerarioActual = await this.prisma.itinerario.findFirst({
+        where: { reservaId: id },
+        include: { dias: { include: { servicios: { include: { servicio: true } } }, orderBy: { numeroDia: 'asc' } } },
+      });
+      lineasActualesMultiple = (itinerarioActual?.dias ?? []).flatMap((dia) =>
+        dia.servicios.map((s) => ({ ...s, fecha: dia.fecha })),
+      );
+    }
+
     if (pagoRegistrado && reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
       // Confirmada: solo se permite reprogramar fecha/hora de cada línea, no el servicio ni el
       // precio (eso dejaría el pago desalineado) ni agregar/quitar líneas.
-      const itinerarioActual = await this.prisma.itinerario.findFirst({
-        where: { reservaId: id },
-        include: { dias: { include: { servicios: true }, orderBy: { numeroDia: 'asc' } } },
-      });
-      const lineasActuales = (itinerarioActual?.dias ?? []).flatMap((dia) => dia.servicios);
-      if (lineasActuales.length !== dto.serviciosMultiples.length) {
+      if (lineasActualesMultiple.length !== dto.serviciosMultiples.length) {
         throw new BadRequestException(
           'Esta reserva ya tiene un pago registrado: no se pueden agregar ni quitar servicios del itinerario, solo reprogramar sus fechas y horas',
         );
       }
       dto.serviciosMultiples.forEach((linea, i) => {
-        const actual = lineasActuales[i];
+        const actual = lineasActualesMultiple[i];
         const precioCoincide = linea.precio === undefined || Number(linea.precio) === Number(actual.precio);
         if (linea.servicioId !== actual.servicioId || !precioCoincide) {
           throw new BadRequestException(
@@ -651,7 +666,7 @@ export class ReservasService {
 
     if (reserva.tipo === 'MULTIPLE' && dto.serviciosMultiples?.length) {
       const lineasMultiples: {
-        servicio: { id: string; monedaId: string };
+        servicio: { id: string; monedaId: string; nombre: string };
         fecha: Date;
         horaInicio: string;
         precio: number;
@@ -667,7 +682,7 @@ export class ReservasService {
           );
         }
         lineasMultiples.push({
-          servicio: { id: s.id, monedaId: s.monedaId },
+          servicio: { id: s.id, monedaId: s.monedaId, nombre: s.nombre },
           fecha: new Date(linea.fecha),
           horaInicio: linea.horaInicio ?? '00:00',
           precio,
@@ -704,11 +719,56 @@ export class ReservasService {
           },
         },
       });
-      cambios.push(
-        pagoRegistrado
-          ? 'Se reprogramaron las fechas/horas de los servicios del itinerario'
-          : 'Se actualizaron los servicios del itinerario (fechas, horas y/o precios)',
-      );
+      // Diff línea por línea (igual que OrdenServicioHistorial): se registra qué servicios se
+      // agregaron, quitaron o cambiaron de fecha/precio, en vez de un mensaje genérico. Como las
+      // líneas de itinerario no traen un id propio enviado por el cliente, se emparejan por
+      // servicioId en el mismo orden en que aparecen (si hay varias líneas del mismo servicio).
+      type LineaDiff = { servicioId: string; nombre: string; fecha: Date; precio: number };
+      const viejasNormalizadas: LineaDiff[] = lineasActualesMultiple.map((l) => ({
+        servicioId: l.servicioId,
+        nombre: l.servicio.nombre,
+        fecha: l.fecha,
+        precio: Number(l.precio),
+      }));
+      const nuevasNormalizadas: LineaDiff[] = lineasMultiples.map((l) => ({
+        servicioId: l.servicio.id,
+        nombre: l.servicio.nombre,
+        fecha: l.fecha,
+        precio: l.precio,
+      }));
+      const agruparPorServicio = (lista: LineaDiff[]) => {
+        const mapa = new Map<string, LineaDiff[]>();
+        for (const item of lista) {
+          const arr = mapa.get(item.servicioId) ?? [];
+          arr.push(item);
+          mapa.set(item.servicioId, arr);
+        }
+        return mapa;
+      };
+      const viejasPorServicio = agruparPorServicio(viejasNormalizadas);
+      const nuevasPorServicio = agruparPorServicio(nuevasNormalizadas);
+      for (const sid of new Set([...viejasPorServicio.keys(), ...nuevasPorServicio.keys()])) {
+        const viejas = viejasPorServicio.get(sid) ?? [];
+        const nuevas = nuevasPorServicio.get(sid) ?? [];
+        const nombre = viejas[0]?.nombre ?? nuevas[0]?.nombre ?? sid;
+        const pares = Math.min(viejas.length, nuevas.length);
+        for (let i = 0; i < pares; i++) {
+          const fechaVieja = viejas[i].fecha.toISOString().slice(0, 10);
+          const fechaNueva = nuevas[i].fecha.toISOString().slice(0, 10);
+          if (fechaVieja !== fechaNueva) {
+            cambios.push(`Se cambió la fecha de "${nombre}" de ${fechaVieja} a ${fechaNueva}`);
+          }
+          if (viejas[i].precio !== nuevas[i].precio) {
+            cambios.push(`Se cambió el precio de "${nombre}" de ${viejas[i].precio} a ${nuevas[i].precio}`);
+          }
+        }
+        for (let i = pares; i < viejas.length; i++) {
+          cambios.push(`Se eliminó el servicio "${nombre}" del ${viejas[i].fecha.toISOString().slice(0, 10)}`);
+        }
+        for (let i = pares; i < nuevas.length; i++) {
+          cambios.push(`Se agregó el servicio "${nombre}" el ${nuevas[i].fecha.toISOString().slice(0, 10)}`);
+        }
+      }
     } else {
       if (dto.fechaServicioInicio) fechaInicio = new Date(dto.fechaServicioInicio);
       fechaFin = dto.fechaServicioFin

@@ -309,9 +309,68 @@ export class CotizacionesService {
         dto.cantidadPersonas ?? cotizacion.cantidadPersonas,
         dto.fechaServicio ? new Date(dto.fechaServicio) : cotizacion.fechaServicio,
       );
+
+      // Diff línea por línea (igual que OrdenServicioHistorial) para registrar en el historial
+      // qué servicios se agregaron, quitaron o cambiaron de fecha/precio, en vez de un mensaje
+      // genérico. Como CotizacionItemDto no trae un id de línea, se emparejan por servicioId en
+      // el mismo orden en que aparecen (si hay varias líneas del mismo servicio).
+      const itemsExistentes = await this.prisma.cotizacionItem.findMany({
+        where: { cotizacionId: id },
+        include: { servicio: true },
+        orderBy: { orden: 'asc' },
+      });
+      type LineaDiff = { servicioId: string; nombre: string; fecha: Date; precio: number };
+      const servicioIdsNuevos = Array.from(new Set(itemsData.map((i) => i.servicioId)));
+      const serviciosNuevos = await this.prisma.servicio.findMany({ where: { id: { in: servicioIdsNuevos } } });
+      const nombrePorIdNuevo = new Map(serviciosNuevos.map((s) => [s.id, s.nombre]));
+      const viejasNormalizadas: LineaDiff[] = itemsExistentes.map((i) => ({
+        servicioId: i.servicioId,
+        nombre: i.servicio.nombre,
+        fecha: i.fecha,
+        precio: Number(i.precioUnitario),
+      }));
+      const nuevasNormalizadas: LineaDiff[] = itemsData.map((i) => ({
+        servicioId: i.servicioId,
+        nombre: nombrePorIdNuevo.get(i.servicioId) ?? i.servicioId,
+        fecha: i.fecha,
+        precio: i.precioUnitario,
+      }));
+      const agruparPorServicio = (lista: LineaDiff[]) => {
+        const mapa = new Map<string, LineaDiff[]>();
+        for (const item of lista) {
+          const arr = mapa.get(item.servicioId) ?? [];
+          arr.push(item);
+          mapa.set(item.servicioId, arr);
+        }
+        return mapa;
+      };
+      const viejasPorServicio = agruparPorServicio(viejasNormalizadas);
+      const nuevasPorServicio = agruparPorServicio(nuevasNormalizadas);
+      for (const sid of new Set([...viejasPorServicio.keys(), ...nuevasPorServicio.keys()])) {
+        const viejas = viejasPorServicio.get(sid) ?? [];
+        const nuevas = nuevasPorServicio.get(sid) ?? [];
+        const nombre = viejas[0]?.nombre ?? nuevas[0]?.nombre ?? sid;
+        const pares = Math.min(viejas.length, nuevas.length);
+        for (let i = 0; i < pares; i++) {
+          const fechaVieja = viejas[i].fecha.toISOString().slice(0, 10);
+          const fechaNueva = nuevas[i].fecha.toISOString().slice(0, 10);
+          if (fechaVieja !== fechaNueva) {
+            cambios.push(`Se cambió la fecha de "${nombre}" de ${fechaVieja} a ${fechaNueva}`);
+          }
+          if (viejas[i].precio !== nuevas[i].precio) {
+            cambios.push(`Se cambió el precio de "${nombre}" de ${viejas[i].precio} a ${nuevas[i].precio}`);
+          }
+        }
+        for (let i = pares; i < viejas.length; i++) {
+          cambios.push(`Se eliminó el servicio "${nombre}" del ${viejas[i].fecha.toISOString().slice(0, 10)}`);
+        }
+        for (let i = pares; i < nuevas.length; i++) {
+          cambios.push(`Se agregó el servicio "${nombre}" el ${nuevas[i].fecha.toISOString().slice(0, 10)}`);
+        }
+      }
+
       await this.prisma.cotizacionItem.deleteMany({ where: { cotizacionId: id } });
       data.items = { create: itemsData };
-      cambios.push('Se actualizaron los servicios de la cotización');
     } else if (listaPrecioCambio) {
       const factor = 1 + Number(listaPrecio?.porcentajeAdicional ?? 0) / 100;
       const items = await this.prisma.cotizacionItem.findMany({
