@@ -64,13 +64,13 @@ export class ReservasController {
     @Param('id') id: string,
     @Body() dto: UpdateReservaDto,
   ) {
-    return this.reservasService.actualizar(user.agenciaId, id, dto);
+    return this.reservasService.actualizar(user.agenciaId, id, user.userId, dto);
   }
 
   @Patch(':id/cancelar')
   @Roles('admin', 'vendedor')
   cancelar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.reservasService.cancelar(user.agenciaId, id);
+    return this.reservasService.cancelar(user.agenciaId, id, user.userId);
   }
 
   @Delete(':id')
@@ -87,6 +87,6 @@ export class ReservasController {
     @Param('id') id: string,
     @Body() dto: ConfirmarReservaDto,
   ) {
-    return this.reservasService.confirmar(user.agenciaId, id, dto);
+    return this.reservasService.confirmar(user.agenciaId, id, user.userId, dto);
   }
 }

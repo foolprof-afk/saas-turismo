@@ -51,7 +51,7 @@ export class CotizacionesController {
   @Patch(':id/cancelar')
   @Roles('admin', 'vendedor')
   cancelar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
-    return this.cotizacionesService.cancelar(user.agenciaId, id);
+    return this.cotizacionesService.cancelar(user.agenciaId, id, user.userId);
   }
 
   @Patch(':id/confirmar')

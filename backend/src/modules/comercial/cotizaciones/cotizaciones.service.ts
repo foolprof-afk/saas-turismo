@@ -35,6 +35,7 @@ const INCLUDE_COTIZACION = {
     include: { servicio: true, moneda: true },
     orderBy: [{ fecha: 'asc' }, { orden: 'asc' }] as Prisma.CotizacionItemOrderByWithRelationInput[],
   },
+  historial: { include: { usuario: { select: { nombre: true } } }, orderBy: { fecha: 'desc' as const } },
 };
 
 @Injectable()
@@ -235,6 +236,10 @@ export class CotizacionesService {
       },
     });
 
+    await this.prisma.cotizacionHistorial.create({
+      data: { cotizacionId: cotizacion.id, usuarioId: vendedorId, descripcion: 'Se creó la cotización' },
+    });
+
     return this.findOne(agenciaId, cotizacion.id, user);
   }
 
@@ -251,24 +256,39 @@ export class CotizacionesService {
     }
 
     const data: Prisma.CotizacionUncheckedUpdateInput = {};
-    if (dto.cantidadPersonas !== undefined) data.cantidadPersonas = dto.cantidadPersonas;
-    if (dto.pasajeroResponsable !== undefined) data.pasajeroResponsable = dto.pasajeroResponsable;
+    const cambios: string[] = [];
+    if (dto.cantidadPersonas !== undefined && dto.cantidadPersonas !== cotizacion.cantidadPersonas) {
+      data.cantidadPersonas = dto.cantidadPersonas;
+      cambios.push(`Se cambió la cantidad de personas a ${dto.cantidadPersonas}`);
+    }
+    if (dto.pasajeroResponsable !== undefined && dto.pasajeroResponsable !== cotizacion.pasajeroResponsable) {
+      data.pasajeroResponsable = dto.pasajeroResponsable;
+      cambios.push(`Se cambió el pasajero responsable a "${dto.pasajeroResponsable}"`);
+    }
     if (dto.documentoResponsable !== undefined) data.documentoResponsable = dto.documentoResponsable;
     if (dto.telefonoResponsable !== undefined) data.telefonoResponsable = dto.telefonoResponsable;
-    if (dto.fechaServicio !== undefined) data.fechaServicio = new Date(dto.fechaServicio);
-    if (dto.notas !== undefined) data.notas = dto.notas;
+    if (dto.fechaServicio !== undefined) {
+      data.fechaServicio = new Date(dto.fechaServicio);
+      cambios.push(`Se cambió la fecha de servicio a ${dto.fechaServicio.slice(0, 10)}`);
+    }
+    if (dto.notas !== undefined && dto.notas !== cotizacion.notas) {
+      data.notas = dto.notas;
+      cambios.push('Se actualizaron las notas de la cotización');
+    }
 
     let listaPrecioCambio = false;
     let listaPrecio: { porcentajeAdicional: Prisma.Decimal } | null = null;
-    if (dto.listaPrecioId !== undefined) {
+    if (dto.listaPrecioId !== undefined && dto.listaPrecioId !== cotizacion.listaPrecioId) {
       listaPrecioCambio = true;
       listaPrecio = dto.listaPrecioId ? await this.resolverListaPrecio(agenciaId, user, dto.listaPrecioId) : null;
       data.listaPrecioId = listaPrecio ? dto.listaPrecioId : null;
+      cambios.push('Se cambió la lista de precios de la cotización');
     }
 
-    if (dto.monedaId !== undefined) {
+    if (dto.monedaId !== undefined && dto.monedaId !== cotizacion.monedaId) {
       const moneda = await this.resolverMoneda(agenciaId, dto.monedaId);
       data.monedaId = moneda?.id ?? null;
+      cambios.push('Se cambió la moneda de la cotización');
     }
 
     if (dto.items?.length) {
@@ -291,6 +311,7 @@ export class CotizacionesService {
       );
       await this.prisma.cotizacionItem.deleteMany({ where: { cotizacionId: id } });
       data.items = { create: itemsData };
+      cambios.push('Se actualizaron los servicios de la cotización');
     } else if (listaPrecioCambio) {
       const factor = 1 + Number(listaPrecio?.porcentajeAdicional ?? 0) / 100;
       const items = await this.prisma.cotizacionItem.findMany({
@@ -308,13 +329,24 @@ export class CotizacionesService {
     }
 
     await this.prisma.cotizacion.update({ where: { id }, data });
+
+    if (cambios.length) {
+      await this.prisma.cotizacionHistorial.createMany({
+        data: cambios.map((descripcion) => ({ cotizacionId: id, usuarioId: user.userId, descripcion })),
+      });
+    }
+
     return this.findOne(agenciaId, id, user);
   }
 
-  async cancelar(agenciaId: string, id: string) {
+  async cancelar(agenciaId: string, id: string, usuarioId: string) {
     const cotizacion = await this.prisma.cotizacion.findFirst({ where: { id, agenciaId } });
     if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
-    return this.prisma.cotizacion.update({ where: { id }, data: { estado: 'CANCELADA' } });
+    const actualizada = await this.prisma.cotizacion.update({ where: { id }, data: { estado: 'CANCELADA' } });
+    await this.prisma.cotizacionHistorial.create({
+      data: { cotizacionId: id, usuarioId, descripcion: 'Se canceló la cotización' },
+    });
+    return actualizada;
   }
 
   /**
@@ -375,6 +407,14 @@ export class CotizacionesService {
     await this.prisma.cotizacion.update({
       where: { id },
       data: { estado: 'CONFIRMADA', reservaId: reserva.id },
+    });
+
+    await this.prisma.cotizacionHistorial.create({
+      data: {
+        cotizacionId: id,
+        usuarioId: user?.userId ?? null,
+        descripcion: `Se confirmó la cotización, se generó la reserva ${reserva.codigoReserva}`,
+      },
     });
 
     return this.findOne(agenciaId, id, user);

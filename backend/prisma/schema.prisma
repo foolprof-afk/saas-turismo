@@ -171,6 +171,8 @@ model Usuario {
   cotizacionesVendidas     Cotizacion[]             @relation("VendedorCotizacion")
   ordenesServicioEmitidas  OrdenServicio[]
   ordenesServicioHistorial OrdenServicioHistorial[]
+  reservaHistorial         ReservaHistorial[]
+  cotizacionHistorial      CotizacionHistorial[]
 
   @@unique([agenciaId, email])
   @@map("usuarios")
@@ -241,6 +243,7 @@ model Cotizacion {
   moneda      Moneda?          @relation(fields: [monedaId], references: [id])
   reserva     Reserva?         @relation(fields: [reservaId], references: [id])
   items       CotizacionItem[]
+  historial   CotizacionHistorial[]
 
   @@map("cotizaciones")
 }
@@ -274,6 +277,23 @@ model CotizacionItem {
   moneda     Moneda     @relation(fields: [monedaId], references: [id])
 
   @@map("cotizacion_items")
+}
+
+// Bitácora de cambios visible en la pantalla de detalle de la cotización: confirmaciones,
+// modificaciones y quién las hizo, con fecha/hora (ver OrdenServicioHistorial, mismo patrón).
+// usuarioId es opcional porque confirmarPublica (el cliente confirma desde el enlace público,
+// sin sesión) también registra una entrada, sin un usuario interno asociado.
+model CotizacionHistorial {
+  id           String   @id @default(cuid())
+  cotizacionId String
+  usuarioId    String?
+  descripcion  String
+  fecha        DateTime @default(now())
+
+  cotizacion Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  usuario    Usuario?   @relation(fields: [usuarioId], references: [id])
+
+  @@map("cotizacion_historial")
 }
 
 // Registro de auditoria: login, acceso a pantallas por menu, y creacion/modificacion/eliminacion
@@ -368,6 +388,7 @@ model Reserva {
   pagos      Pago[]
   cotizacion Cotizacion?
   linksPago  LinkPago[]
+  historial  ReservaHistorial[]
 
   @@map("reservas")
 }
@@ -404,6 +425,24 @@ model Voucher {
   reserva Reserva @relation(fields: [reservaId], references: [id], onDelete: Cascade)
 
   @@map("vouchers")
+}
+
+// Bitácora de cambios visible en la pantalla de detalle de la reserva: confirmaciones,
+// modificaciones y quién las hizo, con fecha/hora (ver OrdenServicioHistorial, mismo patrón).
+// usuarioId es opcional porque las entradas que se originan de una acción pública/del cliente
+// (ej. la cotización se confirma desde su enlace público, ver CotizacionesService.confirmarPublica)
+// no tienen un usuario interno asociado.
+model ReservaHistorial {
+  id          String   @id @default(cuid())
+  reservaId   String
+  usuarioId   String?
+  descripcion String
+  fecha       DateTime @default(now())
+
+  reserva Reserva  @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("reserva_historial")
 }
 
 // ----------------------------------------------------------------------------

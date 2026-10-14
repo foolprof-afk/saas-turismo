@@ -29,6 +29,6 @@ export class PagosController {
       comprobanteUrl?: string;
     },
   ) {
-    return this.pagosService.registrar(user.agenciaId, reservaId, data);
+    return this.pagosService.registrar(user.agenciaId, reservaId, user.userId, data);
   }
 }

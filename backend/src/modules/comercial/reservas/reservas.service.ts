@@ -328,6 +328,7 @@ export class ReservasService {
         // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
         // origen (muchas reservas nacen de una cotización que ya documentaba acuerdos/instrucciones).
         cotizacion: { select: { notas: true } },
+        historial: { include: { usuario: { select: { nombre: true } } }, orderBy: { fecha: 'desc' } },
       },
     });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
@@ -513,6 +514,10 @@ export class ReservasService {
         },
       });
 
+      await tx.reservaHistorial.create({
+        data: { reservaId: nuevaReserva.id, usuarioId: vendedorId, descripcion: 'Se creó la reserva' },
+      });
+
       if (plantilla) {
         await tx.itinerario.create({
           data: {
@@ -595,7 +600,7 @@ export class ReservasService {
    * cambiar el tipo de reserva ni el servicio o plantilla elegidos (eso es una decisión de
    * creación, no de edición).
    */
-  async actualizar(agenciaId: string, id: string, dto: UpdateReservaDto) {
+  async actualizar(agenciaId: string, id: string, usuarioId: string, dto: UpdateReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
     if (reserva.estado === 'CANCELADA' || reserva.estado === 'OPERADA') {
@@ -633,10 +638,14 @@ export class ReservasService {
     }
 
     const data: Prisma.ReservaUncheckedUpdateInput = {};
+    const cambios: string[] = [];
     // Las notas no afectan pagos ni montos: se pueden editar en cualquier estado no
     // cancelado/operado. Se asigna directo (sin "|| undefined") para no perder un borrado
     // explícito de las notas (enviar "" debe limpiar el campo, no dejarlo intacto).
-    if (dto.notas !== undefined) data.notas = dto.notas;
+    if (dto.notas !== undefined && dto.notas !== reserva.notas) {
+      data.notas = dto.notas;
+      cambios.push('Se actualizaron las notas de la reserva');
+    }
     let fechaInicio = reserva.fechaServicioInicio;
     let fechaFin = reserva.fechaServicioFin;
 
@@ -695,6 +704,11 @@ export class ReservasService {
           },
         },
       });
+      cambios.push(
+        pagoRegistrado
+          ? 'Se reprogramaron las fechas/horas de los servicios del itinerario'
+          : 'Se actualizaron los servicios del itinerario (fechas, horas y/o precios)',
+      );
     } else {
       if (dto.fechaServicioInicio) fechaInicio = new Date(dto.fechaServicioInicio);
       fechaFin = dto.fechaServicioFin
@@ -705,10 +719,19 @@ export class ReservasService {
       if (fechaFin < fechaInicio) {
         throw new BadRequestException('fechaServicioFin no puede ser anterior a fechaServicioInicio');
       }
-      if (dto.fechaServicioInicio) data.fechaServicioInicio = fechaInicio;
+      if (dto.fechaServicioInicio) {
+        data.fechaServicioInicio = fechaInicio;
+        cambios.push(`Se cambió la fecha de servicio a ${fechaInicio.toISOString().slice(0, 10)}`);
+      }
       if (dto.fechaServicioFin || dto.fechaServicioInicio) data.fechaServicioFin = fechaFin;
-      if (dto.horaServicio !== undefined) data.horaServicio = dto.horaServicio;
-      if (dto.monedaId) data.monedaId = dto.monedaId;
+      if (dto.horaServicio !== undefined && dto.horaServicio !== reserva.horaServicio) {
+        data.horaServicio = dto.horaServicio;
+        cambios.push(`Se cambió la hora de servicio a ${dto.horaServicio}`);
+      }
+      if (dto.monedaId && dto.monedaId !== reserva.monedaId) {
+        data.monedaId = dto.monedaId;
+        cambios.push('Se cambió la moneda de la reserva');
+      }
 
       const cantidadPasajeros = dto.pasajeros?.length ?? (await this.prisma.pasajero.count({ where: { reservaId: id } }));
       let precioEstablecido = 0;
@@ -747,6 +770,7 @@ export class ReservasService {
           );
         }
         data.total = dto.precioLiquidado;
+        cambios.push(`Se cambió el precio liquidado a ${dto.precioLiquidado.toFixed(2)}`);
       }
 
       // Reservas de "servicio"/"plantilla" tienen un único día de itinerario (o varios, para
@@ -774,9 +798,16 @@ export class ReservasService {
       }));
       await this.prisma.pasajero.deleteMany({ where: { reservaId: id } });
       data.pasajeros = { create: pasajerosData };
+      cambios.push('Se actualizó la lista de pasajeros');
     }
 
     await this.prisma.reserva.update({ where: { id }, data });
+
+    if (cambios.length) {
+      await this.prisma.reservaHistorial.createMany({
+        data: cambios.map((descripcion) => ({ reservaId: id, usuarioId, descripcion })),
+      });
+    }
 
     if (dto.fechaServicioInicio || dto.serviciosMultiples?.length) {
       // El voucher (QR) codifica la reserva y su expiración según fechaServicioFin; si esta
@@ -788,9 +819,13 @@ export class ReservasService {
     return this.findOne(agenciaId, id);
   }
 
-  async cancelar(agenciaId: string, id: string) {
+  async cancelar(agenciaId: string, id: string, usuarioId: string) {
     await this.findOne(agenciaId, id);
-    return this.prisma.reserva.update({ where: { id }, data: { estado: 'CANCELADA' } });
+    const reserva = await this.prisma.reserva.update({ where: { id }, data: { estado: 'CANCELADA' } });
+    await this.prisma.reservaHistorial.create({
+      data: { reservaId: id, usuarioId, descripcion: 'Se canceló la reserva' },
+    });
+    return reserva;
   }
 
   /**
@@ -836,7 +871,7 @@ export class ReservasService {
    *   que no se suma al total abonado ni se descuenta del saldo pendiente de la reserva.
    * En reservas MULTIPLE no hay un total/moneda único, así que monto y monedaId son obligatorios.
    */
-  async confirmar(agenciaId: string, id: string, dto: ConfirmarReservaDto) {
+  async confirmar(agenciaId: string, id: string, usuarioId: string, dto: ConfirmarReservaDto) {
     const reserva = await this.prisma.reserva.findFirst({
       where: { id, agenciaId },
       include: {
@@ -922,6 +957,11 @@ export class ReservasService {
     const montoImpuesto = calcularMontoImpuesto(config.impuestoPorcentaje, monto);
     const tienePrueba = Boolean(dto.referenciaExterna || dto.comprobanteUrl);
 
+    const primeraConfirmacion = reserva.estado !== 'CONFIRMADA';
+    const descripcionHistorial = primeraConfirmacion
+      ? `Se confirmó la reserva con un pago de ${monto.toFixed(2)} ${monedaPago.codigo} (${formaPago.nombre})`
+      : `Se registró un abono de ${monto.toFixed(2)} ${monedaPago.codigo} (${formaPago.nombre})`;
+
     await this.prisma.$transaction([
       this.prisma.pago.create({
         data: {
@@ -934,6 +974,9 @@ export class ReservasService {
           comprobanteUrl: dto.comprobanteUrl,
           estado: permitePagoDiferido && !tienePrueba ? 'PENDIENTE' : 'PAGADO',
         },
+      }),
+      this.prisma.reservaHistorial.create({
+        data: { reservaId: id, usuarioId, descripcion: descripcionHistorial },
       }),
       this.prisma.reserva.update({
         where: { id },

@@ -21,6 +21,7 @@ export class PagosService {
   async registrar(
     agenciaId: string,
     reservaId: string,
+    usuarioId: string,
     data: {
       formaPagoId: string;
       monto: number;
@@ -32,8 +33,18 @@ export class PagosService {
     const reserva = await this.prisma.reserva.findFirst({ where: { id: reservaId, agenciaId } });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
 
-    const pago = await this.prisma.pago.create({
-      data: { reservaId, ...data, estado: 'PAGADO' },
+    const [pago, formaPago, moneda] = await Promise.all([
+      this.prisma.pago.create({ data: { reservaId, ...data, estado: 'PAGADO' } }),
+      this.prisma.formaPago.findFirst({ where: { id: data.formaPagoId, agenciaId } }),
+      this.prisma.moneda.findFirst({ where: { id: data.monedaId, agenciaId } }),
+    ]);
+
+    await this.prisma.reservaHistorial.create({
+      data: {
+        reservaId,
+        usuarioId,
+        descripcion: `Se registró un abono de ${Number(data.monto).toFixed(2)} ${moneda?.codigo ?? ''} (${formaPago?.nombre ?? 'forma de pago'})`,
+      },
     });
 
     // Un abono registrado a mano (efectivo, transferencia, etc.) es un canal distinto al de los

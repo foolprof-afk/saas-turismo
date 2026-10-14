@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, formatFechaHora } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 
 interface CotizacionItem {
@@ -33,6 +33,7 @@ interface CotizacionDetalle {
   reserva?: { id: string; codigoReserva: string } | null;
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   items: CotizacionItem[];
+  historial: { id: string; descripcion: string; fecha: string; usuario: { nombre: string } | null }[];
 }
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
@@ -610,6 +611,25 @@ export default function CotizacionDetallePage() {
         <div className="rounded-lg border bg-white p-5">
           <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
           <p className="text-sm text-gray-700">{cotizacion.notas}</p>
+        </div>
+      )}
+
+      {cotizacion.historial.length > 0 && (
+        <div className="space-y-2 rounded-lg border bg-white p-6 print:hidden">
+          <h2 className="text-sm font-semibold text-gray-700">Historial de cambios</h2>
+          <p className="text-xs text-gray-400">
+            Registro interno de modificaciones a esta cotización; no aparece en el documento impreso.
+          </p>
+          <ul className="divide-y text-sm">
+            {cotizacion.historial.map((h) => (
+              <li key={h.id} className="py-2">
+                <p>{h.descripcion}</p>
+                <p className="text-xs text-gray-400">
+                  {h.usuario?.nombre ?? "Cliente"} · {formatFechaHora(h.fecha)}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

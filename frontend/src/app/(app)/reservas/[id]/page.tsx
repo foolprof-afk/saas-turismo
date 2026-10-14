@@ -57,6 +57,7 @@ interface ReservaDetalle {
       }[];
     }[];
   };
+  historial: { id: string; descripcion: string; fecha: string; usuario: { nombre: string } | null }[];
 }
 
 interface FormaPago {
@@ -990,6 +991,25 @@ export default function ReservaDetallePage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {reserva.historial.length > 0 && (
+        <div className="space-y-2 rounded-lg border bg-white p-6 print:hidden">
+          <h2 className="text-sm font-semibold text-gray-700">Historial de cambios</h2>
+          <p className="text-xs text-gray-400">
+            Registro interno de modificaciones a esta reserva; no aparece en el documento impreso.
+          </p>
+          <ul className="divide-y text-sm">
+            {reserva.historial.map((h) => (
+              <li key={h.id} className="py-2">
+                <p>{h.descripcion}</p>
+                <p className="text-xs text-gray-400">
+                  {h.usuario?.nombre ?? "Cliente"} · {formatFechaHora(h.fecha)}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
