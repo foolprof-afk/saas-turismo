@@ -446,6 +446,16 @@ export class CotizacionesService {
       throw new BadRequestException('La cotización no tiene servicios');
     }
 
+    // La cotización solo captura datos individuales del pasajero responsable; el resto del
+    // grupo (cantidadPersonas - 1) no tiene nombre propio registrado, así que se crean como
+    // acompañantes con nombre genérico para que la reserva quede con la cantidad de pasajeros
+    // correcta (y no solo con el responsable).
+    const acompanantes = Array.from({ length: Math.max(cotizacion.cantidadPersonas - 1, 0) }, (_, i) => ({
+      nombre: `Acompañante ${i + 2}`,
+      tipo: TipoPasajeroDto.ADULTO,
+      esResponsable: false,
+    }));
+
     const reserva = await this.reservasService.create(agenciaId, cotizacion.vendedorId, {
       serviciosMultiples: cotizacion.items.map((item) => ({
         servicioId: item.servicioId,
@@ -460,6 +470,7 @@ export class CotizacionesService {
           tipo: TipoPasajeroDto.ADULTO,
           esResponsable: true,
         },
+        ...acompanantes,
       ],
     });
 
