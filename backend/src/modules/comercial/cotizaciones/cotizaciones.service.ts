@@ -71,7 +71,7 @@ export class CotizacionesService {
       where.vendedorId = { in: vendedorIdsPermitidos };
     }
     if (filtros.clienteId) where.clienteId = filtros.clienteId;
-    if (!filtros.q && (filtros.fechaInicio || filtros.fechaFin)) {
+    if (filtros.fechaInicio || filtros.fechaFin) {
       where.fechaServicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
         ...(filtros.fechaFin ? { lte: new Date(filtros.fechaFin) } : {}),

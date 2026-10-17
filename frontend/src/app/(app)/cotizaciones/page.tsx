@@ -98,6 +98,8 @@ export default function CotizacionesPage() {
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
 
   const cargar = () => {
     setLoading(true);
@@ -106,6 +108,8 @@ export default function CotizacionesPage() {
     if (estado) params.set("estado", estado);
     if (vendedorId) params.set("vendedorId", vendedorId);
     if (busqueda) params.set("q", busqueda);
+    if (fechaInicio) params.set("fechaInicio", fechaInicio);
+    if (fechaFin) params.set("fechaFin", fechaFin);
     const qs = params.toString();
     api
       .get<Cotizacion[]>(`/cotizaciones${qs ? `?${qs}` : ""}`)
@@ -175,6 +179,24 @@ export default function CotizacionesPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Desde</label>
+          <input
+            type="date"
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Hasta</label>
+          <input
+            type="date"
+            value={fechaFin}
+            onChange={(e) => setFechaFin(e.target.value)}
+            className="mt-1 rounded border px-3 py-2 text-sm"
+          />
         </div>
         <button
           type="submit"
