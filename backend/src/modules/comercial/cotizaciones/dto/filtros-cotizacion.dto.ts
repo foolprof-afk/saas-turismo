@@ -33,6 +33,18 @@ export class FiltrosCotizacionDto {
   @IsString()
   fechaFin?: string;
 
+  // Columna por la que se ordena el listado (ver CotizacionesService.findAll). 'fecha' ordena
+  // por fechaServicio (fecha de viaje/servicio, no la fecha de creación de la cotización).
+  @IsOptional()
+  @IsString()
+  @IsIn(['fecha', 'nombre'])
+  sortBy?: 'fecha' | 'nombre';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  sortDir?: 'asc' | 'desc';
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

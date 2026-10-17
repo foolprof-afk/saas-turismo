@@ -31,6 +31,10 @@ interface Moneda {
 }
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
+const LIMIT = 20;
+
+type SortBy = "fecha" | "nombre";
+type SortDir = "asc" | "desc";
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
   return (monto * tasaDestino) / tasaOrigen;
@@ -90,6 +94,7 @@ function totalPredeterminado(cotizaciones: Cotizacion[], monedas: Moneda[]) {
 
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
+  const [total, setTotal] = useState(0);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [monedas, setMonedas] = useState<Moneda[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +105,9 @@ export default function CotizacionesPage() {
   const [busqueda, setBusqueda] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortBy | "">("");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const cargar = () => {
     setLoading(true);
@@ -110,10 +118,18 @@ export default function CotizacionesPage() {
     if (busqueda) params.set("q", busqueda);
     if (fechaInicio) params.set("fechaInicio", fechaInicio);
     if (fechaFin) params.set("fechaFin", fechaFin);
-    const qs = params.toString();
+    if (sortBy) {
+      params.set("sortBy", sortBy);
+      params.set("sortDir", sortDir);
+    }
+    params.set("page", String(page));
+    params.set("limit", String(LIMIT));
     api
-      .get<Cotizacion[]>(`/cotizaciones${qs ? `?${qs}` : ""}`)
-      .then(setCotizaciones)
+      .get<{ items: Cotizacion[]; total: number }>(`/cotizaciones?${params.toString()}`)
+      .then((res) => {
+        setCotizaciones(res.items);
+        setTotal(res.total);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "No se pudieron cargar las cotizaciones"))
       .finally(() => setLoading(false));
   };
@@ -121,9 +137,33 @@ export default function CotizacionesPage() {
   useEffect(() => {
     api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => null);
     api.get<Moneda[]>("/monedas?limit=500").then(setMonedas).catch(() => null);
-    cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, sortBy, sortDir]);
+
+  const aplicarFiltros = () => {
+    if (page !== 1) setPage(1);
+    else cargar();
+  };
+
+  // Click en una columna ordenable: si ya se está ordenando por esa columna invierte la
+  // dirección, si no, empieza en el orden por defecto de esa columna.
+  const ordenarPor = (columna: SortBy) => {
+    if (sortBy === columna) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(columna);
+      setSortDir(columna === "fecha" ? "desc" : "asc");
+    }
+    setPage(1);
+  };
+
+  const flecha = (columna: SortBy) => (sortBy === columna ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+  const totalPaginas = Math.max(1, Math.ceil(total / LIMIT));
 
   return (
     <div className="space-y-4">
@@ -137,7 +177,7 @@ export default function CotizacionesPage() {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          cargar();
+          aplicarFiltros();
         }}
         className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4"
       >
@@ -214,7 +254,9 @@ export default function CotizacionesPage() {
         const porMoneda = totalesLista(cotizaciones).filter((t) => t.codigo !== predeterminado?.codigo);
         return (
           <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-white p-4">
-            <span className="text-sm font-semibold text-gray-500">Total de la lista ({cotizaciones.length}):</span>
+            <span className="text-sm font-semibold text-gray-500">
+              Total de la página ({cotizaciones.length} de {total}):
+            </span>
             {predeterminado && (
               <span className="text-sm font-semibold">
                 {predeterminado.simbolo} {formatMonto(predeterminado.total)} {predeterminado.codigo}
@@ -234,10 +276,14 @@ export default function CotizacionesPage() {
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Código</th>
-              <th className="px-4 py-2">Responsable</th>
+              <th className="cursor-pointer select-none px-4 py-2" onClick={() => ordenarPor("nombre")}>
+                Responsable{flecha("nombre")}
+              </th>
               <th className="px-4 py-2">Personas</th>
               <th className="px-4 py-2">Vendedor</th>
-              <th className="px-4 py-2">Fecha</th>
+              <th className="cursor-pointer select-none px-4 py-2" onClick={() => ordenarPor("fecha")}>
+                Fecha{flecha("fecha")}
+              </th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2">Total</th>
               <th className="px-4 py-2"></th>
@@ -289,6 +335,28 @@ export default function CotizacionesPage() {
           </tbody>
         </table>
       </div>
+
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="rounded border px-3 py-1 disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span className="text-gray-500">
+            Página {page} de {totalPaginas} ({total} cotizaciones)
+          </span>
+          <button
+            disabled={page >= totalPaginas}
+            onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
+            className="rounded border px-3 py-1 disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
     </div>
   );
 }

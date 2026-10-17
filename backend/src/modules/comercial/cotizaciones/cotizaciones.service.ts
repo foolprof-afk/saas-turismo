@@ -23,6 +23,8 @@ export interface FiltrosCotizacion {
   clienteId?: string;
   fechaInicio?: string;
   fechaFin?: string;
+  sortBy?: 'fecha' | 'nombre';
+  sortDir?: 'asc' | 'desc';
 }
 
 const INCLUDE_COTIZACION = {
@@ -82,13 +84,19 @@ export class CotizacionesService {
 
   async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosCotizacion = {}, user?: AuthenticatedUser) {
     const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
-    return this.prisma.cotizacion.findMany({
-      where: this.construirWhere(agenciaId, filtros, vendedorIdsPermitidos),
-      include: INCLUDE_COTIZACION,
-      skip,
-      take,
-      orderBy: { createdAt: 'desc' },
-    });
+    const where = this.construirWhere(agenciaId, filtros, vendedorIdsPermitidos);
+    const sortDir = filtros.sortDir ?? 'desc';
+    const orderBy: Prisma.CotizacionOrderByWithRelationInput =
+      filtros.sortBy === 'fecha'
+        ? { fechaServicio: sortDir }
+        : filtros.sortBy === 'nombre'
+          ? { pasajeroResponsable: sortDir }
+          : { createdAt: 'desc' };
+    const [items, total] = await Promise.all([
+      this.prisma.cotizacion.findMany({ where, include: INCLUDE_COTIZACION, skip, take, orderBy }),
+      this.prisma.cotizacion.count({ where }),
+    ]);
+    return { items, total };
   }
 
   async findOne(agenciaId: string, id: string, user?: AuthenticatedUser) {
