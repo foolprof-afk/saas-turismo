@@ -13,6 +13,9 @@ interface ServicioOpcion {
   // del servicio), útil cuando los servicios mostrados pueden estar en distintas monedas.
   etiqueta?: string;
   palabrasClave?: string[];
+  // Si el llamador lo incluye, los servicios INACTIVO (eliminados) se excluyen de la lista:
+  // no deben poder agregarse a cotizaciones/reservas/órdenes nuevas (ver servicios/page.tsx).
+  estado?: string;
 }
 
 interface BuscadorServicioProps {
@@ -51,6 +54,7 @@ export function BuscadorServicio({ servicios, value, onChange, className, requir
 
   const queryNorm = query.trim().toLowerCase().replace(/^#/, "");
   const filtrados = servicios
+    .filter((s) => s.estado !== "INACTIVO")
     .filter(
       (s) =>
         s.nombre.toLowerCase().includes(queryNorm) ||

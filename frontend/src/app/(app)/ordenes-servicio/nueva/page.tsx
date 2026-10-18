@@ -17,6 +17,7 @@ interface ServicioOpcion {
   proveedorId: string;
   precioCosto?: string | null;
   moneda: { id: string; codigo: string; simbolo: string; tasaCambio: string };
+  estado?: string;
 }
 
 interface Moneda {
@@ -203,7 +204,7 @@ export default function NuevaOrdenServicioPage() {
               <div key={index} className="space-y-2 rounded border p-3">
                 <BuscadorServicio
                   required
-                  servicios={servicios.map((s) => ({ id: s.id, nombre: s.nombre, etiqueta: s.moneda.codigo }))}
+                  servicios={servicios.map((s) => ({ id: s.id, nombre: s.nombre, etiqueta: s.moneda.codigo, estado: s.estado }))}
                   value={linea.servicioId}
                   onChange={(sid) => cambiarServicioDeLinea(index, sid)}
                   className="w-full rounded border px-3 py-2.5 text-base"

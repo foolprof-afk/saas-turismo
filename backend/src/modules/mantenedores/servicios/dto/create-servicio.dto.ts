@@ -74,4 +74,12 @@ export class CreateServicioDto {
   @IsArray()
   @IsString({ each: true })
   asociadoIds?: string[];
+
+  // Controla el uso interno del servicio (si puede seguir cotizándose/reservándose), distinto
+  // de estadoPublicacion. Se usa para "eliminar" (inactivar) y reactivar un servicio sin
+  // borrarlo físicamente, ya que puede estar referenciado por cotizaciones/reservas/órdenes
+  // de servicio existentes (ver ServiciosService.update).
+  @IsOptional()
+  @IsIn(['ACTIVO', 'INACTIVO'])
+  estado?: 'ACTIVO' | 'INACTIVO';
 }
