@@ -50,7 +50,6 @@ interface ReservaDetalle {
       servicios: {
         servicio: {
           id: string;
-          proveedorId: string;
           precioCosto?: string | null;
           moneda: { id: string; codigo: string; simbolo: string; tasaCambio: string };
         };
@@ -126,13 +125,14 @@ export default function NuevaOrdenServicioPage() {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // Busca una reserva por código y precarga, como líneas de la orden, los servicios de su
-  // itinerario que correspondan al proveedor seleccionado (con su precioCosto de catálogo),
-  // para no tener que volver a escribirlos a mano. No reemplaza las líneas existentes, solo
-  // agrega; el usuario puede luego quitar o agregar más servicios manualmente.
+  // Busca una reserva por código y precarga, como líneas de la orden, todos los servicios de su
+  // itinerario (con su precioCosto de catálogo), sin filtrar por proveedor: el usuario puede
+  // elegir el proveedor según disponibilidad/conveniencia, no necesariamente el mismo con el
+  // que se vendió el servicio. No reemplaza las líneas existentes, solo agrega; el usuario
+  // puede luego quitar o agregar más servicios manualmente.
   const buscarReserva = async () => {
     const codigo = codigoReserva.trim();
-    if (!codigo || !proveedorId) return;
+    if (!codigo) return;
     setBuscandoReserva(true);
     setErrorReserva(null);
     setReservaCargada(null);
@@ -152,18 +152,16 @@ export default function NuevaOrdenServicioPage() {
       }
       const detalle = await api.get<ReservaDetalle>(`/reservas/${elegida.id}`);
       const lineasReserva = (detalle.itinerario?.dias ?? []).flatMap((dia) =>
-        dia.servicios
-          .filter((s) => s.servicio.proveedorId === proveedorId)
-          .map((s) => ({
-            servicioId: s.servicio.id,
-            cantidad: "1",
-            precioCosto: s.servicio.precioCosto ?? "",
-            monedaId: s.servicio.moneda.id,
-            fechaServicio: dia.fecha.slice(0, 10),
-          })),
+        dia.servicios.map((s) => ({
+          servicioId: s.servicio.id,
+          cantidad: "1",
+          precioCosto: s.servicio.precioCosto ?? "",
+          monedaId: s.servicio.moneda.id,
+          fechaServicio: dia.fecha.slice(0, 10),
+        })),
       );
       if (lineasReserva.length === 0) {
-        setErrorReserva("Esa reserva no tiene servicios de este proveedor");
+        setErrorReserva("Esa reserva no tiene servicios");
         return;
       }
       setItems([...items, ...lineasReserva]);
@@ -273,22 +271,18 @@ export default function NuevaOrdenServicioPage() {
                   buscarReserva();
                 }
               }}
-              disabled={!proveedorId}
               placeholder="Ej. RES-AB12CD34"
-              className="w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100 sm:w-1/2"
+              className="w-full rounded border px-3 py-2 text-sm sm:w-1/2"
             />
             <button
               type="button"
               onClick={buscarReserva}
-              disabled={!proveedorId || !codigoReserva.trim() || buscandoReserva}
+              disabled={!codigoReserva.trim() || buscandoReserva}
               className="shrink-0 rounded border px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
             >
               {buscandoReserva ? "Buscando..." : "Cargar servicios"}
             </button>
           </div>
-          {!proveedorId && (
-            <p className="mt-1 text-xs text-gray-400">Selecciona un proveedor para buscar por número de reserva.</p>
-          )}
           {errorReserva && <p className="mt-1 text-xs text-red-600">{errorReserva}</p>}
           {reservaCargada && (
             <p className="mt-1 text-xs text-emerald-600">Servicios cargados desde la reserva {reservaCargada}.</p>
