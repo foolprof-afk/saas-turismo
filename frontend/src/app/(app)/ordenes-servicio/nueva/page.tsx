@@ -36,6 +36,29 @@ interface LineaOrden {
   fechaServicio: string;
 }
 
+interface ReservaBusqueda {
+  id: string;
+  codigoReserva: string;
+}
+
+interface ReservaDetalle {
+  id: string;
+  codigoReserva: string;
+  itinerario: {
+    dias: {
+      fecha: string;
+      servicios: {
+        servicio: {
+          id: string;
+          proveedorId: string;
+          precioCosto?: string | null;
+          moneda: { id: string; codigo: string; simbolo: string; tasaCambio: string };
+        };
+      }[];
+    }[];
+  } | null;
+}
+
 // Misma convención de tasaCambio que en el resto del sistema (ver reserva-montos.util.ts en el
 // backend): tasaCambio = cuántas unidades de esa moneda equivalen a 1 unidad de la moneda
 // principal. Convertir de origen a destino es monto * tasaDestino / tasaOrigen.
@@ -52,6 +75,11 @@ export default function NuevaOrdenServicioPage() {
   const [proveedorId, setProveedorId] = useState("");
   const [notas, setNotas] = useState("");
   const [items, setItems] = useState<LineaOrden[]>([]);
+
+  const [codigoReserva, setCodigoReserva] = useState("");
+  const [buscandoReserva, setBuscandoReserva] = useState(false);
+  const [errorReserva, setErrorReserva] = useState<string | null>(null);
+  const [reservaCargada, setReservaCargada] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -96,6 +124,55 @@ export default function NuevaOrdenServicioPage() {
 
   const quitarLinea = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
+  };
+
+  // Busca una reserva por código y precarga, como líneas de la orden, los servicios de su
+  // itinerario que correspondan al proveedor seleccionado (con su precioCosto de catálogo),
+  // para no tener que volver a escribirlos a mano. No reemplaza las líneas existentes, solo
+  // agrega; el usuario puede luego quitar o agregar más servicios manualmente.
+  const buscarReserva = async () => {
+    const codigo = codigoReserva.trim();
+    if (!codigo || !proveedorId) return;
+    setBuscandoReserva(true);
+    setErrorReserva(null);
+    setReservaCargada(null);
+    try {
+      const coincidencias = await api.get<ReservaBusqueda[]>(
+        `/reservas?codigoReserva=${encodeURIComponent(codigo)}&limit=5`,
+      );
+      const exacta = coincidencias.find((r) => r.codigoReserva.toLowerCase() === codigo.toLowerCase());
+      const elegida = exacta ?? (coincidencias.length === 1 ? coincidencias[0] : undefined);
+      if (!elegida) {
+        setErrorReserva(
+          coincidencias.length === 0
+            ? "No se encontró ninguna reserva con ese código"
+            : "Hay varias reservas que coinciden, escribe el código completo",
+        );
+        return;
+      }
+      const detalle = await api.get<ReservaDetalle>(`/reservas/${elegida.id}`);
+      const lineasReserva = (detalle.itinerario?.dias ?? []).flatMap((dia) =>
+        dia.servicios
+          .filter((s) => s.servicio.proveedorId === proveedorId)
+          .map((s) => ({
+            servicioId: s.servicio.id,
+            cantidad: "1",
+            precioCosto: s.servicio.precioCosto ?? "",
+            monedaId: s.servicio.moneda.id,
+            fechaServicio: dia.fecha.slice(0, 10),
+          })),
+      );
+      if (lineasReserva.length === 0) {
+        setErrorReserva("Esa reserva no tiene servicios de este proveedor");
+        return;
+      }
+      setItems([...items, ...lineasReserva]);
+      setReservaCargada(detalle.codigoReserva);
+    } catch (err) {
+      setErrorReserva(err instanceof ApiError ? err.message : "No se pudo buscar la reserva");
+    } finally {
+      setBuscandoReserva(false);
+    }
   };
 
   // Cada línea puede quedar en una moneda distinta a la del servicio (el vendedor la puede
@@ -181,6 +258,41 @@ export default function NuevaOrdenServicioPage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium"># Reserva (opcional)</label>
+          <div className="mt-1 flex gap-2">
+            <input
+              type="text"
+              value={codigoReserva}
+              onChange={(e) => setCodigoReserva(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  buscarReserva();
+                }
+              }}
+              disabled={!proveedorId}
+              placeholder="Ej. RES-AB12CD34"
+              className="w-full rounded border px-3 py-2 text-sm disabled:bg-gray-100 sm:w-1/2"
+            />
+            <button
+              type="button"
+              onClick={buscarReserva}
+              disabled={!proveedorId || !codigoReserva.trim() || buscandoReserva}
+              className="shrink-0 rounded border px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
+            >
+              {buscandoReserva ? "Buscando..." : "Cargar servicios"}
+            </button>
+          </div>
+          {!proveedorId && (
+            <p className="mt-1 text-xs text-gray-400">Selecciona un proveedor para buscar por número de reserva.</p>
+          )}
+          {errorReserva && <p className="mt-1 text-xs text-red-600">{errorReserva}</p>}
+          {reservaCargada && (
+            <p className="mt-1 text-xs text-emerald-600">Servicios cargados desde la reserva {reservaCargada}.</p>
+          )}
         </div>
 
         <div className="space-y-3">
