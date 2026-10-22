@@ -40,6 +40,24 @@ export class ReservasController {
     return this.reservasService.generarEnlaceCliente(user.agenciaId, filtros.clienteId, filtros);
   }
 
+  // Búsqueda usada para precargar servicios al crear una orden de servicio (ver
+  // ordenes-servicio/nueva): a propósito no se pasa `user`, por lo que findAll no aplica la
+  // restricción de "solo mis reservas o las que me comparten" (pensada para la privacidad
+  // comercial del listado principal) — cualquier admin/vendedor puede operar cualquier
+  // reserva de la agencia, sin importar quién la vendió.
+  @Get('buscar-codigo')
+  @Roles('admin', 'vendedor')
+  buscarPorCodigo(@CurrentUser() user: AuthenticatedUser, @Query('codigo') codigo: string) {
+    if (!codigo) throw new BadRequestException('codigo es obligatorio');
+    return this.reservasService.findAll(user.agenciaId, 0, 5, { codigoReserva: codigo });
+  }
+
+  @Get(':id/operativo')
+  @Roles('admin', 'vendedor')
+  findOneParaOperacion(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.reservasService.findOne(user.agenciaId, id);
+  }
+
   @Get(':id/enlace')
   @Roles('admin', 'vendedor')
   generarEnlace(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {

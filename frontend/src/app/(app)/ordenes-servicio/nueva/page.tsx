@@ -138,7 +138,7 @@ export default function NuevaOrdenServicioPage() {
     setReservaCargada(null);
     try {
       const coincidencias = await api.get<ReservaBusqueda[]>(
-        `/reservas?codigoReserva=${encodeURIComponent(codigo)}&limit=5`,
+        `/reservas/buscar-codigo?codigo=${encodeURIComponent(codigo)}`,
       );
       const exacta = coincidencias.find((r) => r.codigoReserva.toLowerCase() === codigo.toLowerCase());
       const elegida = exacta ?? (coincidencias.length === 1 ? coincidencias[0] : undefined);
@@ -150,7 +150,7 @@ export default function NuevaOrdenServicioPage() {
         );
         return;
       }
-      const detalle = await api.get<ReservaDetalle>(`/reservas/${elegida.id}`);
+      const detalle = await api.get<ReservaDetalle>(`/reservas/${elegida.id}/operativo`);
       const lineasReserva = (detalle.itinerario?.dias ?? []).flatMap((dia) =>
         dia.servicios.map((s) => ({
           servicioId: s.servicio.id,
