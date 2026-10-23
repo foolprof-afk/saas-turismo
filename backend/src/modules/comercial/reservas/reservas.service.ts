@@ -323,7 +323,11 @@ export class ReservasService {
         moneda: true,
         pagos: { include: { moneda: true } },
         itinerario: {
-          include: { dias: { include: { servicios: { include: { servicio: true, moneda: true } } } } },
+          include: {
+            dias: {
+              include: { servicios: { include: { servicio: { include: { moneda: true } }, moneda: true } } },
+            },
+          },
         },
         // Fallback: si la reserva no tiene notas propias, se muestran las de la cotización de
         // origen (muchas reservas nacen de una cotización que ya documentaba acuerdos/instrucciones).
