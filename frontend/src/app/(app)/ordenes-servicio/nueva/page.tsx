@@ -44,6 +44,7 @@ interface ReservaBusqueda {
 interface ReservaDetalle {
   id: string;
   codigoReserva: string;
+  pasajeros: { nombre: string; telefono: string | null; esResponsable: boolean }[];
   itinerario: {
     dias: {
       fecha: string;
@@ -165,6 +166,14 @@ export default function NuevaOrdenServicioPage() {
         return;
       }
       setItems([...items, ...lineasReserva]);
+      const pasajero =
+        detalle.pasajeros.find((p) => p.esResponsable) ?? detalle.pasajeros[0];
+      if (pasajero) {
+        const datosPasajero = [pasajero.nombre, pasajero.telefono, `${detalle.pasajeros.length} pasajero(s)`]
+          .filter((v): v is string => Boolean(v))
+          .join(" ");
+        setNotas(notas ? `${notas} ${datosPasajero}` : datosPasajero);
+      }
       setReservaCargada(detalle.codigoReserva);
     } catch (err) {
       setErrorReserva(err instanceof ApiError ? err.message : "No se pudo buscar la reserva");
