@@ -1111,16 +1111,30 @@ export class ReservasService {
    * verificar cualquier modificación posterior.
    */
   async generarEnlacePublico(agenciaId: string, id: string) {
-    const reserva = await this.prisma.reserva.findFirst({ where: { id, agenciaId } });
+    const reserva = await this.prisma.reserva.findFirst({
+      where: { id, agenciaId },
+      include: {
+        pasajeros: { where: { esResponsable: true }, take: 1 },
+        cotizacion: { select: { codigoCotizacion: true } },
+      },
+    });
     if (!reserva) throw new NotFoundException('Reserva no encontrada');
+    const responsable = reserva.pasajeros[0];
+    // Título descriptivo del enlace (no afecta la redirección): nombre y teléfono del pasajero
+    // responsable + código de la cotización de origen (si la hay) + código de la reserva, para
+    // identificar de un vistazo a quién pertenece el enlace generado.
+    const titulo = [responsable?.nombre, responsable?.telefono, reserva.cotizacion?.codigoCotizacion, reserva.codigoReserva]
+      .filter(Boolean)
+      .join(' ');
     const token = firmarEnlaceReserva({ reservaId: id, agenciaId });
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
     // Se acorta con la misma validez que el token (90 días, ver enlace-reserva-token.util).
     const url = await this.linksCortosService.acortar(
       `${frontendUrl}/reserva-cliente/${token}`,
       new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      titulo,
     );
-    return { url };
+    return { url, titulo };
   }
 
   /**

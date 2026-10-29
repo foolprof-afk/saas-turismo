@@ -121,6 +121,7 @@ export default function CotizacionDetallePage() {
   const [error, setError] = useState<string | null>(null);
   const [generandoEnlace, setGenerandoEnlace] = useState(false);
   const [enlace, setEnlace] = useState<string | null>(null);
+  const [enlaceTitulo, setEnlaceTitulo] = useState<string | null>(null);
   const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
   const [enlaceCopiado, setEnlaceCopiado] = useState(false);
 
@@ -170,8 +171,9 @@ export default function CotizacionDetallePage() {
     setGenerandoEnlace(true);
     setErrorEnlace(null);
     try {
-      const res = await api.get<{ url: string }>(`/cotizaciones/${cotizacion.id}/enlace`);
+      const res = await api.get<{ url: string; titulo: string }>(`/cotizaciones/${cotizacion.id}/enlace`);
       setEnlace(res.url);
+      setEnlaceTitulo(res.titulo);
       setEnlaceCopiado(false);
     } catch (err) {
       setErrorEnlace(err instanceof ApiError ? err.message : "No se pudo generar el enlace");
@@ -183,7 +185,7 @@ export default function CotizacionDetallePage() {
   const copiarEnlace = async () => {
     if (!enlace) return;
     try {
-      await navigator.clipboard.writeText(enlace);
+      await navigator.clipboard.writeText(enlaceTitulo ? `${enlaceTitulo} ${enlace}` : enlace);
       setEnlaceCopiado(true);
       setTimeout(() => setEnlaceCopiado(false), 1500);
     } catch {
@@ -481,6 +483,14 @@ export default function CotizacionDetallePage() {
         {errorEnlace && <p className="mt-2 text-xs text-red-600">{errorEnlace}</p>}
         {enlace && (
           <div className="mt-3 space-y-2">
+            {enlaceTitulo && (
+              <input
+                readOnly
+                value={enlaceTitulo}
+                onClick={(e) => e.currentTarget.select()}
+                className="w-full rounded border px-2 py-1 text-xs font-medium text-gray-700"
+              />
+            )}
             <input
               readOnly
               value={enlace}
@@ -497,7 +507,7 @@ export default function CotizacionDetallePage() {
               {cotizacion.telefonoResponsable && (
                 <a
                   href={`https://wa.me/${cotizacion.telefonoResponsable.replace(/\D/g, "")}?text=${encodeURIComponent(
-                    `Hola, aquí está tu cotización ${cotizacion.codigoCotizacion}: ${enlace}`,
+                    `${enlaceTitulo ? `${enlaceTitulo}\n` : ""}Hola, aquí está tu cotización ${cotizacion.codigoCotizacion}: ${enlace}`,
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -508,7 +518,7 @@ export default function CotizacionDetallePage() {
               )}
               <a
                 href={`mailto:?subject=${encodeURIComponent(
-                  `Cotización ${cotizacion.codigoCotizacion}`,
+                  enlaceTitulo ?? `Cotización ${cotizacion.codigoCotizacion}`,
                 )}&body=${encodeURIComponent(`Hola, aquí está tu cotización: ${enlace}`)}`}
                 className="rounded border px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
               >

@@ -34,20 +34,26 @@ export class LinksCortosService {
    * Crea un código corto para destino y devuelve la URL corta completa
    * (`${frontendUrl}/api/l/:codigo`). Si ya existe un código vigente para ese mismo destino
    * exacto (p. ej. se volvió a pedir el mismo enlace sin que el token de destino cambiara), lo
-   * reutiliza en vez de crear uno nuevo, para no acumular filas de más.
+   * reutiliza en vez de crear uno nuevo, para no acumular filas de más (pero actualiza su
+   * título por si cambió, p. ej. se corrigió el nombre o teléfono del pasajero).
    */
-  async acortar(destino: string, expiraEn?: Date): Promise<string> {
+  async acortar(destino: string, expiraEn?: Date, titulo?: string): Promise<string> {
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
     const existente = await this.prisma.linkCorto.findFirst({
       where: { destino, OR: [{ expiraEn: null }, { expiraEn: { gt: new Date() } }] },
       orderBy: { creadoEn: 'desc' },
     });
-    if (existente) return `${frontendUrl}/api/l/${existente.codigo}`;
+    if (existente) {
+      if (titulo && titulo !== existente.titulo) {
+        await this.prisma.linkCorto.update({ where: { id: existente.id }, data: { titulo } });
+      }
+      return `${frontendUrl}/api/l/${existente.codigo}`;
+    }
 
     for (let intento = 0; intento < 5; intento++) {
       const codigo = generarCodigo();
       try {
-        await this.prisma.linkCorto.create({ data: { codigo, destino, expiraEn } });
+        await this.prisma.linkCorto.create({ data: { codigo, destino, expiraEn, titulo } });
         return `${frontendUrl}/api/l/${codigo}`;
       } catch {
         // Colisión de código (muy improbable con 7 caracteres de un alfabeto de 57): reintenta.

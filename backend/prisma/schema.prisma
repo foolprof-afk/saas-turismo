@@ -972,6 +972,9 @@ model LinkCorto {
   id       String    @id @default(cuid())
   codigo   String    @unique
   destino  String
+  // Etiqueta descriptiva para identificar de un vistazo a quién pertenece el enlace (p. ej.
+  // "Juan Pérez 50212345678 COT-0001 RES-0002"), sin que afecte la redirección en sí.
+  titulo   String?
   expiraEn DateTime?
   creadoEn DateTime  @default(now())
 

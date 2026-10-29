@@ -504,16 +504,30 @@ export class CotizacionesService {
    * refleja la versión actual de la cotización sin tener que reenviarlo tras cada actualización.
    */
   async generarEnlacePublico(agenciaId: string, id: string) {
-    const cotizacion = await this.prisma.cotizacion.findFirst({ where: { id, agenciaId } });
+    const cotizacion = await this.prisma.cotizacion.findFirst({
+      where: { id, agenciaId },
+      include: { reserva: { select: { codigoReserva: true } } },
+    });
     if (!cotizacion) throw new NotFoundException('Cotización no encontrada');
+    // Título descriptivo del enlace (no afecta la redirección): pasajero responsable + teléfono +
+    // código de la cotización + código de la reserva (si ya se confirmó una a partir de ella).
+    const titulo = [
+      cotizacion.pasajeroResponsable,
+      cotizacion.telefonoResponsable,
+      cotizacion.codigoCotizacion,
+      cotizacion.reserva?.codigoReserva,
+    ]
+      .filter(Boolean)
+      .join(' ');
     const token = firmarEnlaceCotizacion({ cotizacionId: id, agenciaId });
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
     // Se acorta con la misma validez que el token (90 días, ver enlace-cotizacion-token.util).
     const url = await this.linksCortosService.acortar(
       `${frontendUrl}/cotizacion-cliente/${token}`,
       new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      titulo,
     );
-    return { url };
+    return { url, titulo };
   }
 
   /**
