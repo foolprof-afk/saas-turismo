@@ -12,6 +12,7 @@ import { convertirMonto } from '../../../common/utils/reserva-montos.util';
 import { firmarEnlaceCotizacion, verificarEnlaceCotizacion } from '../../../common/utils/enlace-cotizacion-token.util';
 import { firmarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
 import { LinksCortosService } from '../../links-cortos/links-cortos.service';
+import { LinksPagoService } from '../../finanzas/links-pago/links-pago.service';
 
 export interface FiltrosCotizacion {
   estado?: string;
@@ -46,6 +47,7 @@ export class CotizacionesService {
     private readonly prisma: PrismaService,
     private readonly reservasService: ReservasService,
     private readonly linksCortosService: LinksCortosService,
+    private readonly linksPagoService: LinksPagoService,
   ) {}
 
   private construirWhere(
@@ -494,6 +496,11 @@ export class CotizacionesService {
         descripcion: `Se confirmó la cotización, se generó la reserva ${reserva.codigoReserva}`,
       },
     });
+
+    // Genera automáticamente los links de pago (abono mínimo + 100% del total) para que el
+    // cliente ya tenga cómo pagar desde que se confirma la cotización, sin que el vendedor tenga
+    // que generarlos manualmente (ver LinksPagoService.generarAutomaticos).
+    await this.linksPagoService.generarAutomaticos(agenciaId, reserva.id);
 
     return this.findOne(agenciaId, id, user);
   }

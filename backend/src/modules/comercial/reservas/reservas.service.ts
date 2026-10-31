@@ -1161,15 +1161,16 @@ export class ReservasService {
         // origen. moneda/monedaId se incluyen para poder consolidar el total en una sola moneda
         // cuando la reserva es MULTIPLE (ver monedaReservaDe).
         cotizacion: { select: { notas: true, monedaId: true, moneda: true } },
-        // Último link de pago vigente (si hay más de uno PENDIENTE, p. ej. se generó uno nuevo sin
-        // cancelar el anterior, se muestra el más reciente): así el cliente ve un botón para pagar
-        // directamente desde su enlace de reserva, sin que el vendedor tenga que reenviárselo aparte.
-        // urlPago/monto > 0 excluye el registro a medio crear (ver LinksPagoService.generar: se crea
-        // con urlPago '' y se completa recién cuando el proveedor confirma el checkout).
+        // Todos los links de pago vigentes (puede haber más de uno PENDIENTE a la vez, p. ej. el
+        // abono mínimo y el 100% generados automáticamente al confirmar la cotización, ver
+        // LinksPagoService.generarAutomaticos): se listan ordenados de menor a mayor monto para
+        // que el cliente elija cuál pagar directamente desde su enlace de reserva, sin que el
+        // vendedor tenga que reenviárselos aparte. urlPago/monto > 0 excluye el registro a medio
+        // crear (ver LinksPagoService.generar: se crea con urlPago '' y se completa recién cuando
+        // el proveedor confirma el checkout).
         linksPago: {
           where: { estado: 'PENDIENTE', urlPago: { not: '' }, monto: { gt: 0 } },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+          orderBy: { monto: 'asc' },
           include: { moneda: true },
         },
       },
@@ -1187,13 +1188,12 @@ export class ReservasService {
     const monedaReserva = monedaReservaDe(reserva);
     return {
       ...reservaSinLinksPago,
-      linkPagoPendiente: linksPago[0]
-        ? {
-            monto: linksPago[0].monto,
-            moneda: { codigo: linksPago[0].moneda.codigo, simbolo: linksPago[0].moneda.simbolo },
-            urlPago: linksPago[0].urlPago,
-          }
-        : null,
+      linksPagoPendientes: linksPago.map((l) => ({
+        id: l.id,
+        monto: l.monto,
+        moneda: { codigo: l.moneda.codigo, simbolo: l.moneda.simbolo },
+        urlPago: l.urlPago,
+      })),
       montos,
       totalPrincipal: convertirAPrincipal(montos, monedaPrincipal),
       totalAbonado,

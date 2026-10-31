@@ -7,5 +7,6 @@ import { PagoClienteController } from './pago-cliente.controller';
 @Module({
   providers: [LinksPagoService],
   controllers: [LinksPagoController, LinksPagoWebhookController, PagoClienteController],
+  exports: [LinksPagoService],
 })
 export class LinksPagoModule {}

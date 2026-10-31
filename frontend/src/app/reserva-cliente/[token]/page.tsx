@@ -23,6 +23,7 @@ interface Pago {
 }
 
 interface LinkPagoPendiente {
+  id: string;
   monto: string;
   moneda: { codigo: string; simbolo: string };
   urlPago: string;
@@ -32,7 +33,7 @@ interface ReservaPublica {
   codigoReserva: string;
   estado: string;
   total: string | null;
-  linkPagoPendiente?: LinkPagoPendiente | null;
+  linksPagoPendientes: LinkPagoPendiente[];
   montos: MontoPorMoneda[];
   totalAbonado: MontoPorMoneda[];
   saldoPendiente: MontoPorMoneda[];
@@ -174,21 +175,34 @@ export default function ReservaClientePublicaPage() {
           )}
         </div>
 
-        {reserva.linkPagoPendiente && reserva.linkPagoPendiente.urlPago && Number(reserva.linkPagoPendiente.monto) > 0 && (
+        {reserva.linksPagoPendientes.length > 0 && (
           <div className="rounded-lg border-2 border-green-200 bg-green-50 p-5 text-center">
-            <h2 className="mb-1 text-sm font-semibold text-green-700">Pago pendiente</h2>
-            <p className="mb-3 text-xl font-bold text-green-800">
-              {reserva.linkPagoPendiente.moneda.simbolo}
-              {formatMonto(reserva.linkPagoPendiente.monto)} {reserva.linkPagoPendiente.moneda.codigo}
-            </p>
-            <a
-              href={reserva.linkPagoPendiente.urlPago}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700"
-            >
-              Pagar ahora
-            </a>
+            <h2 className="mb-3 text-sm font-semibold text-green-700">Pago pendiente</h2>
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+              {reserva.linksPagoPendientes.map((link) => {
+                const esElMayor =
+                  Number(link.monto) === Math.max(...reserva.linksPagoPendientes.map((l) => Number(l.monto)));
+                const etiqueta =
+                  reserva.linksPagoPendientes.length > 1 ? (esElMayor ? "Pago total" : "Abono parcial") : null;
+                return (
+                  <div key={link.id} className="flex flex-col items-center gap-2">
+                    {etiqueta && <p className="text-xs font-medium text-green-700">{etiqueta}</p>}
+                    <p className="text-xl font-bold text-green-800">
+                      {link.moneda.simbolo}
+                      {formatMonto(link.monto)} {link.moneda.codigo}
+                    </p>
+                    <a
+                      href={link.urlPago}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700"
+                    >
+                      Pagar ahora
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
