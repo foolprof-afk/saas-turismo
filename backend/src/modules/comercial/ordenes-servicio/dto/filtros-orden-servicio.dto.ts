@@ -16,6 +16,12 @@ export class FiltrosOrdenServicioDto {
   @IsString()
   codigoOrden?: string;
 
+  // Búsqueda libre por nombre de servicio (contains, insensitive): coincide si ALGUNO de los
+  // items de la orden tiene un servicio cuyo nombre lo contiene (ver OrdenesServicioService.findAll).
+  @IsOptional()
+  @IsString()
+  servicio?: string;
+
   @IsOptional()
   @IsDateString()
   fechaDesde?: string;

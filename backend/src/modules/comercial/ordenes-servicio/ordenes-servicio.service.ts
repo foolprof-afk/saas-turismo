@@ -28,13 +28,18 @@ export class OrdenesServicioService {
     const where: Prisma.OrdenServicioWhereInput = { agenciaId };
     if (filtros.proveedorId) where.proveedorId = filtros.proveedorId;
     if (filtros.codigoOrden) where.codigoOrden = { contains: filtros.codigoOrden, mode: 'insensitive' };
-    if (filtros.fechaDesde || filtros.fechaHasta) {
+    if (filtros.fechaDesde || filtros.fechaHasta || filtros.servicio) {
       where.items = {
         some: {
-          fechaServicio: {
-            ...(filtros.fechaDesde ? { gte: new Date(filtros.fechaDesde) } : {}),
-            ...(filtros.fechaHasta ? { lte: new Date(filtros.fechaHasta) } : {}),
-          },
+          ...(filtros.fechaDesde || filtros.fechaHasta
+            ? {
+                fechaServicio: {
+                  ...(filtros.fechaDesde ? { gte: new Date(filtros.fechaDesde) } : {}),
+                  ...(filtros.fechaHasta ? { lte: new Date(filtros.fechaHasta) } : {}),
+                },
+              }
+            : {}),
+          ...(filtros.servicio ? { servicio: { nombre: { contains: filtros.servicio, mode: 'insensitive' } } } : {}),
         },
       };
     }

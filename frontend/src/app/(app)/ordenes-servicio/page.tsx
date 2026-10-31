@@ -56,6 +56,7 @@ export default function OrdenesServicioPage() {
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [codigoOrden, setCodigoOrden] = useState("");
+  const [servicio, setServicio] = useState("");
 
   const cargar = () => {
     setLoading(true);
@@ -65,6 +66,7 @@ export default function OrdenesServicioPage() {
     if (fechaDesde) params.set("fechaDesde", fechaDesde);
     if (fechaHasta) params.set("fechaHasta", fechaHasta);
     if (codigoOrden) params.set("codigoOrden", codigoOrden);
+    if (servicio) params.set("servicio", servicio);
     params.set("limit", "200");
     api
       .get<OrdenServicio[]>(`/ordenes-servicio?${params.toString()}`)
@@ -105,6 +107,15 @@ export default function OrdenesServicioPage() {
             onChange={(e) => setCodigoOrden(e.target.value)}
             placeholder="OS-XXXXXXXX"
             className="mt-1 rounded border px-3 py-2 text-sm font-mono"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Servicio</label>
+          <input
+            value={servicio}
+            onChange={(e) => setServicio(e.target.value)}
+            placeholder="Nombre del servicio"
+            className="mt-1 rounded border px-3 py-2 text-sm"
           />
         </div>
         <div>
