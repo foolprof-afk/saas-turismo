@@ -100,6 +100,9 @@ export default function OrdenesServicioPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Órdenes de servicio</h1>
         <div className="flex gap-2">
+          <Link href="/ordenes-servicio/calendario" className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Calendario
+          </Link>
           <button
             type="button"
             disabled={ordenes.length === 0}

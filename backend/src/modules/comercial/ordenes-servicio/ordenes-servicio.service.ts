@@ -58,6 +58,65 @@ export class OrdenesServicioService {
     return orden;
   }
 
+  /**
+   * Vista de calendario: una entrada por cada combinación orden+día que cae dentro del mes
+   * solicitado (no por orden completa), para que una orden con servicios en varios días
+   * aparezca en cada día que realmente tiene actividad, agrupando los servicios de ese día.
+   * OrdenServicio no referencia a Reserva/Pasajero directamente, así que el pasajero se extrae
+   * (si existe) del campo "notas", que la pantalla de creación precarga con "Pasajero: ..."
+   * cuando la orden se generó a partir de una reserva.
+   */
+  async calendario(agenciaId: string, anio: number, mes: number) {
+    const inicioMes = new Date(Date.UTC(anio, mes - 1, 1));
+    const finMes = new Date(Date.UTC(anio, mes, 1));
+
+    const items = await this.prisma.ordenServicioItem.findMany({
+      where: {
+        fechaServicio: { gte: inicioMes, lt: finMes },
+        ordenServicio: { agenciaId, estado: { not: 'ANULADA' } },
+      },
+      include: {
+        servicio: true,
+        ordenServicio: { include: { proveedor: true } },
+      },
+      orderBy: { fechaServicio: 'asc' },
+    });
+
+    const porOrdenDia = new Map<
+      string,
+      {
+        fecha: Date;
+        ordenServicioId: string;
+        codigoOrden: string;
+        estado: string;
+        proveedorNombre: string;
+        pasajero: string | null;
+        servicios: string[];
+      }
+    >();
+    for (const item of items) {
+      const clave = `${item.ordenServicioId}_${item.fechaServicio.toISOString().slice(0, 10)}`;
+      const entry = porOrdenDia.get(clave) ?? {
+        fecha: item.fechaServicio,
+        ordenServicioId: item.ordenServicioId,
+        codigoOrden: item.ordenServicio.codigoOrden,
+        estado: item.ordenServicio.estado,
+        proveedorNombre: item.ordenServicio.proveedor.nombre,
+        pasajero: this.extraerPasajeroDeNotas(item.ordenServicio.notas),
+        servicios: [],
+      };
+      entry.servicios.push(item.servicio.nombre);
+      porOrdenDia.set(clave, entry);
+    }
+    return Array.from(porOrdenDia.values());
+  }
+
+  private extraerPasajeroDeNotas(notas: string | null): string | null {
+    if (!notas) return null;
+    const match = notas.match(/Pasajero:\s*([^|]+)/);
+    return match ? match[1].trim() : null;
+  }
+
   private generarCodigoOrden(): string {
     return `OS-${randomBytes(4).toString('hex').toUpperCase()}`;
   }
