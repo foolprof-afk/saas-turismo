@@ -44,6 +44,8 @@ interface ReservaBusqueda {
 interface ReservaDetalle {
   id: string;
   codigoReserva: string;
+  notas: string | null;
+  cotizacion: { notas: string | null } | null;
   pasajeros: { nombre: string; telefono: string | null; esResponsable: boolean }[];
   itinerario: {
     dias: {
@@ -168,12 +170,18 @@ export default function NuevaOrdenServicioPage() {
       setItems([...items, ...lineasReserva]);
       const pasajero =
         detalle.pasajeros.find((p) => p.esResponsable) ?? detalle.pasajeros[0];
-      if (pasajero) {
-        const datosPasajero = [pasajero.nombre, pasajero.telefono, `${detalle.pasajeros.length} pasajero(s)`]
-          .filter((v): v is string => Boolean(v))
-          .join(" ");
-        setNotas(notas ? `${notas} ${datosPasajero}` : datosPasajero);
-      }
+      // Las notas de la orden se precargan con los datos de contacto de la reserva y sus
+      // notas internas (o, si no tiene, las de la cotización de origen), para que el
+      // proveedor reciba el mismo contexto que se acordó con el cliente.
+      const notasReserva = detalle.notas || detalle.cotizacion?.notas || "";
+      const partesNotas = [
+        `Reserva: ${detalle.codigoReserva}`,
+        pasajero ? `Pasajero: ${pasajero.nombre}` : null,
+        pasajero?.telefono ? `Tel: ${pasajero.telefono}` : null,
+        notasReserva ? `Notas: ${notasReserva}` : null,
+      ].filter((v): v is string => Boolean(v));
+      const textoNotas = partesNotas.join(" | ");
+      setNotas(notas ? `${notas} ${textoNotas}` : textoNotas);
       setReservaCargada(detalle.codigoReserva);
     } catch (err) {
       setErrorReserva(err instanceof ApiError ? err.message : "No se pudo buscar la reserva");
