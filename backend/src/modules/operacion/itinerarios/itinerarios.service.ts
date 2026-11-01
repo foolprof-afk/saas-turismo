@@ -58,12 +58,25 @@ export class ItinerariosService {
           include: { ordenServicio: { include: { proveedor: true } } },
         })
       : [];
-    const proveedorPorServicio = new Map(ordenesItems.map((oi) => [oi.servicioId, oi.ordenServicio.proveedor.nombre]));
+    const ordenPorServicio = new Map(
+      ordenesItems.map((oi) => [
+        oi.servicioId,
+        {
+          id: oi.ordenServicio.id,
+          codigoOrden: oi.ordenServicio.codigoOrden,
+          proveedor: oi.ordenServicio.proveedor.nombre,
+        },
+      ]),
+    );
 
-    return agenda.map((item) => ({
-      ...item,
-      proveedorOrdenServicio: proveedorPorServicio.get(item.servicioId) ?? null,
-    }));
+    return agenda.map((item) => {
+      const orden = ordenPorServicio.get(item.servicioId) ?? null;
+      return {
+        ...item,
+        proveedorOrdenServicio: orden?.proveedor ?? null,
+        ordenServicio: orden ? { id: orden.id, codigoOrden: orden.codigoOrden } : null,
+      };
+    });
   }
 
   findByReserva(agenciaId: string, reservaId: string) {

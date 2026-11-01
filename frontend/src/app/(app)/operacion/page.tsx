@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { hoyLocal } from "@/lib/fecha";
 
@@ -15,6 +16,7 @@ interface ItemAgenda {
   estado: string;
   servicio: { nombre: string };
   proveedorOrdenServicio: string | null;
+  ordenServicio: { id: string; codigoOrden: string } | null;
   dia: {
     itinerario: {
       reserva: {
@@ -154,6 +156,7 @@ export default function OperacionPage() {
               <th className="px-4 py-2">Hora</th>
               <th className="px-4 py-2">Servicio</th>
               <th className="px-4 py-2">Proveedor</th>
+              <th className="px-4 py-2">Orden de servicio</th>
               <th className="px-4 py-2">Reserva</th>
               <th className="px-4 py-2">Cliente</th>
               <th className="px-4 py-2">Vendedor</th>
@@ -164,7 +167,7 @@ export default function OperacionPage() {
           <tbody>
             {agenda.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
                   Sin servicios programados para esta fecha
                 </td>
               </tr>
@@ -180,6 +183,15 @@ export default function OperacionPage() {
                   </td>
                   <td className={`px-4 py-2 ${enlazado ? "font-medium text-green-700" : "text-gray-400"}`}>
                     {item.proveedorOrdenServicio ?? "-"}
+                  </td>
+                  <td className="px-4 py-2 font-mono">
+                    {item.ordenServicio ? (
+                      <Link href={`/ordenes-servicio/${item.ordenServicio.id}`} className="text-blue-600 hover:underline">
+                        {item.ordenServicio.codigoOrden}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-2 font-mono">{item.dia.itinerario.reserva.codigoReserva}</td>
                   <td className="px-4 py-2">{item.dia.itinerario.reserva.cliente.nombre}</td>
