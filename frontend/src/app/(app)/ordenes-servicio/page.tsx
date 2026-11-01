@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha, formatFechaCorta } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
+import { descargarCsv } from "@/lib/csv";
 
 interface Opcion {
   id: string;
@@ -46,6 +47,19 @@ function rangoFechas(orden: OrdenServicio) {
   return min === max ? min : `${min} – ${max}`;
 }
 
+// Exporta exactamente las órdenes visibles en la tabla (con los filtros ya aplicados) como
+// respaldo descargable.
+function filasOrdenesCsv(ordenes: OrdenServicio[]) {
+  return ordenes.map((o) => ({
+    Código: o.codigoOrden,
+    Proveedor: o.proveedor?.nombre ?? "",
+    "Fecha servicio": rangoFechas(o),
+    Emisión: formatFechaCorta(o.fechaEmision),
+    Estado: o.estado,
+    Total: totalOrden(o).map((t) => `${t.simbolo}${formatMonto(t.total)} ${t.codigo}`).join(" + ") || "-",
+  }));
+}
+
 export default function OrdenesServicioPage() {
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [proveedores, setProveedores] = useState<Opcion[]>([]);
@@ -85,9 +99,21 @@ export default function OrdenesServicioPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Órdenes de servicio</h1>
-        <Link href="/ordenes-servicio/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
-          Nueva orden
-        </Link>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={ordenes.length === 0}
+            onClick={() =>
+              descargarCsv(`ordenes-servicio_${new Date().toISOString().slice(0, 10)}.csv`, filasOrdenesCsv(ordenes))
+            }
+            className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Descargar CSV
+          </button>
+          <Link href="/ordenes-servicio/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
+            Nueva orden
+          </Link>
+        </div>
       </div>
       <p className="text-sm text-gray-500">
         Documento que se envía a un proveedor para pedirle que ejecute uno o más servicios a un precio costo pactado.

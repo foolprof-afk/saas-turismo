@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
+import { descargarCsv } from "@/lib/csv";
 
 interface Cotizacion {
   id: string;
@@ -92,6 +93,20 @@ function totalPredeterminado(cotizaciones: Cotizacion[], monedas: Moneda[]) {
   return { total, codigo: principal.codigo, simbolo: principal.simbolo };
 }
 
+// Exporta exactamente las cotizaciones visibles en la tabla (con los filtros ya aplicados y la
+// página actual) como respaldo descargable.
+function filasCotizacionesCsv(cotizaciones: Cotizacion[]) {
+  return cotizaciones.map((c) => ({
+    Código: c.codigoCotizacion,
+    Responsable: c.pasajeroResponsable,
+    Personas: c.cantidadPersonas,
+    Vendedor: c.vendedor?.nombre ?? "",
+    Fecha: formatFecha(c.fechaServicio),
+    Estado: c.estado,
+    Total: totalCotizacion(c).map((t) => `${t.simbolo}${formatMonto(t.total)} ${t.codigo}`).join(" + ") || "-",
+  }));
+}
+
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [total, setTotal] = useState(0);
@@ -169,9 +184,21 @@ export default function CotizacionesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Cotizaciones</h1>
-        <Link href="/cotizaciones/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
-          Nueva cotización
-        </Link>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={cotizaciones.length === 0}
+            onClick={() =>
+              descargarCsv(`cotizaciones_${new Date().toISOString().slice(0, 10)}.csv`, filasCotizacionesCsv(cotizaciones))
+            }
+            className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Descargar CSV
+          </button>
+          <Link href="/cotizaciones/nueva" className="rounded bg-gray-900 px-4 py-2 text-sm text-white">
+            Nueva cotización
+          </Link>
+        </div>
       </div>
 
       <form

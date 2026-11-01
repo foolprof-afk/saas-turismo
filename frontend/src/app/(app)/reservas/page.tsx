@@ -5,12 +5,20 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
+import { descargarCsv } from "@/lib/csv";
 
 interface MontoPorMoneda {
   monedaId: string;
   monedaCodigo: string;
   monedaSimbolo: string;
   total: number;
+}
+
+interface PagoReserva {
+  monto: string;
+  estado: string;
+  fecha: string;
+  moneda: { codigo: string; simbolo: string };
 }
 
 interface Reserva {
@@ -25,6 +33,26 @@ interface Reserva {
   cliente: { nombre: string };
   vendedor: { nombre: string };
   pasajeros: { nombre: string; telefono?: string | null }[];
+  pagos: PagoReserva[];
+}
+
+// Exporta exactamente las reservas visibles en la tabla (con los filtros ya aplicados) como
+// respaldo descargable, incluyendo el detalle de pagos realizados sobre cada una.
+function filasReservasCsv(reservas: Reserva[]) {
+  return reservas.map((r) => ({
+    Código: r.codigoReserva,
+    Titular: r.pasajeros?.[0]?.nombre ?? r.cliente?.nombre ?? "",
+    Teléfono: r.pasajeros?.[0]?.telefono ?? "",
+    Vendedor: r.vendedor?.nombre ?? "",
+    Fecha: formatFecha(r.fechaServicioInicio),
+    Estado: r.estado,
+    Monto: r.montos.map((m) => `${m.monedaSimbolo}${formatMonto(m.total)} ${m.monedaCodigo}`).join(" + ") || "-",
+    "Pagos realizados":
+      r.pagos
+        .filter((p) => p.estado === "PAGADO")
+        .map((p) => `${p.moneda.simbolo}${formatMonto(p.monto)} ${p.moneda.codigo} (${formatFecha(p.fecha)})`)
+        .join(" | ") || "-",
+  }));
 }
 
 interface Vendedor {
@@ -135,6 +163,14 @@ export default function ReservasPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Reservas</h1>
         <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={reservas.length === 0}
+            onClick={() => descargarCsv(`reservas_${new Date().toISOString().slice(0, 10)}.csv`, filasReservasCsv(reservas))}
+            className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Descargar CSV
+          </button>
           <Link href="/reservas/calendario" className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
             Calendario
           </Link>

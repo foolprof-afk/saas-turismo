@@ -152,6 +152,7 @@ export class ReservasService {
           pasajeros: true,
           moneda: true,
           itinerario: { include: INCLUDE_ITINERARIO_MONTOS },
+          pagos: { include: { moneda: true }, orderBy: { fecha: 'asc' } },
         },
         skip,
         take,
