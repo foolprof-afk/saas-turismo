@@ -5,28 +5,14 @@ import { api } from "@/lib/api";
 import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 
-interface Vendedor {
+interface PagoCuadre {
   id: string;
-  nombre: string;
-  clienteId?: string | null;
-}
-
-interface Cliente {
-  id: string;
-  nombre: string;
-  email?: string | null;
-  telefono?: string | null;
-}
-
-interface ReservaCuadre {
-  id: string;
+  fecha: string;
+  monto: string;
+  montoImpuesto: string;
   codigoReserva: string;
-  estado: string;
-  total: string;
-  fechaServicioInicio: string;
-  cliente: { nombre: string };
-  vendedor: { nombre: string };
-  formaPago?: { nombre: string } | null;
+  vendedorNombre: string | null;
+  formaPago: { nombre: string };
   moneda: { codigo: string; simbolo: string };
 }
 
@@ -39,9 +25,9 @@ interface TotalPorMoneda {
   cantidad: number;
 }
 
-interface TotalPorVendedor extends TotalPorMoneda {
-  vendedorId: string;
-  vendedorNombre: string;
+interface TotalPorMonedaFormaPago extends TotalPorMoneda {
+  formaPagoId: string;
+  formaPagoNombre: string;
 }
 
 interface MonedaPrincipal {
@@ -59,51 +45,30 @@ interface TotalGeneral {
 }
 
 interface CuadreResponse {
-  reservas: ReservaCuadre[];
+  pagos: PagoCuadre[];
   monedaPrincipal: MonedaPrincipal | null;
   porMoneda: TotalPorMoneda[];
-  porVendedor: TotalPorVendedor[];
+  porMonedaFormaPago: TotalPorMonedaFormaPago[];
   totalGeneral: TotalGeneral | null;
 }
 
-const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
-
 export default function CuadreDeCajaPage() {
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [data, setData] = useState<CuadreResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [codigoReserva, setCodigoReserva] = useState("");
-  const [estado, setEstado] = useState("");
-  const [vendedorId, setVendedorId] = useState("");
-  const [clienteId, setClienteId] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
-
-  const [enviando, setEnviando] = useState(false);
-  const [enlace, setEnlace] = useState<{ url: string; cliente: Cliente } | null>(null);
-  const [errorEnlace, setErrorEnlace] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => setVendedores([]));
-    api.get<Cliente[]>("/clientes?limit=500").then(setClientes).catch(() => setClientes([]));
-  }, []);
-
-  const vendedoresFiltrados = clienteId ? vendedores.filter((v) => v.clienteId === clienteId) : vendedores;
 
   const cargar = () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (codigoReserva) params.set("codigoReserva", codigoReserva);
-    if (estado) params.set("estado", estado);
-    if (vendedorId) params.set("vendedorId", vendedorId);
-    if (clienteId) params.set("clienteId", clienteId);
     if (fechaInicio) params.set("fechaInicio", fechaInicio);
     if (fechaFin) params.set("fechaFin", fechaFin);
     const qs = params.toString();
     api
-      .get<CuadreResponse>(`/reservas/cuadre${qs ? `?${qs}` : ""}`)
+      .get<CuadreResponse>(`/pagos/cuadre${qs ? `?${qs}` : ""}`)
       .then(setData)
       .finally(() => setLoading(false));
   };
@@ -111,45 +76,21 @@ export default function CuadreDeCajaPage() {
   useEffect(() => {
     const timeout = setTimeout(cargar, 300);
     return () => clearTimeout(timeout);
-  }, [codigoReserva, estado, vendedorId, clienteId, fechaInicio, fechaFin]);
-
-  useEffect(() => {
-    if (vendedorId && !vendedoresFiltrados.some((v) => v.id === vendedorId)) {
-      setVendedorId("");
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId]);
-
-  useEffect(() => {
-    setEnlace(null);
-    setErrorEnlace(null);
-  }, [clienteId, estado, fechaInicio, fechaFin]);
-
-  const generarEnlace = () => {
-    if (!clienteId) return;
-    setEnviando(true);
-    setErrorEnlace(null);
-    const params = new URLSearchParams();
-    params.set("clienteId", clienteId);
-    if (estado) params.set("estado", estado);
-    if (fechaInicio) params.set("fechaInicio", fechaInicio);
-    if (fechaFin) params.set("fechaFin", fechaFin);
-    api
-      .get<{ url: string; cliente: Cliente }>(`/reservas/cuadre/enlace?${params.toString()}`)
-      .then(setEnlace)
-      .catch(() => setErrorEnlace("No se pudo generar el enlace"))
-      .finally(() => setEnviando(false));
-  };
-
-  const filtrandoPorCodigo = codigoReserva.trim().length > 0;
+  }, [codigoReserva, fechaInicio, fechaFin]);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Cuadre de caja</h1>
+      <div>
+        <h1 className="text-2xl font-semibold">Cuadre de caja</h1>
+        <p className="text-sm text-gray-500">
+          Ingresos efectivamente percibidos (pagos registrados como pagados). Sin fechas marcadas se suma todo.
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-white p-4">
         <div>
-          <label className="block text-sm font-medium">Código de reserva</label>
+          <label className="block text-sm font-medium"># Reserva</label>
           <input
             value={codigoReserva}
             onChange={(e) => setCodigoReserva(e.target.value)}
@@ -158,131 +99,24 @@ export default function CuadreDeCajaPage() {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium">Estado</label>
-          <select
-            disabled={filtrandoPorCodigo}
-            value={estado}
-            onChange={(e) => setEstado(e.target.value)}
-            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">Todos</option>
-            {ESTADOS.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium">Cliente</label>
-          <select
-            disabled={filtrandoPorCodigo}
-            value={clienteId}
-            onChange={(e) => setClienteId(e.target.value)}
-            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">Todos</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium">Vendedor</label>
-          <select
-            disabled={filtrandoPorCodigo}
-            value={vendedorId}
-            onChange={(e) => setVendedorId(e.target.value)}
-            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
-          >
-            <option value="">Todos</option>
-            {vendedoresFiltrados.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
           <label className="block text-sm font-medium">Desde</label>
           <input
             type="date"
-            disabled={filtrandoPorCodigo}
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
+            className="mt-1 rounded border px-3 py-2 text-sm"
           />
         </div>
         <div>
           <label className="block text-sm font-medium">Hasta</label>
           <input
             type="date"
-            disabled={filtrandoPorCodigo}
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className="mt-1 rounded border px-3 py-2 text-sm disabled:opacity-50"
+            className="mt-1 rounded border px-3 py-2 text-sm"
           />
         </div>
       </div>
-
-      {filtrandoPorCodigo && (
-        <p className="text-xs text-gray-500">
-          Filtrando solo por código de reserva — se ignoran fecha, estado y vendedor.
-        </p>
-      )}
-
-      {clienteId && (
-        <div className="rounded-lg border bg-white p-4">
-          <h2 className="text-sm font-semibold text-gray-500">Enviar cuadre al cliente</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Genera un enlace público (sin login) con el cuadre filtrado, para que el cliente lo revise y realice sus pagos.
-          </p>
-          <button
-            onClick={generarEnlace}
-            disabled={enviando}
-            className="mt-2 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {enviando ? "Generando..." : "Generar enlace"}
-          </button>
-          {errorEnlace && <p className="mt-2 text-xs text-red-600">{errorEnlace}</p>}
-          {enlace && (
-            <div className="mt-3 space-y-2">
-              <input
-                readOnly
-                value={enlace.url}
-                onClick={(e) => e.currentTarget.select()}
-                className="w-full rounded border px-2 py-1 text-xs font-mono"
-              />
-              <div className="flex flex-wrap gap-2">
-                {enlace.cliente.telefono && (
-                  <a
-                    href={`https://wa.me/${enlace.cliente.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
-                      `Hola, aquí está el enlace de tu cuadre de cuenta: ${enlace.url}`,
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded border px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
-                  >
-                    Enviar por WhatsApp
-                  </a>
-                )}
-                {enlace.cliente.email && (
-                  <a
-                    href={`mailto:${enlace.cliente.email}?subject=${encodeURIComponent(
-                      "Cuadre de cuenta",
-                    )}&body=${encodeURIComponent(`Hola, aquí está el enlace de tu cuadre de cuenta: ${enlace.url}`)}`}
-                    className="rounded border px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
-                  >
-                    Enviar por correo
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {loading && <p className="text-sm text-gray-400">Cargando...</p>}
 
@@ -291,7 +125,7 @@ export default function CuadreDeCajaPage() {
           {data.monedaPrincipal && data.totalGeneral && (
             <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-5">
               <h2 className="mb-1 text-sm font-semibold text-emerald-700">
-                Total general (convertido a moneda predeterminada)
+                Total general percibido (convertido a moneda predeterminada)
               </h2>
               <p className="text-2xl font-bold text-emerald-800">
                 {data.totalGeneral.monedaSimbolo} {formatMonto(data.totalGeneral.total)} {data.totalGeneral.monedaCodigo}
@@ -304,15 +138,13 @@ export default function CuadreDeCajaPage() {
           )}
 
           <div className="rounded-lg border bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-gray-500">
-              Totales por moneda (dinero real en caja por tipo de moneda)
-            </h2>
+            <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por moneda</h2>
             <table className="w-full min-w-[640px] text-sm">
               <thead className="text-left text-gray-500">
                 <tr>
                   <th className="py-1">Moneda</th>
                   <th className="py-1">Tipo de cambio</th>
-                  <th className="py-1">Cantidad</th>
+                  <th className="py-1">Cantidad de pagos</th>
                   <th className="py-1">Total</th>
                   {data.monedaPrincipal && <th className="py-1">Equivalente</th>}
                 </tr>
@@ -355,34 +187,30 @@ export default function CuadreDeCajaPage() {
           </div>
 
           <div className="rounded-lg border bg-white p-5">
-            <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por vendedor y moneda</h2>
+            <h2 className="mb-3 text-sm font-semibold text-gray-500">Totales por moneda y forma de pago</h2>
             <table className="w-full min-w-[640px] text-sm">
               <thead className="text-left text-gray-500">
                 <tr>
-                  <th className="py-1">Vendedor</th>
                   <th className="py-1">Moneda</th>
-                  <th className="py-1">Tipo de cambio</th>
+                  <th className="py-1">Forma de pago</th>
                   <th className="py-1">Cantidad</th>
                   <th className="py-1">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {data.porVendedor.map((v) => (
-                  <tr key={`${v.vendedorId}-${v.monedaId}`} className="border-t">
-                    <td className="py-1">{v.vendedorNombre}</td>
+                {data.porMonedaFormaPago.map((v) => (
+                  <tr key={`${v.monedaId}-${v.formaPagoId}`} className="border-t">
                     <td className="py-1">{v.monedaCodigo}</td>
-                    <td className="py-1 text-gray-500">
-                      {v.monedaCodigo === data.monedaPrincipal?.codigo ? "—" : v.tasaCambio.toFixed(4)}
-                    </td>
+                    <td className="py-1">{v.formaPagoNombre}</td>
                     <td className="py-1">{v.cantidad}</td>
-                    <td className="py-1">
+                    <td className="py-1 font-semibold">
                       {v.monedaSimbolo} {formatMonto(v.total)}
                     </td>
                   </tr>
                 ))}
-                {data.porVendedor.length === 0 && (
+                {data.porMonedaFormaPago.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-4 text-center text-gray-400">
+                    <td colSpan={4} className="py-4 text-center text-gray-400">
                       Sin resultados
                     </td>
                   </tr>
@@ -395,37 +223,39 @@ export default function CuadreDeCajaPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-gray-50 text-left text-gray-500">
                 <tr>
-                  <th className="px-4 py-2">Código</th>
-                  <th className="px-4 py-2">Cliente</th>
-                  <th className="px-4 py-2">Vendedor</th>
                   <th className="px-4 py-2">Fecha</th>
+                  <th className="px-4 py-2">Reserva</th>
+                  <th className="px-4 py-2">Vendedor</th>
                   <th className="px-4 py-2">Forma de pago</th>
-                  <th className="px-4 py-2">Estado</th>
                   <th className="px-4 py-2">Moneda</th>
+                  <th className="px-4 py-2">Monto</th>
+                  <th className="px-4 py-2">Impuesto</th>
                   <th className="px-4 py-2">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {data.reservas.length === 0 && (
+                {data.pagos.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
-                      No hay reservas para los filtros seleccionados
+                      No hay pagos para los filtros seleccionados
                     </td>
                   </tr>
                 )}
-                {data.reservas.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="px-4 py-2 font-mono">{r.codigoReserva}</td>
-                    <td className="px-4 py-2">{r.cliente?.nombre}</td>
-                    <td className="px-4 py-2">{r.vendedor?.nombre}</td>
-                    <td className="px-4 py-2">{formatFecha(r.fechaServicioInicio)}</td>
-                    <td className="px-4 py-2">{r.formaPago?.nombre ?? "—"}</td>
+                {data.pagos.map((p) => (
+                  <tr key={p.id} className="border-t">
+                    <td className="px-4 py-2">{formatFecha(p.fecha)}</td>
+                    <td className="px-4 py-2 font-mono">{p.codigoReserva}</td>
+                    <td className="px-4 py-2">{p.vendedorNombre ?? "—"}</td>
+                    <td className="px-4 py-2">{p.formaPago.nombre}</td>
+                    <td className="px-4 py-2">{p.moneda.codigo}</td>
                     <td className="px-4 py-2">
-                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{r.estado}</span>
+                      {p.moneda.simbolo} {formatMonto(Number(p.monto))}
                     </td>
-                    <td className="px-4 py-2">{r.moneda?.codigo}</td>
-                    <td className="px-4 py-2">
-                      {r.moneda?.simbolo} {r.total !== null ? formatMonto(r.total) : "-"}
+                    <td className="px-4 py-2 text-gray-500">
+                      {Number(p.montoImpuesto) > 0 ? `${p.moneda.simbolo} ${formatMonto(Number(p.montoImpuesto))}` : "—"}
+                    </td>
+                    <td className="px-4 py-2 font-semibold">
+                      {p.moneda.simbolo} {formatMonto(Number(p.monto) + Number(p.montoImpuesto))}
                     </td>
                   </tr>
                 ))}
