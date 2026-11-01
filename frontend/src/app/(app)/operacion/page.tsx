@@ -14,12 +14,11 @@ interface ItemAgenda {
   horaInicio: string;
   estado: string;
   servicio: { nombre: string };
-  vehiculo?: { patente: string } | null;
-  guia?: { nombre: string } | null;
-  puntoRecogida?: { nombre: string } | null;
+  proveedorOrdenServicio: string | null;
   dia: {
     itinerario: {
       reserva: {
+        estado: string;
         codigoReserva: string;
         cliente: { nombre: string };
         vendedor: { nombre: string };
@@ -28,6 +27,13 @@ interface ItemAgenda {
     };
   };
 }
+
+const COLOR_ESTADO_RESERVA: Record<string, string> = {
+  CONFIRMADA: "bg-green-100 text-green-700",
+  PENDIENTE: "bg-yellow-100 text-yellow-700",
+  OPERADA: "bg-blue-100 text-blue-700",
+  CANCELADA: "bg-red-100 text-red-700",
+};
 
 export default function OperacionPage() {
   const [fecha, setFecha] = useState(hoyLocal);
@@ -147,9 +153,7 @@ export default function OperacionPage() {
             <tr>
               <th className="px-4 py-2">Hora</th>
               <th className="px-4 py-2">Servicio</th>
-              <th className="px-4 py-2">Punto de recogida</th>
-              <th className="px-4 py-2">Vehículo</th>
-              <th className="px-4 py-2">Guía</th>
+              <th className="px-4 py-2">Proveedor</th>
               <th className="px-4 py-2">Reserva</th>
               <th className="px-4 py-2">Cliente</th>
               <th className="px-4 py-2">Vendedor</th>
@@ -160,29 +164,41 @@ export default function OperacionPage() {
           <tbody>
             {agenda.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   Sin servicios programados para esta fecha
                 </td>
               </tr>
             )}
-            {agenda.map((item) => (
-              <tr key={item.id} className="border-t">
-                <td className="px-4 py-2">{item.horaInicio}</td>
-                <td className="px-4 py-2">{item.servicio.nombre}</td>
-                <td className="px-4 py-2">{item.puntoRecogida?.nombre ?? "-"}</td>
-                <td className="px-4 py-2">{item.vehiculo?.patente ?? "-"}</td>
-                <td className="px-4 py-2">{item.guia?.nombre ?? "-"}</td>
-                <td className="px-4 py-2 font-mono">{item.dia.itinerario.reserva.codigoReserva}</td>
-                <td className="px-4 py-2">{item.dia.itinerario.reserva.cliente.nombre}</td>
-                <td className="px-4 py-2">{item.dia.itinerario.reserva.vendedor?.nombre ?? "-"}</td>
-                <td className="px-4 py-2">
-                  {item.dia.itinerario.reserva.pasajeros.map((p) => p.nombre).join(", ")}
-                </td>
-                <td className="px-4 py-2">
-                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">{item.estado}</span>
-                </td>
-              </tr>
-            ))}
+            {agenda.map((item) => {
+              const enlazado = Boolean(item.proveedorOrdenServicio);
+              const estadoReserva = item.dia.itinerario.reserva.estado;
+              return (
+                <tr key={item.id} className={`border-t ${enlazado ? "bg-green-50" : ""}`}>
+                  <td className="px-4 py-2">{item.horaInicio}</td>
+                  <td className={`px-4 py-2 ${enlazado ? "font-medium text-green-700" : ""}`}>
+                    {item.servicio.nombre}
+                  </td>
+                  <td className={`px-4 py-2 ${enlazado ? "font-medium text-green-700" : "text-gray-400"}`}>
+                    {item.proveedorOrdenServicio ?? "-"}
+                  </td>
+                  <td className="px-4 py-2 font-mono">{item.dia.itinerario.reserva.codigoReserva}</td>
+                  <td className="px-4 py-2">{item.dia.itinerario.reserva.cliente.nombre}</td>
+                  <td className="px-4 py-2">{item.dia.itinerario.reserva.vendedor?.nombre ?? "-"}</td>
+                  <td className="px-4 py-2">
+                    {item.dia.itinerario.reserva.pasajeros.map((p) => p.nombre).join(", ")}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs ${
+                        COLOR_ESTADO_RESERVA[estadoReserva] ?? "bg-gray-100 text-gray-700"
+                      }`}
+                    >
+                      {estadoReserva}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

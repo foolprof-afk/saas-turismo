@@ -15,7 +15,7 @@ export class ItinerariosService {
     const inicioDia = new Date(dia.setHours(0, 0, 0, 0));
     const finDia = new Date(dia.setHours(23, 59, 59, 999));
 
-    return this.prisma.itinerarioServicio.findMany({
+    const agenda = await this.prisma.itinerarioServicio.findMany({
       where: {
         dia: {
           fecha: { gte: inicioDia, lte: finDia },
@@ -43,6 +43,27 @@ export class ItinerariosService {
       },
       orderBy: { horaInicio: 'asc' },
     });
+
+    // OrdenServicioItem no referencia directamente al ItinerarioServicio (ver schema): para
+    // saber qué servicios de la agenda ya tienen una orden de servicio emitida a un proveedor
+    // (y a cuál), se matchea por servicio + fecha del día, que es la única relación disponible.
+    const servicioIds = Array.from(new Set(agenda.map((i) => i.servicioId)));
+    const ordenesItems = servicioIds.length
+      ? await this.prisma.ordenServicioItem.findMany({
+          where: {
+            servicioId: { in: servicioIds },
+            fechaServicio: { gte: inicioDia, lte: finDia },
+            ordenServicio: { agenciaId, estado: { not: 'ANULADA' } },
+          },
+          include: { ordenServicio: { include: { proveedor: true } } },
+        })
+      : [];
+    const proveedorPorServicio = new Map(ordenesItems.map((oi) => [oi.servicioId, oi.ordenServicio.proveedor.nombre]));
+
+    return agenda.map((item) => ({
+      ...item,
+      proveedorOrdenServicio: proveedorPorServicio.get(item.servicioId) ?? null,
+    }));
   }
 
   findByReserva(agenciaId: string, reservaId: string) {
