@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent, DragEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { BuscadorServicio } from "@/components/buscador-servicio";
+import { BuscadorPasajero } from "@/components/buscador-pasajero";
 import { formatMonto } from "@/lib/moneda";
 import { hoyLocal } from "@/lib/fecha";
 
@@ -288,13 +289,17 @@ export default function NuevaCotizacionPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Pasajero responsable</label>
-            <input
-              required
-              value={pasajeroResponsable}
-              onChange={(e) => setPasajeroResponsable(e.target.value)}
-              placeholder="Nombre completo"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-            />
+            <div className="mt-1">
+              <BuscadorPasajero
+                required
+                value={pasajeroResponsable}
+                onChange={setPasajeroResponsable}
+                onSeleccionar={(p) => {
+                  setPasajeroResponsable(p.nombre);
+                  if (p.telefono) setTelefonoResponsable(p.telefono);
+                }}
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium">Cantidad de personas</label>

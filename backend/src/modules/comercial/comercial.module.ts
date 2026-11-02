@@ -4,9 +4,17 @@ import { ReservasModule } from './reservas/reservas.module';
 import { VouchersModule } from './vouchers/vouchers.module';
 import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 import { OrdenesServicioModule } from './ordenes-servicio/ordenes-servicio.module';
+import { PasajerosModule } from './pasajeros/pasajeros.module';
 
 @Module({
-  imports: [ClientesModule, ReservasModule, VouchersModule, CotizacionesModule, OrdenesServicioModule],
+  imports: [
+    ClientesModule,
+    ReservasModule,
+    VouchersModule,
+    CotizacionesModule,
+    OrdenesServicioModule,
+    PasajerosModule,
+  ],
   exports: [VouchersModule],
 })
 export class ComercialModule {}

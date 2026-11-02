@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { BuscadorServicio } from "@/components/buscador-servicio";
+import { BuscadorPasajero } from "@/components/buscador-pasajero";
 
 interface Opcion {
   id: string;
@@ -441,13 +442,20 @@ export default function NuevaReservaPage() {
                   onChange={() => setResponsableIndex(i)}
                   title="Responsable del grupo"
                 />
-                <input
-                  required
-                  placeholder="Nombre completo"
-                  value={p.nombre}
-                  onChange={(e) => actualizarPasajero(i, { nombre: e.target.value })}
-                  className="flex-1 rounded border px-3 py-2 text-sm"
-                />
+                <div className="flex-1">
+                  <BuscadorPasajero
+                    required
+                    value={p.nombre}
+                    onChange={(nombre) => actualizarPasajero(i, { nombre })}
+                    onSeleccionar={(sugerido) =>
+                      actualizarPasajero(i, {
+                        nombre: sugerido.nombre,
+                        telefono: sugerido.telefono ?? p.telefono,
+                      })
+                    }
+                    className="w-full rounded border px-3 py-2 text-sm"
+                  />
+                </div>
                 <input
                   placeholder="Teléfono"
                   value={p.telefono}
