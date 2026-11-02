@@ -65,6 +65,7 @@ export default function OrdenesServicioPage() {
   const [proveedores, setProveedores] = useState<Opcion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cambiandoPago, setCambiandoPago] = useState<string | null>(null);
 
   const [proveedorId, setProveedorId] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
@@ -94,6 +95,21 @@ export default function OrdenesServicioPage() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Un click en la insignia de estado marca/desmarca la orden como pagada al proveedor.
+  const togglePago = async (orden: OrdenServicio) => {
+    if (orden.estado === "ANULADA") return;
+    setCambiandoPago(orden.id);
+    try {
+      const endpoint = orden.estado === "PAGADA" ? "despagar" : "pagar";
+      await api.patch(`/ordenes-servicio/${orden.id}/${endpoint}`);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado de pago");
+    } finally {
+      setCambiandoPago(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -229,13 +245,21 @@ export default function OrdenesServicioPage() {
                 <td className="px-4 py-2">{rangoFechas(o)}</td>
                 <td className="px-4 py-2">{formatFechaCorta(o.fechaEmision)}</td>
                 <td className="px-4 py-2">
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs ${
-                      o.estado === "ANULADA" ? "bg-red-100 text-red-700" : "bg-gray-100"
+                  <button
+                    type="button"
+                    onClick={() => togglePago(o)}
+                    disabled={o.estado === "ANULADA" || cambiandoPago === o.id}
+                    title={o.estado === "ANULADA" ? undefined : "Click para cambiar el estado de pago"}
+                    className={`rounded-full px-2 py-1 text-xs disabled:cursor-not-allowed ${
+                      o.estado === "ANULADA"
+                        ? "bg-red-100 text-red-700"
+                        : o.estado === "PAGADA"
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          : "bg-gray-100 hover:bg-gray-200"
                     }`}
                   >
                     {o.estado}
-                  </span>
+                  </button>
                 </td>
                 <td className="px-4 py-2">
                   {totalOrden(o).map((t) => (

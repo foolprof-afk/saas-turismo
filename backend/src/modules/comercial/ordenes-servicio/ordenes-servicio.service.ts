@@ -260,6 +260,21 @@ export class OrdenesServicioService {
     return this.prisma.ordenServicio.update({ where: { id }, data: { estado: 'ANULADA' } });
   }
 
+  /**
+   * Marca/desmarca el pago de la orden al proveedor (un click en el listado o en el detalle).
+   * Solo aplica entre EMITIDA y PAGADA; una orden ANULADA no se puede marcar como pagada.
+   */
+  async marcarPagada(agenciaId: string, id: string, pagada: boolean) {
+    const orden = await this.findOne(agenciaId, id);
+    if (orden.estado === 'ANULADA') {
+      throw new BadRequestException('No se puede cambiar el estado de pago de una orden anulada');
+    }
+    return this.prisma.ordenServicio.update({
+      where: { id },
+      data: { estado: pagada ? 'PAGADA' : 'EMITIDA' },
+    });
+  }
+
   async eliminar(agenciaId: string, id: string) {
     await this.findOne(agenciaId, id);
     return this.prisma.ordenServicio.delete({ where: { id } });

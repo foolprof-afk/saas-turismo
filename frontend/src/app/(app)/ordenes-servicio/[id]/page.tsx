@@ -103,6 +103,20 @@ export default function OrdenServicioDetallePage() {
     }
   };
 
+  const handleTogglePago = async () => {
+    if (!orden) return;
+    setProcesando(true);
+    try {
+      const endpoint = orden.estado === "PAGADA" ? "despagar" : "pagar";
+      await api.patch(`/ordenes-servicio/${params.id}/${endpoint}`);
+      cargar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo actualizar el estado de pago");
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const handleEliminar = async () => {
     if (!confirm("¿Eliminar esta orden de servicio de forma permanente?")) return;
     setProcesando(true);
@@ -149,6 +163,19 @@ export default function OrdenServicioDetallePage() {
             >
               Editar
             </Link>
+          )}
+          {orden.estado !== "ANULADA" && (
+            <button
+              onClick={handleTogglePago}
+              disabled={procesando}
+              className={`rounded border px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
+                orden.estado === "PAGADA"
+                  ? "text-emerald-700 hover:bg-emerald-50"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {orden.estado === "PAGADA" ? "Marcar como pendiente" : "Marcar como pagada"}
+            </button>
           )}
           {orden.estado === "EMITIDA" && (
             <button
@@ -200,7 +227,11 @@ export default function OrdenServicioDetallePage() {
             <p className="font-mono text-sm">{orden.codigoOrden}</p>
             <span
               className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${
-                orden.estado === "ANULADA" ? "bg-red-100 text-red-700" : "bg-gray-100"
+                orden.estado === "ANULADA"
+                  ? "bg-red-100 text-red-700"
+                  : orden.estado === "PAGADA"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-gray-100"
               }`}
             >
               {orden.estado}

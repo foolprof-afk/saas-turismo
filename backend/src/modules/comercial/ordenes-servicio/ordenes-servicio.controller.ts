@@ -57,6 +57,18 @@ export class OrdenesServicioController {
     return this.ordenesServicioService.anular(user.agenciaId, id);
   }
 
+  @Patch(':id/pagar')
+  pagar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    assertPermiso(user, 'ordenes-servicio', 'escribir');
+    return this.ordenesServicioService.marcarPagada(user.agenciaId, id, true);
+  }
+
+  @Patch(':id/despagar')
+  despagar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    assertPermiso(user, 'ordenes-servicio', 'escribir');
+    return this.ordenesServicioService.marcarPagada(user.agenciaId, id, false);
+  }
+
   @Delete(':id')
   eliminar(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     assertPermiso(user, 'ordenes-servicio', 'eliminar');
