@@ -24,8 +24,17 @@ interface OrdenServicio {
   codigoOrden: string;
   estado: string;
   fechaEmision: string;
+  notas: string | null;
   proveedor: { nombre: string };
   items: OrdenServicioItem[];
+}
+
+// OrdenServicio no referencia a Reserva/Pasajero directamente; cuando la orden se generó a
+// partir de una reserva, el pasajero queda precargado en "notas" como "Pasajero: ...".
+function extraerPasajero(notas: string | null): string | null {
+  if (!notas) return null;
+  const match = notas.match(/Pasajero:\s*([^|]+)/);
+  return match ? match[1].trim() : null;
 }
 
 function totalOrden(orden: OrdenServicio) {
@@ -53,6 +62,7 @@ function filasOrdenesCsv(ordenes: OrdenServicio[]) {
   return ordenes.map((o) => ({
     Código: o.codigoOrden,
     Proveedor: o.proveedor?.nombre ?? "",
+    Pasajero: extraerPasajero(o.notas) ?? "",
     "Fecha servicio": rangoFechas(o),
     Emisión: formatFechaCorta(o.fechaEmision),
     Estado: o.estado,
@@ -241,7 +251,12 @@ export default function OrdenesServicioPage() {
                     {o.codigoOrden}
                   </Link>
                 </td>
-                <td className="px-4 py-2">{o.proveedor?.nombre}</td>
+                <td className="px-4 py-2">
+                  {o.proveedor?.nombre}
+                  {extraerPasajero(o.notas) && (
+                    <span className="block text-xs text-gray-400">{extraerPasajero(o.notas)}</span>
+                  )}
+                </td>
                 <td className="px-4 py-2">{rangoFechas(o)}</td>
                 <td className="px-4 py-2">{formatFechaCorta(o.fechaEmision)}</td>
                 <td className="px-4 py-2">
