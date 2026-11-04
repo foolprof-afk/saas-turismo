@@ -48,14 +48,18 @@ export class ItinerariosService {
     // saber qué servicios de la agenda ya tienen una orden de servicio emitida a un proveedor
     // (y a cuál), se matchea por servicio + fecha del día, que es la única relación disponible.
     const servicioIds = Array.from(new Set(agenda.map((i) => i.servicioId)));
+    // Se incluyen también las órdenes ANULADAS: antes se excluían y el servicio quedaba sin
+    // ningún dato de orden en la agenda, como si nunca se hubiera emitido una (ver frontend,
+    // que la muestra tachada/en rojo en vez de ocultarla).
     const ordenesItems = servicioIds.length
       ? await this.prisma.ordenServicioItem.findMany({
           where: {
             servicioId: { in: servicioIds },
             fechaServicio: { gte: inicioDia, lte: finDia },
-            ordenServicio: { agenciaId, estado: { not: 'ANULADA' } },
+            ordenServicio: { agenciaId },
           },
           include: { ordenServicio: { include: { proveedor: true } } },
+          orderBy: { ordenServicio: { estado: 'asc' } }, // ANULADA > EMITIDA/PAGADA alfabéticamente, así la vigente gana el Map si hay varias
         })
       : [];
     const ordenPorServicio = new Map(
@@ -65,6 +69,7 @@ export class ItinerariosService {
           id: oi.ordenServicio.id,
           codigoOrden: oi.ordenServicio.codigoOrden,
           proveedor: oi.ordenServicio.proveedor.nombre,
+          estado: oi.ordenServicio.estado,
         },
       ]),
     );
@@ -74,7 +79,7 @@ export class ItinerariosService {
       return {
         ...item,
         proveedorOrdenServicio: orden?.proveedor ?? null,
-        ordenServicio: orden ? { id: orden.id, codigoOrden: orden.codigoOrden } : null,
+        ordenServicio: orden ? { id: orden.id, codigoOrden: orden.codigoOrden, estado: orden.estado } : null,
       };
     });
   }

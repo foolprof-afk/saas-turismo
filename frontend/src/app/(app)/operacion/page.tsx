@@ -16,7 +16,7 @@ interface ItemAgenda {
   estado: string;
   servicio: { nombre: string };
   proveedorOrdenServicio: string | null;
-  ordenServicio: { id: string; codigoOrden: string } | null;
+  ordenServicio: { id: string; codigoOrden: string; estado: string } | null;
   dia: {
     itinerario: {
       reserva: {
@@ -173,25 +173,34 @@ export default function OperacionPage() {
               </tr>
             )}
             {agenda.map((item) => {
-              const enlazado = Boolean(item.proveedorOrdenServicio);
+              const ordenAnulada = item.ordenServicio?.estado === "ANULADA";
+              const enlazado = Boolean(item.proveedorOrdenServicio) && !ordenAnulada;
               const estadoReserva = item.dia.itinerario.reserva.estado;
               return (
-                <tr key={item.id} className={`border-t ${enlazado ? "bg-green-50" : ""}`}>
+                <tr key={item.id} className={`border-t ${enlazado ? "bg-green-50" : ordenAnulada ? "bg-red-50" : ""}`}>
                   <td className="px-4 py-2">{item.horaInicio}</td>
                   <td className={`px-4 py-2 ${enlazado ? "font-medium text-green-700" : ""}`}>
                     {item.servicio.nombre}
                   </td>
-                  <td className={`px-4 py-2 ${enlazado ? "font-medium text-green-700" : "text-gray-400"}`}>
+                  <td
+                    className={`px-4 py-2 ${
+                      enlazado ? "font-medium text-green-700" : ordenAnulada ? "text-red-600 line-through" : "text-gray-400"
+                    }`}
+                  >
                     {item.proveedorOrdenServicio ?? "-"}
                   </td>
                   <td className="px-4 py-2 font-mono">
                     {item.ordenServicio ? (
-                      <Link href={`/ordenes-servicio/${item.ordenServicio.id}`} className="text-blue-600 hover:underline">
+                      <Link
+                        href={`/ordenes-servicio/${item.ordenServicio.id}`}
+                        className={ordenAnulada ? "text-red-600 line-through hover:underline" : "text-blue-600 hover:underline"}
+                      >
                         {item.ordenServicio.codigoOrden}
                       </Link>
                     ) : (
                       <span className="text-gray-400">-</span>
                     )}
+                    {ordenAnulada && <span className="ml-1 text-xs text-red-500">(anulada)</span>}
                   </td>
                   <td className="px-4 py-2 font-mono">{item.dia.itinerario.reserva.codigoReserva}</td>
                   <td className="px-4 py-2">{item.dia.itinerario.reserva.cliente.nombre}</td>
