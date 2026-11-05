@@ -822,6 +822,16 @@ export default function ReservaDetallePage() {
       {reserva.estado !== "CANCELADA" && pasarelasPago.some((p) => p.activo) && (
         <div className="rounded-lg border bg-white p-5 print:hidden">
           <h2 className="mb-3 text-sm font-semibold text-gray-500">Link de pago</h2>
+          {/* Aviso si la generación automática al confirmar la cotización falló (ver
+              CotizacionesService.confirmar/LinksPagoService.generarAutomaticos) y el vendedor
+              todavía no generó ninguno manualmente. */}
+          {linksPago.length === 0 &&
+            reserva.historial.some((h) => h.descripcion.startsWith("No se pudo generar el link de pago automático")) && (
+              <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                No se pudo generar automáticamente el link de pago al confirmar esta reserva. Generalo manualmente
+                abajo.
+              </p>
+            )}
           <p className="mb-3 text-xs text-gray-500">
             {saldoConsolidadoEnMonedaEfectiva !== undefined && saldoConsolidadoEnMonedaEfectiva > 0 ? (
               <>

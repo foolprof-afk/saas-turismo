@@ -499,8 +499,20 @@ export class CotizacionesService {
 
     // Genera automáticamente los links de pago (abono mínimo + 100% del total) para que el
     // cliente ya tenga cómo pagar desde que se confirma la cotización, sin que el vendedor tenga
-    // que generarlos manualmente (ver LinksPagoService.generarAutomaticos).
-    await this.linksPagoService.generarAutomaticos(agenciaId, reserva.id);
+    // que generarlos manualmente (ver LinksPagoService.generarAutomaticos). Si no se pudo generar,
+    // se deja un aviso visible en el historial de la reserva en vez de fallar en silencio.
+    const resultadoLinks = await this.linksPagoService.generarAutomaticos(agenciaId, reserva.id);
+    if (!resultadoLinks.ok) {
+      await this.prisma.reservaHistorial.create({
+        data: {
+          reservaId: reserva.id,
+          usuarioId: user?.userId ?? null,
+          descripcion: `No se pudo generar el link de pago automático al confirmar la reserva${
+            resultadoLinks.motivo ? ` (${resultadoLinks.motivo})` : ''
+          }. Genéralo manualmente desde esta pantalla.`,
+        },
+      });
+    }
 
     return this.findOne(agenciaId, id, user);
   }

@@ -130,25 +130,28 @@ export class LinksPagoService {
    * el cliente elija cómo pagar: uno por el abono mínimo (30% del total si supera los 100 de la
    * moneda principal de la agencia, 50% si es igual o menor) y otro por el 100% del total. No
    * lanza error si no se puede resolver automáticamente (sin pasarela activa única configurada,
-   * sin moneda principal, reserva MULTIPLE con más de una moneda, etc.): la confirmación de la
-   * cotización no debe bloquearse por esto (ver CotizacionesService.confirmar), y el vendedor
+   * sin moneda principal, etc.): la confirmación de la cotización no debe bloquearse por esto
+   * (ver CotizacionesService.confirmar), pero sí se devuelve el motivo para que el caller pueda
+   * dejar constancia visible (ver reserva_historial) en vez de fallar en silencio, y el vendedor
    * siempre puede generar el link manualmente desde el detalle de la reserva.
    */
-  async generarAutomaticos(agenciaId: string, reservaId: string): Promise<void> {
+  async generarAutomaticos(agenciaId: string, reservaId: string): Promise<{ ok: boolean; motivo?: string }> {
+    const datos = await this.calcularAbonoAutomatico(agenciaId, reservaId);
+    if (!datos) return { ok: true }; // reserva cancelada o sin saldo pendiente: no hay nada que cobrar
+    if ('motivo' in datos) return { ok: false, motivo: datos.motivo };
     try {
-      const datos = await this.calcularAbonoAutomatico(agenciaId, reservaId);
-      if (!datos) return;
       await this.generar(agenciaId, reservaId, { monedaId: datos.monedaId, monto: datos.montoAbono });
       await this.generar(agenciaId, reservaId, { monedaId: datos.monedaId, monto: datos.montoTotal });
-    } catch {
-      // Ver comentario arriba: no debe bloquear la confirmación de la cotización.
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, motivo: err instanceof Error ? err.message : 'error desconocido' };
     }
   }
 
   private async calcularAbonoAutomatico(
     agenciaId: string,
     reservaId: string,
-  ): Promise<{ monedaId: string; montoAbono: number; montoTotal: number } | null> {
+  ): Promise<{ monedaId: string; montoAbono: number; montoTotal: number } | { motivo: string } | null> {
     const reserva = await this.prisma.reserva.findFirst({
       where: { id: reservaId, agenciaId },
       include: { moneda: true, itinerario: { include: INCLUDE_ITINERARIO_MONTOS }, pagos: { include: { moneda: true } } },
@@ -156,22 +159,33 @@ export class LinksPagoService {
     if (!reserva || reserva.estado === 'CANCELADA') return null;
 
     const montosReserva = desglosePorMoneda(reserva);
-    const monedaId = reserva.monedaId ?? (montosReserva.length === 1 ? montosReserva[0].monedaId : undefined);
-    if (!monedaId) return null;
+    const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+    // Si la reserva mezcla más de una moneda (p. ej. una cotización con servicios en monedas
+    // distintas, lo más común en reservas MULTIPLE) y no tiene una moneda fija asignada, se usa
+    // la moneda principal de la agencia como moneda del link automático: antes esto simplemente
+    // no generaba ningún link, sin aviso.
+    const monedaId = reserva.monedaId ?? (montosReserva.length === 1 ? montosReserva[0].monedaId : monedaPrincipal?.id);
+    if (!monedaId) {
+      return montosReserva.length > 1
+        ? {
+            motivo:
+              'la reserva tiene servicios en más de una moneda y no hay una moneda principal configurada para la agencia',
+          }
+        : null; // reserva sin ningún servicio con moneda: no hay nada que cobrar, no es un error
+    }
 
     const moneda = await this.prisma.moneda.findFirst({ where: { id: monedaId, agenciaId } });
-    if (!moneda) return null;
+    if (!moneda) return { motivo: 'no se encontró la moneda del link de pago' };
 
     const abonadoActual = calcularAbonado(reserva.pagos);
     const saldoActual = calcularSaldoPendiente(montosReserva, abonadoActual);
-    const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
     const montoTotal = this.saldoPendienteConvertido(saldoActual, monedaPrincipal, {
       id: moneda.id,
       codigo: moneda.codigo,
       simbolo: moneda.simbolo,
       tasaCambio: Number(moneda.tasaCambio),
     });
-    if (!montoTotal || montoTotal <= 0) return null;
+    if (!montoTotal || montoTotal <= 0) return null; // sin saldo pendiente: no hay nada que cobrar
 
     // El umbral de 100 se evalúa en la moneda principal de la agencia (no en la moneda del link
     // en particular), para que el 30%/50% dependa siempre de la misma referencia sin importar en
