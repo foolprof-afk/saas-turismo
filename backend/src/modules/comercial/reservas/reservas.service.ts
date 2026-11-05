@@ -78,7 +78,9 @@ export class ReservasService {
     if (!filtros.codigoReserva && (filtros.fechaInicio || filtros.fechaFin)) {
       where.fechaServicioInicio = {
         ...(filtros.fechaInicio ? { gte: new Date(filtros.fechaInicio) } : {}),
-        ...(filtros.fechaFin ? { lte: new Date(filtros.fechaFin) } : {}),
+        // Se agrega T23:59:59.999 para que fechaFin incluya todo el día, no solo su medianoche
+        // (new Date("YYYY-MM-DD") sin hora cae en las 00:00, excluyendo el resto del día).
+        ...(filtros.fechaFin ? { lte: new Date(`${filtros.fechaFin}T23:59:59.999`) } : {}),
       };
     }
     return where;

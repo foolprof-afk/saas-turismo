@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha } from "@/lib/fecha";
+import { formatFecha, hoyLocal } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 import { descargarCsv } from "@/lib/csv";
 
@@ -124,8 +124,8 @@ export default function ReservasPage() {
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   const [codigoReserva, setCodigoReserva] = useState("");
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaFin, setFechaFin] = useState("");
+  const [fechaInicio, setFechaInicio] = useState(hoyLocal);
+  const [fechaFin, setFechaFin] = useState(hoyLocal);
 
   const cargar = () => {
     setLoading(true);
@@ -148,8 +148,8 @@ export default function ReservasPage() {
     setEstado("");
     setVendedorId("");
     setCodigoReserva("");
-    setFechaInicio("");
-    setFechaFin("");
+    setFechaInicio(hoyLocal());
+    setFechaFin(hoyLocal());
   };
 
   useEffect(() => {

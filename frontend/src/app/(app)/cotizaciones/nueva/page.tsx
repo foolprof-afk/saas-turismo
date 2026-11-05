@@ -457,6 +457,9 @@ export default function NuevaCotizacionPage() {
                           onChange={(e) => actualizarCantidad(i, e.target.value)}
                           className="mt-1 w-20 rounded border px-2 py-2 text-sm"
                         />
+                        {linea.cantidad !== "" && Number(linea.cantidad) !== Number(cantidadPersonas) && (
+                          <p className="mt-1 text-xs text-amber-600">Revisar: distinto de {cantidadPersonas}</p>
+                        )}
                       </div>
                     )}
                     {s && (

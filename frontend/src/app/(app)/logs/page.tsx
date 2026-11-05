@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { formatFechaHora } from "@/lib/fecha";
+import { formatFechaHora, hoyLocal } from "@/lib/fecha";
 
 interface Usuario {
   id: string;
@@ -51,8 +51,8 @@ export default function LogsPage() {
   const [usuarioId, setUsuarioId] = useState("");
   const [accion, setAccion] = useState("");
   const [modulo, setModulo] = useState("");
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaFin, setFechaFin] = useState("");
+  const [fechaInicio, setFechaInicio] = useState(hoyLocal);
+  const [fechaFin, setFechaFin] = useState(hoyLocal);
 
   useEffect(() => {
     api

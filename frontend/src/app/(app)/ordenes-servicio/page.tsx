@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha, formatFechaCorta } from "@/lib/fecha";
+import { formatFecha, formatFechaCorta, hoyLocal } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 import { descargarCsv } from "@/lib/csv";
 
@@ -78,8 +78,8 @@ export default function OrdenesServicioPage() {
   const [cambiandoPago, setCambiandoPago] = useState<string | null>(null);
 
   const [proveedorId, setProveedorId] = useState("");
-  const [fechaDesde, setFechaDesde] = useState("");
-  const [fechaHasta, setFechaHasta] = useState("");
+  const [fechaDesde, setFechaDesde] = useState(hoyLocal);
+  const [fechaHasta, setFechaHasta] = useState(hoyLocal);
   const [codigoOrden, setCodigoOrden] = useState("");
   const [servicio, setServicio] = useState("");
 

@@ -35,7 +35,9 @@ export class OrdenesServicioService {
             ? {
                 fechaServicio: {
                   ...(filtros.fechaDesde ? { gte: new Date(filtros.fechaDesde) } : {}),
-                  ...(filtros.fechaHasta ? { lte: new Date(filtros.fechaHasta) } : {}),
+                  // Se agrega T23:59:59.999 para que fechaHasta incluya todo el día, no solo su
+                  // medianoche (new Date("YYYY-MM-DD") sin hora cae en las 00:00).
+                  ...(filtros.fechaHasta ? { lte: new Date(`${filtros.fechaHasta}T23:59:59.999`) } : {}),
                 },
               }
             : {}),
