@@ -22,6 +22,11 @@ export class ItinerariosService {
           itinerario: {
             reserva: {
               agenciaId,
+              // Despacho del día: solo reservas confirmadas y con al menos un pago registrado
+              // (lo que realmente se va a operar con los proveedores/operadores). Las canceladas
+              // y las pendientes (sin confirmar/sin abono) no deben aparecer acá.
+              estado: 'CONFIRMADA',
+              pagos: { some: {} },
               ...(vendedorIds && vendedorIds.length ? { vendedorId: { in: vendedorIds } } : {}),
             },
           },
