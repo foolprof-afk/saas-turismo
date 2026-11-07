@@ -453,7 +453,7 @@ model Proveedor {
   id              String        @id @default(cuid())
   agenciaId       String
   nombre          String
-  tipo            String // hotel | transportista | guia_freelance | otro
+  tipo            String // hotel | transportista | guia_freelance | otro | operador | ... (ver catálogo TipoProveedor)
   contacto        String?
   condicionesPago String?
   cuentaBancaria  String?
@@ -477,6 +477,17 @@ model TipoServicio {
   servicios Servicio[]
 
   @@map("tipos_servicio")
+}
+
+// Catálogo global (igual que TipoServicio) de los valores que puede tomar Proveedor.tipo.
+// Proveedor.tipo sigue siendo un String libre (no FK) para no requerir migrar los proveedores
+// existentes; este catálogo solo alimenta el selector del formulario y permite agregar nuevos
+// tipos (ej. "operador") desde la UI sin tocar código.
+model TipoProveedor {
+  id     String @id @default(cuid())
+  nombre String @unique
+
+  @@map("tipos_proveedor")
 }
 
 model Servicio {

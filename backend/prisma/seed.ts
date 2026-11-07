@@ -52,6 +52,13 @@ async function main() {
         create: { nombre },
       }),
     ),
+    ...['hotel', 'transportista', 'guia_freelance', 'otro', 'operador'].map((nombre) =>
+      prisma.tipoProveedor.upsert({
+        where: { nombre },
+        update: {},
+        create: { nombre },
+      }),
+    ),
   ]);
 
   console.log('Seed completado: agencia "demo", usuario admin@demo.com / admin123');

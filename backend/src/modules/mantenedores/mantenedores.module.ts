@@ -3,6 +3,7 @@ import { AgenciasModule } from './agencias/agencias.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 import { RolesModule } from './roles/roles.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
+import { TiposProveedorModule } from './tipos-proveedor/tipos-proveedor.module';
 import { ServiciosModule } from './servicios/servicios.module';
 import { TiposServicioModule } from './tipos-servicio/tipos-servicio.module';
 import { PlantillasItinerarioModule } from './plantillas-itinerario/plantillas-itinerario.module';
@@ -23,6 +24,7 @@ import { PasarelasPagoModule } from './pasarelas-pago/pasarelas-pago.module';
     UsuariosModule,
     RolesModule,
     ProveedoresModule,
+    TiposProveedorModule,
     ServiciosModule,
     TiposServicioModule,
     PlantillasItinerarioModule,

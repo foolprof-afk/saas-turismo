@@ -13,9 +13,19 @@ interface Proveedor {
   estado: string;
 }
 
+interface TipoProveedor {
+  id: string;
+  nombre: string;
+}
+
 export default function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [tipos, setTipos] = useState<TipoProveedor[]>([]);
+  const [gestionTiposAbierta, setGestionTiposAbierta] = useState(false);
+  const [nuevoTipo, setNuevoTipo] = useState("");
+  const [tiposError, setTiposError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
@@ -36,9 +46,40 @@ export default function ProveedoresPage() {
       .finally(() => setLoading(false));
   };
 
+  // Catálogo editable de tipos de proveedor (ver TiposProveedorService): alimenta el selector
+  // de abajo y se puede ampliar desde "Gestionar tipos" sin tocar código.
+  const cargarTipos = () => {
+    api.get<TipoProveedor[]>("/tipos-proveedor").then(setTipos);
+  };
+
   useEffect(() => {
     cargar();
+    cargarTipos();
   }, []);
+
+  const crearTipo = async (e: FormEvent) => {
+    e.preventDefault();
+    setTiposError(null);
+    const nombreLimpio = nuevoTipo.trim();
+    if (!nombreLimpio) return;
+    try {
+      await api.post("/tipos-proveedor", { nombre: nombreLimpio });
+      setNuevoTipo("");
+      cargarTipos();
+    } catch (err) {
+      setTiposError(err instanceof ApiError ? err.message : "No se pudo crear el tipo");
+    }
+  };
+
+  const eliminarTipo = async (id: string) => {
+    if (!confirm("¿Eliminar este tipo de proveedor?")) return;
+    try {
+      await api.delete(`/tipos-proveedor/${id}`);
+      cargarTipos();
+    } catch (err) {
+      setTiposError(err instanceof ApiError ? err.message : "No se pudo eliminar el tipo");
+    }
+  };
 
   const resetForm = () => {
     setEditingId(null);
@@ -114,17 +155,56 @@ export default function ProveedoresPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Tipo</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium">Tipo</label>
+              <button
+                type="button"
+                onClick={() => setGestionTiposAbierta((v) => !v)}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Gestionar tipos
+              </button>
+            </div>
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value)}
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             >
-              <option value="hotel">Hotel</option>
-              <option value="transportista">Transportista</option>
-              <option value="guia_freelance">Guía freelance</option>
-              <option value="otro">Otro</option>
+              {/* Si el tipo actual (al editar) ya no está en el catálogo, se incluye igual para no perderlo */}
+              {!tipos.some((t) => t.nombre === tipo) && tipo && <option value={tipo}>{tipo}</option>}
+              {tipos.map((t) => (
+                <option key={t.id} value={t.nombre}>
+                  {t.nombre}
+                </option>
+              ))}
             </select>
+
+            {gestionTiposAbierta && (
+              <div className="mt-2 space-y-2 rounded border bg-gray-50 p-3">
+                <form onSubmit={crearTipo} className="flex gap-2">
+                  <input
+                    value={nuevoTipo}
+                    onChange={(e) => setNuevoTipo(e.target.value)}
+                    placeholder="Nuevo tipo, ej. operador"
+                    className="w-full rounded border px-2 py-1 text-sm"
+                  />
+                  <button type="submit" className="rounded bg-gray-900 px-3 py-1 text-xs font-medium text-white">
+                    Agregar
+                  </button>
+                </form>
+                {tiposError && <p className="text-xs text-red-600">{tiposError}</p>}
+                <ul className="space-y-1">
+                  {tipos.map((t) => (
+                    <li key={t.id} className="flex items-center justify-between text-xs text-gray-700">
+                      <span>{t.nombre}</span>
+                      <button type="button" onClick={() => eliminarTipo(t.id)} className="text-red-600 hover:underline">
+                        Eliminar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
