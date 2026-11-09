@@ -721,7 +721,12 @@ export class ReservasService {
         if (!s) throw new NotFoundException(`Servicio no encontrado: ${linea.servicioId}`);
         const precioMinimo = Number(s.precioBase);
         const precio = linea.precio ?? precioMinimo;
-        if (precio < precioMinimo) {
+        // Si la reserva ya está confirmada (con pago registrado), el precio queda congelado al
+        // momento del pago (ver validación de arriba, que ya exige que coincida con el precio
+        // original de la línea): no se vuelve a comparar contra el precioBase actual del
+        // servicio, que pudo haber subido desde entonces y rechazaría una reprogramación
+        // legítima de fecha/hora sin tocar el precio.
+        if (!pagoRegistrado && precio < precioMinimo) {
           throw new BadRequestException(
             `El precio de "${s.nombre}" no puede ser menor al precio establecido (${precioMinimo})`,
           );
