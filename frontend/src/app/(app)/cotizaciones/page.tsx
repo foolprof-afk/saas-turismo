@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha, hoyLocal } from "@/lib/fecha";
+import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 import { descargarCsv } from "@/lib/csv";
 
@@ -118,8 +118,8 @@ export default function CotizacionesPage() {
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   const [busqueda, setBusqueda] = useState("");
-  const [fechaInicio, setFechaInicio] = useState(hoyLocal);
-  const [fechaFin, setFechaFin] = useState(hoyLocal);
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<SortBy | "">("");
   const [sortDir, setSortDir] = useState<SortDir>("desc");

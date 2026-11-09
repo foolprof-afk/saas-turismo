@@ -32,10 +32,15 @@ const INCLUDE_ITINERARIO_MONTOS = {
 export interface FiltrosReserva {
   estado?: string;
   codigoReserva?: string;
+  // Búsqueda libre por nombre o teléfono del pasajero/cliente: cuando se usa, tiene prioridad
+  // absoluta sobre el resto de los filtros (ver construirWhere).
+  q?: string;
   vendedorId?: string;
   clienteId?: string;
   fechaInicio?: string;
   fechaFin?: string;
+  sortBy?: 'fecha' | 'nombre';
+  sortDir?: 'asc' | 'desc';
 }
 
 @Injectable()
@@ -60,6 +65,32 @@ export class ReservasService {
     filtros: FiltrosReserva = {},
     vendedorIdsPermitidos: string[] | null = null,
   ): Prisma.ReservaWhereInput {
+    // Búsqueda por nombre/teléfono (q) tiene prioridad absoluta: se ignoran código, estado,
+    // vendedor y rango de fechas, así no hay que "limpiar" los demás filtros primero para
+    // poder encontrar una reserva por estos datos. La restricción de visibilidad por vendedor
+    // (vendedorIdsPermitidos) sí se mantiene siempre, es de seguridad, no un filtro de búsqueda.
+    if (filtros.q) {
+      const q = filtros.q.trim();
+      return {
+        agenciaId,
+        ...(vendedorIdsPermitidos ? { vendedorId: { in: vendedorIdsPermitidos } } : {}),
+        OR: [
+          { codigoReserva: { contains: q, mode: 'insensitive' } },
+          { cliente: { nombre: { contains: q, mode: 'insensitive' } } },
+          {
+            pasajeros: {
+              some: {
+                OR: [
+                  { nombre: { contains: q, mode: 'insensitive' } },
+                  { telefono: { contains: q, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        ],
+      };
+    }
+
     const where: Prisma.ReservaWhereInput = { agenciaId };
 
     if (filtros.codigoReserva) {
@@ -144,6 +175,13 @@ export class ReservasService {
 
   async findAll(agenciaId: string, skip = 0, take = 20, filtros: FiltrosReserva = {}, user?: AuthenticatedUser) {
     const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
+    const sortDir = filtros.sortDir ?? 'desc';
+    const orderBy: Prisma.ReservaOrderByWithRelationInput =
+      filtros.sortBy === 'fecha'
+        ? { fechaServicioInicio: sortDir }
+        : filtros.sortBy === 'nombre'
+          ? { cliente: { nombre: sortDir } }
+          : { createdAt: 'desc' };
     const [reservas, monedaPrincipal] = await Promise.all([
       this.prisma.reserva.findMany({
         where: this.construirWhere(agenciaId, filtros, vendedorIdsPermitidos),
@@ -158,7 +196,7 @@ export class ReservasService {
         },
         skip,
         take,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       }),
       this.obtenerMonedaPrincipal(agenciaId),
     ]);

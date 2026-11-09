@@ -55,16 +55,25 @@ export class CotizacionesService {
     filtros: FiltrosCotizacion = {},
     vendedorIdsPermitidos: string[] | null = null,
   ): Prisma.CotizacionWhereInput {
-    const where: Prisma.CotizacionWhereInput = { agenciaId };
-
+    // Búsqueda por código/nombre/teléfono (q) tiene prioridad absoluta: se ignoran estado,
+    // vendedor, cliente y rango de fechas, así no hay que "limpiar" los demás filtros primero
+    // para poder encontrar una cotización por estos datos. La restricción de visibilidad por
+    // vendedor (vendedorIdsPermitidos) sí se mantiene siempre, es de seguridad, no un filtro.
     if (filtros.q) {
       const q = filtros.q.trim();
-      where.OR = [
-        { codigoCotizacion: { contains: q, mode: 'insensitive' } },
-        { pasajeroResponsable: { contains: q, mode: 'insensitive' } },
-        { telefonoResponsable: { contains: q, mode: 'insensitive' } },
-      ];
+      return {
+        agenciaId,
+        ...(vendedorIdsPermitidos ? { vendedorId: { in: vendedorIdsPermitidos } } : {}),
+        OR: [
+          { codigoCotizacion: { contains: q, mode: 'insensitive' } },
+          { pasajeroResponsable: { contains: q, mode: 'insensitive' } },
+          { telefonoResponsable: { contains: q, mode: 'insensitive' } },
+        ],
+      };
     }
+
+    const where: Prisma.CotizacionWhereInput = { agenciaId };
+
     if (filtros.estado) where.estado = filtros.estado as Prisma.EnumEstadoCotizacionFilter['equals'];
     if (filtros.vendedorId) {
       if (vendedorIdsPermitidos && !vendedorIdsPermitidos.includes(filtros.vendedorId)) {

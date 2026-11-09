@@ -20,6 +20,10 @@ export class FiltrosReservaDto {
 
   @IsOptional()
   @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
   vendedorId?: string;
 
   @IsOptional()
@@ -33,6 +37,16 @@ export class FiltrosReservaDto {
   @IsOptional()
   @IsString()
   fechaFin?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['fecha', 'nombre'])
+  sortBy?: 'fecha' | 'nombre';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  sortDir?: 'asc' | 'desc';
 
   @IsOptional()
   @Type(() => Number)

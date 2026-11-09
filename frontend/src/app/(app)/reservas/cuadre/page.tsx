@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { formatFecha, hoyLocal } from "@/lib/fecha";
+import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 
 interface PagoCuadre {
@@ -57,8 +57,8 @@ export default function CuadreDeCajaPage() {
   const [loading, setLoading] = useState(true);
 
   const [codigoReserva, setCodigoReserva] = useState("");
-  const [fechaInicio, setFechaInicio] = useState(hoyLocal);
-  const [fechaFin, setFechaFin] = useState(hoyLocal);
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
 
   const cargar = () => {
     setLoading(true);

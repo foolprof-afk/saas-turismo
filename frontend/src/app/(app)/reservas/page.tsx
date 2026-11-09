@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { formatFecha, hoyLocal } from "@/lib/fecha";
+import { formatFecha } from "@/lib/fecha";
 import { formatMonto } from "@/lib/moneda";
 import { descargarCsv } from "@/lib/csv";
 
@@ -61,6 +61,9 @@ interface Vendedor {
 }
 
 const ESTADOS = ["PENDIENTE", "CONFIRMADA", "OPERADA", "CANCELADA"];
+
+type SortBy = "fecha" | "nombre";
+type SortDir = "asc" | "desc";
 
 // Suma los montos de todas las reservas actualmente listadas (sea la búsqueda por defecto o
 // filtrada), agrupados por moneda: r.montos ya trae el monto real de cada reserva en su propia
@@ -124,18 +127,28 @@ export default function ReservasPage() {
   const [estado, setEstado] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   const [codigoReserva, setCodigoReserva] = useState("");
-  const [fechaInicio, setFechaInicio] = useState(hoyLocal);
-  const [fechaFin, setFechaFin] = useState(hoyLocal);
+  const [busqueda, setBusqueda] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy | "">("");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const cargar = () => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
+    // Si hay búsqueda por nombre/teléfono, el backend la prioriza e ignora el resto de los
+    // filtros (ver reservas.service.ts), así que no hace falta "limpiarlos" acá para buscar.
+    if (busqueda) params.set("q", busqueda);
     if (estado) params.set("estado", estado);
     if (vendedorId) params.set("vendedorId", vendedorId);
     if (codigoReserva) params.set("codigoReserva", codigoReserva);
     if (fechaInicio) params.set("fechaInicio", fechaInicio);
     if (fechaFin) params.set("fechaFin", fechaFin);
+    if (sortBy) {
+      params.set("sortBy", sortBy);
+      params.set("sortDir", sortDir);
+    }
     const qs = params.toString();
     api
       .get<Reserva[]>(`/reservas${qs ? `?${qs}` : ""}`)
@@ -144,19 +157,37 @@ export default function ReservasPage() {
       .finally(() => setLoading(false));
   };
 
+  // Click en una columna ordenable: si ya se está ordenando por esa columna invierte la
+  // dirección, si no, empieza en el orden por defecto de esa columna.
+  const ordenarPor = (columna: SortBy) => {
+    if (sortBy === columna) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(columna);
+      setSortDir(columna === "fecha" ? "desc" : "asc");
+    }
+  };
+
+  const flecha = (columna: SortBy) => (sortBy === columna ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+
   const limpiarFiltros = () => {
     setEstado("");
     setVendedorId("");
     setCodigoReserva("");
-    setFechaInicio(hoyLocal());
-    setFechaFin(hoyLocal());
+    setBusqueda("");
+    setFechaInicio("");
+    setFechaFin("");
   };
 
   useEffect(() => {
     api.get<Vendedor[]>("/usuarios/vendedores").then(setVendedores).catch(() => null);
-    cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortBy, sortDir]);
 
   return (
     <div className="space-y-4">
@@ -194,6 +225,15 @@ export default function ReservasPage() {
             onChange={(e) => setCodigoReserva(e.target.value)}
             placeholder="RES-XXXXXXXX"
             className="mt-1 rounded border px-3 py-2 text-sm font-mono"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Nombre o teléfono</label>
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Nombre o teléfono del pasajero"
+            className="mt-1 rounded border px-3 py-2 text-sm"
           />
         </div>
         <div>
@@ -293,10 +333,14 @@ export default function ReservasPage() {
           <thead className="bg-gray-50 text-left text-gray-500">
             <tr>
               <th className="px-4 py-2">Código</th>
-              <th className="px-4 py-2">Titular</th>
+              <th className="cursor-pointer select-none px-4 py-2" onClick={() => ordenarPor("nombre")}>
+                Titular{flecha("nombre")}
+              </th>
               <th className="px-4 py-2">Teléfono</th>
               <th className="px-4 py-2">Vendedor</th>
-              <th className="px-4 py-2">Fecha</th>
+              <th className="cursor-pointer select-none px-4 py-2" onClick={() => ordenarPor("fecha")}>
+                Fecha{flecha("fecha")}
+              </th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2">Monto</th>
               <th className="px-4 py-2"></th>
