@@ -310,6 +310,7 @@ export class ReservasService {
     const vendedorIdsPermitidos = user ? await resolverVendedorIdsPermitidos(this.prisma, user) : null;
     const inicioMes = new Date(Date.UTC(anio, mes - 1, 1));
     const finMes = new Date(Date.UTC(anio, mes, 1));
+    const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
 
     const dias = await this.prisma.itinerarioDia.findMany({
       where: {
@@ -346,14 +347,17 @@ export class ReservasService {
       const responsable = reserva.pasajeros.find((p) => p.esResponsable);
       // Estado de pago: solo relevante para reservas CONFIRMADA (ver docstring de color en el
       // frontend). Sin pagos registrados se deja el mismo color de siempre; con saldo pendiente
-      // en cualquier moneda (abono parcial) se marca aparte para distinguirla de una pagada
-      // por completo. Se compara por moneda (sin convertir a principal) para no depender de
-      // que la agencia tenga una moneda principal configurada.
+      // se marca aparte para distinguirla de una pagada por completo. El pago puede registrarse
+      // en una moneda distinta a la de las líneas del itinerario (p. ej. reserva en USD pagada en
+      // GTQ), así que el saldo se compara convirtiendo todo a la moneda principal de la agencia
+      // (igual que en findOne), en vez de comparar por moneda, que daría un falso "pendiente" en
+      // la moneda de la reserva y un falso sobrepago en la moneda del pago.
       const totalAbonado = calcularAbonado(reserva.pagos);
-      const saldoPendiente = calcularSaldoPendiente(desglosePorMoneda(reserva), totalAbonado);
+      const totalPrincipal = convertirAPrincipal(desglosePorMoneda(reserva), monedaPrincipal);
+      const totalAbonadoPrincipal = convertirAPrincipal(totalAbonado, monedaPrincipal);
       const estadoPago =
-        reserva.estado === 'CONFIRMADA' && totalAbonado.length > 0
-          ? saldoPendiente.some((m) => m.total > 0.01)
+        reserva.estado === 'CONFIRMADA' && totalAbonado.length > 0 && totalPrincipal
+          ? totalPrincipal.total - (totalAbonadoPrincipal?.total ?? 0) > 0.01
             ? 'PENDIENTE_SALDO'
             : 'PAGADO'
           : null;
