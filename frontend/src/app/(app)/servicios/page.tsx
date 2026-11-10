@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { formatMonto } from "@/lib/moneda";
+import { descargarCsv } from "@/lib/csv";
 
 interface Opcion {
   id: string;
@@ -36,6 +37,30 @@ interface Servicio {
   fotoUrl?: string | null;
   estadoPublicacion?: "PUBLICO" | "PRIVADO";
   asociaciones?: ServicioAsociacion[];
+}
+
+function filasServiciosCsv(
+  servicios: Servicio[],
+  proveedores: Opcion[],
+  tiposServicio: Opcion[],
+  monedas: { id: string; codigo: string }[],
+  verCostos: boolean,
+) {
+  return servicios.map((s) => ({
+    Nombre: s.nombre,
+    Proveedor: proveedores.find((p) => p.id === s.proveedorId)?.nombre ?? "",
+    Tipo: tiposServicio.find((t) => t.id === s.tipoServicioId)?.nombre ?? "",
+    "Catálogo web": s.estadoPublicacion === "PUBLICO" ? "Público" : "Privado",
+    Estado: s.estado === "ACTIVO" ? "Activo" : "Inactivo",
+    ...(verCostos
+      ? {
+          "Precio base": formatMonto(s.precioBase),
+          "Precio costo": s.precioCosto ? formatMonto(s.precioCosto) : "",
+          Moneda: monedas.find((m) => m.id === s.monedaId)?.codigo ?? "",
+        }
+      : {}),
+    "Palabras clave": (s.palabrasClave ?? []).map((p) => `#${p}`).join(" "),
+  }));
 }
 
 export default function ServiciosPage() {
@@ -488,13 +513,26 @@ export default function ServiciosPage() {
         </div>
       </form>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar servicio por nombre o #palabra-clave..."
           className="w-full max-w-sm rounded border px-3 py-2 text-sm"
         />
+        <button
+          type="button"
+          disabled={serviciosFiltrados.length === 0}
+          onClick={() =>
+            descargarCsv(
+              `servicios_${new Date().toISOString().slice(0, 10)}.csv`,
+              filasServiciosCsv(serviciosFiltrados, proveedores, tiposServicio, monedas, verCostos),
+            )
+          }
+          className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          Descargar CSV
+        </button>
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-white">
