@@ -18,6 +18,11 @@ const INCLUDE_ITINERARIO_MONTOS = {
   dias: { include: { servicios: { include: { moneda: true } } } },
 } as const;
 
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+// Umbral en la moneda principal de la agencia (quetzales, en la práctica): por debajo de esto no
+// se permite parcializar el pago al generar un link.
+const MONTO_MINIMO_PARA_PARCIAL = 500;
+
 /**
  * Genera links de pago (checkout de una pasarela como Recurrente) para una reserva y procesa
  * la confirmación que llega por webhook, registrando el Pago automáticamente. Ver
@@ -94,6 +99,22 @@ export class LinksPagoService {
     }
     if (monto <= 0) throw new BadRequestException('El monto del link de pago debe ser mayor a cero');
 
+    // No se permite parcializar el pago si el servicio empieza mañana o antes, o si el total de
+    // la reserva es menor a Q500 (ver permiteParcial): en esos casos el link debe cubrir el
+    // saldo completo. Solo se bloquea si el monto pedido efectivamente queda por debajo de ese
+    // saldo; si no se pudo calcular el saldo en esta moneda (reserva multi-moneda sin moneda
+    // principal configurada), no hay forma de validar y se deja pasar, igual que antes.
+    const totalEnPrincipal = convertirAPrincipal(montosReserva, monedaPrincipal)?.total;
+    if (
+      !this.permiteParcial(reserva.fechaServicioInicio, totalEnPrincipal) &&
+      saldoEnMonedaPago !== undefined &&
+      monto < saldoEnMonedaPago - 0.01
+    ) {
+      throw new BadRequestException(
+        'Esta reserva no admite pagos parciales: el servicio es mañana o antes, o el total es menor a Q500. El link debe ser por el saldo completo.',
+      );
+    }
+
     const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3001';
     const config = (pasarela.config as Record<string, unknown>) ?? {};
 
@@ -140,7 +161,12 @@ export class LinksPagoService {
     if (!datos) return { ok: true }; // reserva cancelada o sin saldo pendiente: no hay nada que cobrar
     if ('motivo' in datos) return { ok: false, motivo: datos.motivo };
     try {
-      await this.generar(agenciaId, reservaId, { monedaId: datos.monedaId, monto: datos.montoAbono });
+      // Si la reserva no admite parcial (servicio mañana o antes, o total menor a Q500) no se
+      // genera el link de abono: solo el del saldo completo, para no ofrecerle al cliente una
+      // opción de pago que de todas formas sería rechazada.
+      if (datos.permiteParcial) {
+        await this.generar(agenciaId, reservaId, { monedaId: datos.monedaId, monto: datos.montoAbono });
+      }
       await this.generar(agenciaId, reservaId, { monedaId: datos.monedaId, monto: datos.montoTotal });
       return { ok: true };
     } catch (err) {
@@ -151,7 +177,11 @@ export class LinksPagoService {
   private async calcularAbonoAutomatico(
     agenciaId: string,
     reservaId: string,
-  ): Promise<{ monedaId: string; montoAbono: number; montoTotal: number } | { motivo: string } | null> {
+  ): Promise<
+    | { monedaId: string; montoAbono: number; montoTotal: number; permiteParcial: boolean }
+    | { motivo: string }
+    | null
+  > {
     const reserva = await this.prisma.reserva.findFirst({
       where: { id: reservaId, agenciaId },
       include: { moneda: true, itinerario: { include: INCLUDE_ITINERARIO_MONTOS }, pagos: { include: { moneda: true } } },
@@ -191,10 +221,30 @@ export class LinksPagoService {
     // en particular), para que el 30%/50% dependa siempre de la misma referencia sin importar en
     // qué moneda esté esta reserva.
     const totalPrincipal = convertirAPrincipal(montosReserva, monedaPrincipal)?.total ?? montoTotal;
+    const permiteParcial = this.permiteParcial(reserva.fechaServicioInicio, totalPrincipal);
     const porcentajeAbono = totalPrincipal > 100 ? 0.3 : 0.5;
-    const montoAbono = Math.round(montoTotal * porcentajeAbono * 100) / 100;
+    const montoAbono = permiteParcial ? Math.round(montoTotal * porcentajeAbono * 100) / 100 : montoTotal;
 
-    return { monedaId, montoAbono, montoTotal };
+    return { monedaId, montoAbono, montoTotal, permiteParcial };
+  }
+
+  /**
+   * Determina si la reserva admite parcializar el pago al generar un link, o si debe exigirse el
+   * saldo completo. No se permite parcial si: (a) falta un día o menos para la fecha de inicio
+   * del servicio (el cliente no tendría margen para completar el saldo a tiempo), o (b) el total
+   * de la reserva, convertido a la moneda principal de la agencia, es menor a Q500 (un abono
+   * parcial ya no sería representativo). Ambos se evalúan al momento de generar el link, con la
+   * fecha de hoy, no con la fecha en que se creó la reserva.
+   */
+  private permiteParcial(fechaServicioInicio: Date, totalEnPrincipal: number | undefined): boolean {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaServicio = new Date(fechaServicioInicio);
+    fechaServicio.setHours(0, 0, 0, 0);
+    const diasHastaServicio = (fechaServicio.getTime() - hoy.getTime()) / MS_POR_DIA;
+    if (diasHastaServicio <= 1) return false;
+    if (totalEnPrincipal !== undefined && totalEnPrincipal < MONTO_MINIMO_PARA_PARCIAL) return false;
+    return true;
   }
 
   /**
