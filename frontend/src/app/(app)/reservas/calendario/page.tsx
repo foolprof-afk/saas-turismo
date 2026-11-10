@@ -11,6 +11,7 @@ interface CalendarioEntrada {
   reservaId: string;
   codigoReserva: string;
   estado: string;
+  estadoPago: "PAGADO" | "PENDIENTE_SALDO" | null;
   clienteNombre: string;
   servicios: string[];
 }
@@ -38,7 +39,17 @@ const COLOR_ESTADO: Record<string, string> = {
   OPERADA: "bg-blue-100 text-blue-800 border-blue-300",
 };
 
+const COLOR_SALDO_PENDIENTE = "bg-purple-100 text-purple-800 border-purple-300";
+
 const MAX_VISIBLE = 4;
+
+// Las reservas CONFIRMADA con un abono parcial (saldo pendiente > 0) se resaltan en morado para
+// distinguirlas de las ya pagadas por completo (verde, igual que antes) y de las que aún no
+// registran ningún pago (sin cambios, mismo color de estado de siempre).
+function colorEntrada(entrada: CalendarioEntrada): string {
+  if (entrada.estadoPago === "PENDIENTE_SALDO") return COLOR_SALDO_PENDIENTE;
+  return COLOR_ESTADO[entrada.estado] ?? "border-gray-300 bg-gray-50";
+}
 
 // El backend ya devuelve `fecha` como YYYY-MM-DDT00:00:00.000Z (día calendario puro, sin hora
 // real asociada), así que tomar los primeros 10 caracteres da directamente la clave de día
@@ -65,7 +76,7 @@ function EntradaCard({
   return (
     <li
       onClick={onClick}
-      className={`cursor-pointer rounded border p-3 text-sm hover:shadow-sm ${COLOR_ESTADO[entrada.estado] ?? "border-gray-300 bg-gray-50"}`}
+      className={`cursor-pointer rounded border p-3 text-sm hover:shadow-sm ${colorEntrada(entrada)}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{entrada.clienteNombre}</span>
@@ -227,6 +238,9 @@ export default function CalendarioReservasPage() {
           <span className="flex items-center gap-1">
             <span className="h-3 w-3 rounded border border-blue-400 bg-blue-200" /> Operada
           </span>
+          <span className="flex items-center gap-1">
+            <span className="h-3 w-3 rounded border border-purple-400 bg-purple-200" /> Saldo pendiente
+          </span>
         </div>
       </div>
 
@@ -259,7 +273,7 @@ export default function CalendarioReservasPage() {
                         key={e.reservaId}
                         onClick={() => irAReserva(e.reservaId)}
                         title={`${e.clienteNombre} — ${e.servicios.join(", ")}`}
-                        className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${COLOR_ESTADO[e.estado] ?? "border-gray-300 bg-gray-100 text-gray-700"}`}
+                        className={`block w-full truncate rounded border px-1 py-0.5 text-left text-[11px] ${colorEntrada(e)}`}
                       >
                         {e.clienteNombre}
                       </button>

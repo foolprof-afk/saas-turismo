@@ -326,7 +326,15 @@ export class ReservasService {
         servicios: { include: { servicio: true } },
         itinerario: {
           include: {
-            reserva: { include: { cliente: true, pasajeros: true } },
+            reserva: {
+              include: {
+                cliente: true,
+                pasajeros: true,
+                pagos: { include: { moneda: true } },
+                moneda: true,
+                itinerario: { include: { dias: { include: { servicios: { include: { moneda: true } } } } } },
+              },
+            },
           },
         },
       },
@@ -336,11 +344,25 @@ export class ReservasService {
     return dias.map((dia) => {
       const reserva = dia.itinerario.reserva;
       const responsable = reserva.pasajeros.find((p) => p.esResponsable);
+      // Estado de pago: solo relevante para reservas CONFIRMADA (ver docstring de color en el
+      // frontend). Sin pagos registrados se deja el mismo color de siempre; con saldo pendiente
+      // en cualquier moneda (abono parcial) se marca aparte para distinguirla de una pagada
+      // por completo. Se compara por moneda (sin convertir a principal) para no depender de
+      // que la agencia tenga una moneda principal configurada.
+      const totalAbonado = calcularAbonado(reserva.pagos);
+      const saldoPendiente = calcularSaldoPendiente(desglosePorMoneda(reserva), totalAbonado);
+      const estadoPago =
+        reserva.estado === 'CONFIRMADA' && totalAbonado.length > 0
+          ? saldoPendiente.some((m) => m.total > 0.01)
+            ? 'PENDIENTE_SALDO'
+            : 'PAGADO'
+          : null;
       return {
         fecha: dia.fecha,
         reservaId: reserva.id,
         codigoReserva: reserva.codigoReserva,
         estado: reserva.estado,
+        estadoPago,
         clienteNombre: responsable?.nombre ?? reserva.cliente.nombre,
         servicios: dia.servicios.map((s) => s.servicio.nombre),
       };
