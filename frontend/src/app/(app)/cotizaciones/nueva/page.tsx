@@ -428,15 +428,6 @@ export default function NuevaCotizacionPage() {
                     >
                       ⠿
                     </span>
-                    <div>
-                      <label className="block text-xs text-gray-500">Fecha</label>
-                      <input
-                        type="date"
-                        value={linea.fecha}
-                        onChange={(e) => actualizarFecha(i, e.target.value)}
-                        className="mt-1 w-36 rounded border px-2 py-2 text-sm"
-                      />
-                    </div>
                     <div className="flex-1">
                       <label className="block text-xs text-gray-500">Servicio</label>
                       <BuscadorServicio
@@ -444,6 +435,26 @@ export default function NuevaCotizacionPage() {
                         servicios={servicios}
                         value={linea.servicioId}
                         onChange={(sid) => actualizarServicio(i, sid)}
+                      />
+                    </div>
+                    {lineas.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => quitarServicio(i)}
+                        className="text-sm text-red-600 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-start gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500">Fecha</label>
+                      <input
+                        type="date"
+                        value={linea.fecha}
+                        onChange={(e) => actualizarFecha(i, e.target.value)}
+                        className="mt-1 w-36 rounded border px-2 py-2 text-sm"
                       />
                     </div>
                     {s && (
@@ -475,15 +486,6 @@ export default function NuevaCotizacionPage() {
                           className="mt-1 w-28 rounded border px-2 py-2 text-sm"
                         />
                       </div>
-                    )}
-                    {lineas.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => quitarServicio(i)}
-                        className="text-sm text-red-600 hover:underline"
-                      >
-                        Quitar
-                      </button>
                     )}
                   </div>
                   {s && (
