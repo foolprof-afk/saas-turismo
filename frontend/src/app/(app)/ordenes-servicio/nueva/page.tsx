@@ -154,10 +154,14 @@ export default function NuevaOrdenServicioPage() {
         return;
       }
       const detalle = await api.get<ReservaDetalle>(`/reservas/${elegida.id}/operativo`);
+      // Por defecto la cantidad de cada línea es la cantidad de pasajeros de la reserva (lo
+      // normal es pedirle al proveedor el servicio para todo el grupo); el usuario puede
+      // ajustarla manualmente si algún servicio aplica a menos personas.
+      const cantidadPasajeros = String(detalle.pasajeros.length || 1);
       const lineasReserva = (detalle.itinerario?.dias ?? []).flatMap((dia) =>
         dia.servicios.map((s) => ({
           servicioId: s.servicio.id,
-          cantidad: "1",
+          cantidad: cantidadPasajeros,
           precioCosto: s.servicio.precioCosto ?? "",
           monedaId: s.servicio.moneda.id,
           fechaServicio: dia.fecha.slice(0, 10),
