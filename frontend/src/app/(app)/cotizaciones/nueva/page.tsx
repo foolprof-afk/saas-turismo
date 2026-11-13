@@ -250,6 +250,18 @@ export default function NuevaCotizacionPage() {
       return;
     }
 
+    // Advertencia antes de guardar (no bloqueante): si algún servicio quedó con una cantidad
+    // explícita distinta a la cantidad de personas de la cotización, se le pide confirmar que
+    // es intencional, para evitar el típico error de dejar la cantidad de personas en 1 cuando
+    // en realidad el grupo es más grande (o viceversa).
+    const noCoincide = items.some((l) => l.cantidad !== "" && Number(l.cantidad) !== Number(cantidadPersonas));
+    if (
+      noCoincide &&
+      !confirm("Revisar la cantidad de personas: no coincide el total de personas. ¿Deseas continuar de todas formas?")
+    ) {
+      return;
+    }
+
     setLoading(true);
     try {
       const cotizacion = await api.post<{ id: string }>("/cotizaciones", {
