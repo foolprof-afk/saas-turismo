@@ -8,6 +8,7 @@ interface Proveedor {
   nombre: string;
   tipo: string;
   contacto?: string | null;
+  telefono?: string | null;
   condicionesPago?: string | null;
   cuentaBancaria?: string | null;
   estado: string;
@@ -31,6 +32,7 @@ export default function ProveedoresPage() {
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState("hotel");
   const [contacto, setContacto] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [condicionesPago, setCondicionesPago] = useState("");
   const [cuentaBancaria, setCuentaBancaria] = useState("");
   const [estado, setEstado] = useState("ACTIVO");
@@ -86,6 +88,7 @@ export default function ProveedoresPage() {
     setNombre("");
     setTipo("hotel");
     setContacto("");
+    setTelefono("");
     setCondicionesPago("");
     setCuentaBancaria("");
     setEstado("ACTIVO");
@@ -96,6 +99,7 @@ export default function ProveedoresPage() {
     setNombre(p.nombre);
     setTipo(p.tipo);
     setContacto(p.contacto ?? "");
+    setTelefono(p.telefono ?? "");
     setCondicionesPago(p.condicionesPago ?? "");
     setCuentaBancaria(p.cuentaBancaria ?? "");
     setEstado(p.estado);
@@ -120,6 +124,7 @@ export default function ProveedoresPage() {
         nombre,
         tipo,
         contacto: contacto || undefined,
+        telefono: telefono || undefined,
         condicionesPago: condicionesPago || undefined,
         cuentaBancaria: cuentaBancaria || undefined,
         estado,
@@ -218,6 +223,19 @@ export default function ProveedoresPage() {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium">Teléfono (opcional)</label>
+            <input
+              type="tel"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="Ej. +502 5555 5555"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
             <label className="block text-sm font-medium">Condiciones de pago (opcional)</label>
             <input
               value={condicionesPago}
@@ -225,9 +243,6 @@ export default function ProveedoresPage() {
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Cuenta bancaria (opcional)</label>
             <input
@@ -236,6 +251,9 @@ export default function ProveedoresPage() {
               className="mt-1 w-full rounded border px-3 py-2 text-sm"
             />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium">Estado</label>
             <select
@@ -278,6 +296,7 @@ export default function ProveedoresPage() {
               <th className="px-4 py-2">Nombre</th>
               <th className="px-4 py-2">Tipo</th>
               <th className="px-4 py-2">Contacto</th>
+              <th className="px-4 py-2">Teléfono</th>
               <th className="px-4 py-2">Estado</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -285,14 +304,14 @@ export default function ProveedoresPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Cargando...
                 </td>
               </tr>
             )}
             {!loading && proveedores.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   No hay proveedores todavía
                 </td>
               </tr>
@@ -302,6 +321,7 @@ export default function ProveedoresPage() {
                 <td className="px-4 py-2">{p.nombre}</td>
                 <td className="px-4 py-2">{p.tipo}</td>
                 <td className="px-4 py-2">{p.contacto ?? "-"}</td>
+                <td className="px-4 py-2">{p.telefono ?? "-"}</td>
                 <td className="px-4 py-2">{p.estado}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => editar(p)} className="mr-3 text-blue-600 hover:underline">

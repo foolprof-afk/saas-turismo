@@ -455,6 +455,7 @@ model Proveedor {
   nombre          String
   tipo            String // hotel | transportista | guia_freelance | otro | operador | ... (ver catálogo TipoProveedor)
   contacto        String?
+  telefono        String?
   condicionesPago String?
   cuentaBancaria  String?
   estado          EstadoGeneral @default(ACTIVO)
