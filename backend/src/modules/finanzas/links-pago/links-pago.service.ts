@@ -364,6 +364,52 @@ export class LinksPagoService {
     ]);
     await this.prisma.linkPago.update({ where: { id: linkPago.id }, data: { estado: 'PAGADO', pagoId: pago.id } });
 
+    // Los dos links automáticos (abono y total, ver generarAutomaticos) ya no deben coexistir
+    // una vez que uno de ellos se pagó: el otro se cancela y, si quedó saldo pendiente (se pagó
+    // el abono), se genera un nuevo link por ese saldo completo.
+    await this.cancelarOtrosYRegenerarSaldo(linkPago.agenciaId, linkPago.reservaId, linkPago.id, linkPago.monedaId, pasarela.id);
+
     return { success: true };
+  }
+
+  /**
+   * Al pagarse uno de los dos links automáticos (abono o total, ver generarAutomaticos), el otro
+   * que haya quedado PENDIENTE ya no corresponde: se cancela para que el cliente no pueda pagarlo
+   * también. Si lo pagado fue el abono, todavía queda saldo pendiente: se genera un nuevo link
+   * por ese saldo completo (ya no se vuelve a ofrecer la opción de un abono parcial, solo el
+   * restante completo). Si lo pagado fue el total, el saldo queda en cero y no se genera ningún
+   * link nuevo. No se propaga ningún error desde aquí: el pago y la reserva ya quedaron
+   * registrados por la transacción anterior, que es lo importante; esto es una comodidad
+   * adicional del flujo automático y no debe hacer fallar el procesamiento del webhook.
+   */
+  private async cancelarOtrosYRegenerarSaldo(
+    agenciaId: string,
+    reservaId: string,
+    linkPagadoId: string,
+    monedaId: string,
+    pasarelaPagoId: string,
+  ) {
+    try {
+      await this.prisma.linkPago.updateMany({
+        where: { reservaId, agenciaId, estado: 'PENDIENTE', id: { not: linkPagadoId } },
+        data: { estado: 'CANCELADO' },
+      });
+
+      const reserva = await this.prisma.reserva.findFirst({
+        where: { id: reservaId, agenciaId },
+        include: { moneda: true, itinerario: { include: INCLUDE_ITINERARIO_MONTOS }, pagos: { include: { moneda: true } } },
+      });
+      if (!reserva) return;
+
+      const monedaPrincipal = await this.obtenerMonedaPrincipal(agenciaId);
+      const totalPrincipal = convertirAPrincipal(desglosePorMoneda(reserva), monedaPrincipal)?.total ?? 0;
+      const abonadoPrincipal = convertirAPrincipal(calcularAbonado(reserva.pagos), monedaPrincipal)?.total ?? 0;
+      if (totalPrincipal - abonadoPrincipal <= 0.01) return; // pago total: no queda saldo, no se genera nada más
+
+      // Sin dto.monto, generar() calcula por defecto el saldo pendiente completo en esta moneda.
+      await this.generar(agenciaId, reservaId, { pasarelaPagoId, monedaId });
+    } catch {
+      // no se propaga: el pago y la reserva ya quedaron registrados antes de llegar aquí
+    }
   }
 }
