@@ -70,6 +70,11 @@ function logoDe(reserva: ReservaPublica): string | undefined {
   return reserva.cliente?.logoUrl || reserva.agencia?.logoUrl || undefined;
 }
 
+function formatoImagenDataUrl(dataUrl: string): string {
+  const match = dataUrl.match(/^data:image\/(\w+);/);
+  return match ? match[1].toUpperCase() : "PNG";
+}
+
 function montosTexto(montos: MontoPorMoneda[]): string {
   if (!montos || montos.length === 0) return "-";
   return montos.map((m) => `${m.monedaSimbolo} ${formatMonto(m.total)} ${m.monedaCodigo}`).join(", ");
@@ -83,6 +88,26 @@ function montoTexto(monto: MontoPorMoneda | null): string {
 // Notas propias de la reserva; si no tiene, se usan las de la cotización de origen.
 function notasDe(reserva: ReservaPublica): string | null {
   return reserva.notas || reserva.cotizacion?.notas || null;
+}
+
+function itinerarioLineas(reserva: ReservaPublica): string[] {
+  if (!reserva.itinerario) return [];
+  const lineas: string[] = [];
+  reserva.itinerario.dias.forEach((dia) => {
+    const fecha = formatFecha(dia.fecha);
+    dia.servicios.forEach((s) => {
+      const precio = s.precio && s.moneda ? ` (${s.moneda.simbolo}${formatMonto(s.precio)} ${s.moneda.codigo})` : "";
+      lineas.push(`${fecha} ${s.horaInicio} — ${s.servicio.nombre}${precio}`);
+    });
+  });
+  return lineas;
+}
+
+function pagosLineas(pagos: Pago[]): string[] {
+  return pagos.map((p) => {
+    const ref = p.referenciaExterna ? ` (Ref: ${p.referenciaExterna})` : "";
+    return `${formatFechaHora(p.fecha)} — ${p.formaPago?.nombre}: ${p.moneda?.simbolo}${formatMonto(p.monto)} ${p.moneda?.codigo}${ref}`;
+  });
 }
 
 export default function ReservaClientePublicaPage() {
@@ -130,6 +155,87 @@ export default function ReservaClientePublicaPage() {
     );
   }
 
+  const descargarPDF = async () => {
+    const { jsPDF } = await import("jspdf");
+    const { limpiarPdf } = await import("@/lib/pdfTexto");
+
+    const lineas: string[] = [];
+    lineas.push(`Agencia: ${reserva.cliente?.nombre ?? ""}`);
+    lineas.push(
+      `Fecha: ${formatFecha(reserva.fechaServicioInicio)}${reserva.horaServicio ? " " + reserva.horaServicio : ""}`,
+    );
+    lineas.push(
+      `Total: ${reserva.totalEnMonedaReserva ? montoTexto(reserva.totalEnMonedaReserva) : montosTexto(reserva.montos)}`,
+    );
+    if (reserva.totalAbonado.length > 0) {
+      lineas.push(
+        `Abonado: ${
+          reserva.totalAbonadoEnMonedaReserva
+            ? montoTexto(reserva.totalAbonadoEnMonedaReserva)
+            : montosTexto(reserva.totalAbonado)
+        }`,
+      );
+      lineas.push(
+        `Saldo pendiente: ${
+          reserva.saldoPendienteEnMonedaReserva
+            ? montoTexto(reserva.saldoPendienteEnMonedaReserva)
+            : montosTexto(reserva.saldoPendiente)
+        }`,
+      );
+    }
+    lineas.push("");
+    lineas.push(`Pasajeros (${reserva.pasajeros.length}):`);
+    reserva.pasajeros.forEach((p) => {
+      lineas.push(`- ${p.nombre} (${p.tipo})${p.esResponsable ? " [Responsable]" : ""}${p.telefono ? " " + p.telefono : ""}`);
+    });
+    const lineasItinerario = itinerarioLineas(reserva);
+    if (lineasItinerario.length > 0) {
+      lineas.push("");
+      lineas.push("Itinerario:");
+      lineasItinerario.forEach((l) => lineas.push(l));
+    }
+    if (reserva.pagos.length > 0) {
+      lineas.push("");
+      lineas.push("Pagos registrados:");
+      pagosLineas(reserva.pagos).forEach((l) => lineas.push(l));
+    }
+    const notas = notasDe(reserva);
+    if (notas) {
+      lineas.push("");
+      lineas.push(`Notas: ${notas}`);
+    }
+
+    const logo = logoDe(reserva);
+    const logoSizeMm = 20;
+    const lineHeightMm = 5;
+
+    // Mismo criterio de dos pasadas que en el PDF del backoffice (ver reservas/[id]/page.tsx):
+    // se mide primero con un documento temporal para saber cuántas líneas reales ocupa el texto
+    // ya envuelto, y así calcular el alto final sin cortar contenido.
+    const docMedicion = new jsPDF({ unit: "mm", format: [80, 100] });
+    docMedicion.setFontSize(9);
+    const lineasEnvueltas = lineas.map((linea) => docMedicion.splitTextToSize(limpiarPdf(linea), 70) as string[]);
+    const totalLineasReales = lineasEnvueltas.reduce((acc, wrapped) => acc + wrapped.length, 0);
+
+    const alturaMm = 30 + totalLineasReales * lineHeightMm + (logo ? logoSizeMm + 5 : 0);
+
+    const doc = new jsPDF({ unit: "mm", format: [80, Math.max(alturaMm, 100)] });
+    let y = 10;
+    if (logo) {
+      doc.addImage(logo, formatoImagenDataUrl(logo), (80 - logoSizeMm) / 2, y, logoSizeMm, logoSizeMm);
+      y += logoSizeMm + 5;
+    }
+    doc.setFontSize(12);
+    doc.text(`Reserva ${reserva.codigoReserva}`, 5, y);
+    y += 7;
+    doc.setFontSize(9);
+    lineasEnvueltas.forEach((wrapped) => {
+      doc.text(wrapped, 5, y);
+      y += wrapped.length * lineHeightMm;
+    });
+    doc.save(`${reserva.codigoReserva}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="mx-auto max-w-2xl space-y-4">
@@ -150,6 +256,15 @@ export default function ReservaClientePublicaPage() {
             Guarda este enlace: siempre muestra la versión más reciente de tu reserva, aunque la agencia
             la modifique después.
           </p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={descargarPDF}
+              className="inline-block rounded-md border px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Descargar PDF
+            </button>
+          </div>
         </div>
 
         <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-5 text-center">

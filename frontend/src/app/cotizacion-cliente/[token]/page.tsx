@@ -35,6 +35,11 @@ function logoDe(cotizacion: CotizacionPublica): string | undefined {
   return cotizacion.cliente?.logoUrl || cotizacion.agencia?.logoUrl || undefined;
 }
 
+function formatoImagenDataUrl(dataUrl: string): string {
+  const match = dataUrl.match(/^data:image\/(\w+);/);
+  return match ? match[1].toUpperCase() : "PNG";
+}
+
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
   return (monto * tasaDestino) / tasaOrigen;
 }
@@ -166,6 +171,156 @@ export default function CotizacionClientePublicaPage() {
   const totales = totalesPorMoneda(cotizacion);
   const totalUnificado = totalConvertido(cotizacion);
 
+  const descargarPDF = async () => {
+    const { jsPDF } = await import("jspdf");
+    const { limpiarPdf } = await import("@/lib/pdfTexto");
+
+    const doc = new jsPDF({ unit: "mm", format: "letter" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 15;
+    const marginBottom = 15;
+    const anchoUtil = pageWidth - marginX * 2;
+    let y = 15;
+
+    const saltoDePaginaSiNecesario = (alturaNecesaria: number) => {
+      if (y + alturaNecesaria > pageHeight - marginBottom) {
+        doc.addPage();
+        y = 15;
+      }
+    };
+
+    const logo = logoDe(cotizacion);
+    if (logo) {
+      const logoSizeMm = 18;
+      doc.addImage(logo, formatoImagenDataUrl(logo), marginX, y, logoSizeMm, logoSizeMm);
+    }
+    doc.setFontSize(16);
+    doc.text(`Cotización ${cotizacion.codigoCotizacion}`, pageWidth - marginX, y + 5, { align: "right" });
+    doc.setFontSize(10);
+    doc.text(`Estado: ${cotizacion.estado}`, pageWidth - marginX, y + 11, { align: "right" });
+    if (cotizacion.agencia?.nombre) {
+      doc.text(limpiarPdf(cotizacion.agencia.nombre), pageWidth - marginX, y + 17, { align: "right" });
+    }
+    y += 26;
+
+    doc.setDrawColor(200);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 7;
+
+    doc.setFontSize(10);
+    const datos: [string, string][] = [
+      ["Responsable", cotizacion.pasajeroResponsable],
+      ["Cantidad de personas", String(cotizacion.cantidadPersonas)],
+      ["Fecha", formatFecha(cotizacion.fechaServicio)],
+      ["Vendedor", cotizacion.vendedor?.nombre ?? "-"],
+    ];
+    const colAncho = anchoUtil / 2;
+    datos.forEach(([label, valor], i) => {
+      const col = i % 2;
+      const fila = Math.floor(i / 2);
+      const x = marginX + col * colAncho;
+      const filaY = y + fila * 6;
+      doc.setFont("helvetica", "bold");
+      doc.text(`${label}:`, x, filaY);
+      doc.setFont("helvetica", "normal");
+      doc.text(limpiarPdf(valor), x + 38, filaY);
+    });
+    y += Math.ceil(datos.length / 2) * 6 + 6;
+
+    doc.setDrawColor(200);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 8;
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Servicios cotizados", marginX, y);
+    doc.setFont("helvetica", "normal");
+    y += 7;
+
+    const colX = {
+      dia: marginX,
+      servicio: marginX + 28,
+      horas: marginX + 100,
+      cantidad: marginX + 118,
+      unitario: marginX + 138,
+      subtotal: marginX + 165,
+    };
+
+    const dibujarEncabezadoTabla = () => {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Fecha", colX.dia, y);
+      doc.text("Servicio", colX.servicio, y);
+      doc.text("Horas", colX.horas, y);
+      doc.text("Cant.", colX.cantidad, y);
+      doc.text("P. unit.", colX.unitario, y);
+      doc.text("Subtotal", colX.subtotal, y);
+      doc.setFont("helvetica", "normal");
+      y += 2;
+      doc.line(marginX, y, pageWidth - marginX, y);
+      y += 5;
+    };
+
+    saltoDePaginaSiNecesario(15);
+    dibujarEncabezadoTabla();
+
+    agruparPorDia(cotizacion).forEach(({ numeroDia, fecha, items: itemsDia }) => {
+      itemsDia.forEach((item, idx) => {
+        const conv = itemEnMonedaCotizacion(item, cotizacion);
+        const horas = horasDe(item);
+        const nombreLineas = doc.splitTextToSize(limpiarPdf(item.servicio.nombre), colX.horas - colX.servicio - 3);
+        const alturaFila = nombreLineas.length * 4.5 + 2;
+
+        saltoDePaginaSiNecesario(alturaFila + 5);
+        if (idx === 0) {
+          doc.setFont("helvetica", "bold");
+          doc.text(`Día ${numeroDia}`, colX.dia, y);
+          doc.setFontSize(7);
+          doc.text(formatFecha(fecha), colX.dia, y + 4);
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+        }
+        doc.setFontSize(9);
+        doc.text(nombreLineas, colX.servicio, y);
+        doc.text(horas ? `${horas} h` : "-", colX.horas, y);
+        doc.text(String(item.cantidad), colX.cantidad, y);
+        doc.text(`${conv.simbolo}${formatMonto(conv.precioUnitario)}`, colX.unitario, y);
+        doc.text(`${conv.simbolo}${formatMonto(conv.subtotal)}`, colX.subtotal, y);
+        y += nombreLineas.length * 4.5;
+        y += 2;
+      });
+    });
+
+    const totalesAMostrar = totalUnificado ? [totalUnificado] : totales;
+    y += 4;
+    saltoDePaginaSiNecesario(6 * totalesAMostrar.length + 10);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 7;
+    doc.setFontSize(11);
+    totalesAMostrar.forEach((t) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total ${t.codigo}: ${t.simbolo}${formatMonto(t.total)}`, pageWidth - marginX, y, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      y += 6;
+    });
+
+    if (cotizacion.notas) {
+      y += 4;
+      saltoDePaginaSiNecesario(15);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Notas", marginX, y);
+      doc.setFont("helvetica", "normal");
+      y += 5;
+      doc.setFontSize(9);
+      const notasLineas = doc.splitTextToSize(limpiarPdf(cotizacion.notas), anchoUtil);
+      doc.text(notasLineas, marginX, y);
+    }
+
+    doc.save(`${cotizacion.codigoCotizacion}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="mx-auto max-w-2xl space-y-4">
@@ -182,6 +337,15 @@ export default function CotizacionClientePublicaPage() {
           </p>
           <h1 className="mt-1 text-xl font-bold">Cotización {cotizacion.codigoCotizacion}</h1>
           <span className="mt-2 inline-block rounded-full bg-gray-100 px-3 py-1 text-xs">{cotizacion.estado}</span>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={descargarPDF}
+              className="inline-block rounded-md border px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Descargar PDF
+            </button>
+          </div>
         </div>
 
         {totalUnificado ? (
