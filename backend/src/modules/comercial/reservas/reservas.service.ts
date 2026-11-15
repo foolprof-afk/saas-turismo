@@ -22,6 +22,7 @@ import { AuthenticatedUser } from '../../../common/decorators/current-user.decor
 import { firmarEnlaceCliente, verificarEnlaceCliente } from '../../../common/utils/enlace-cliente-token.util';
 import { firmarEnlaceReserva, verificarEnlaceReserva } from '../../../common/utils/enlace-reserva-token.util';
 import { LinksCortosService } from '../../links-cortos/links-cortos.service';
+import { LinksPagoService } from '../../finanzas/links-pago/links-pago.service';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -49,6 +50,7 @@ export class ReservasService {
     private readonly prisma: PrismaService,
     private readonly vouchersService: VouchersService,
     private readonly linksCortosService: LinksCortosService,
+    private readonly linksPagoService: LinksPagoService,
   ) {}
 
   /**
@@ -961,6 +963,7 @@ export class ReservasService {
     await this.prisma.reservaHistorial.create({
       data: { reservaId: id, usuarioId, descripcion: 'Se canceló la reserva' },
     });
+    await this.linksPagoService.cancelarPendientesDeReserva(agenciaId, id);
     return reserva;
   }
 

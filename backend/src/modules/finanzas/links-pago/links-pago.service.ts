@@ -336,6 +336,18 @@ export class LinksPagoService {
   }
 
   /**
+   * Cancela todos los links de pago PENDIENTES de una reserva (ej. al cancelarse la reserva,
+   * ver ReservasService.cancelar): ya no corresponde cobrarlos. No toca links ya PAGADOS ni
+   * CANCELADOS, por lo que es seguro llamarla aunque no haya ninguno pendiente.
+   */
+  async cancelarPendientesDeReserva(agenciaId: string, reservaId: string) {
+    await this.prisma.linkPago.updateMany({
+      where: { reservaId, agenciaId, estado: 'PENDIENTE' },
+      data: { estado: 'CANCELADO' },
+    });
+  }
+
+  /**
    * Procesa el webhook de confirmación de pago de una pasarela: verifica la firma, ubica el
    * LinkPago correspondiente y registra el Pago automáticamente (mismo patrón transaccional que
    * ReservasService.confirmar). Es idempotente: si el link ya está PAGADO, no hace nada más.
