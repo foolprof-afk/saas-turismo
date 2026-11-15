@@ -95,6 +95,8 @@ interface LinkPago {
   estado: string;
   urlPago: string;
   moneda: { codigo: string; simbolo: string };
+  ipCliente?: string | null;
+  dispositivoCliente?: string | null;
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -857,7 +859,7 @@ export default function ReservaDetallePage() {
           {linksPago.length > 0 && (
             <ul className="mt-4 space-y-2 text-sm">
               {linksPago.map((l) => (
-                <li key={l.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                <li key={l.id} className="flex flex-wrap items-center justify-between gap-y-1 border-b pb-2 last:border-0">
                   <span>
                     {l.moneda.simbolo}
                     {formatMonto(l.monto)} {l.moneda.codigo} —{" "}
@@ -893,6 +895,11 @@ export default function ReservaDetallePage() {
                         Abrir
                       </a>
                     </span>
+                  )}
+                  {(l.ipCliente || l.dispositivoCliente) && (
+                    <p className="mt-1 w-full text-xs text-gray-400">
+                      Evidencia del clic de pago — IP: {l.ipCliente ?? "-"} · Dispositivo: {l.dispositivoCliente ?? "-"}
+                    </p>
                   )}
                 </li>
               ))}

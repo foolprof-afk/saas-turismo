@@ -594,7 +594,7 @@ export class CotizacionesService {
    * servidor (no basta con que el frontend deshabilite el botón) y queda registrado en
    * Cotizacion.condicionesAceptadas/condicionesAceptadasEn como evidencia de consentimiento.
    */
-  async confirmarPublica(token: string, aceptaCondiciones: boolean) {
+  async confirmarPublica(token: string, aceptaCondiciones: boolean, ip?: string, userAgent?: string) {
     if (!aceptaCondiciones) {
       throw new BadRequestException('Debes aceptar las condiciones de reserva para confirmar');
     }
@@ -606,7 +606,12 @@ export class CotizacionesService {
 
     await this.prisma.cotizacion.update({
       where: { id: existente.id },
-      data: { condicionesAceptadas: true, condicionesAceptadasEn: new Date() },
+      data: {
+        condicionesAceptadas: true,
+        condicionesAceptadasEn: new Date(),
+        ipConfirmacion: ip,
+        dispositivoConfirmacion: userAgent,
+      },
     });
     await this.confirmar(payload.agenciaId, existente.id);
     return this.cotizacionPublica(token);

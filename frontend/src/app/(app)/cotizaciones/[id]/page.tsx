@@ -34,6 +34,10 @@ interface CotizacionDetalle {
   agencia?: { logoUrl?: string | null; nombre?: string } | null;
   items: CotizacionItem[];
   historial: { id: string; descripcion: string; fecha: string; usuario: { nombre: string } | null }[];
+  condicionesAceptadas: boolean;
+  condicionesAceptadasEn?: string | null;
+  ipConfirmacion?: string | null;
+  dispositivoConfirmacion?: string | null;
 }
 
 function convertirMonto(monto: number, tasaOrigen: number, tasaDestino: number) {
@@ -621,6 +625,28 @@ export default function CotizacionDetallePage() {
         <div className="rounded-lg border bg-white p-5">
           <h2 className="mb-2 text-sm font-semibold text-gray-500">Notas</h2>
           <p className="text-sm text-gray-700">{cotizacion.notas}</p>
+        </div>
+      )}
+
+      {cotizacion.condicionesAceptadas && (
+        <div className="rounded-lg border bg-white p-5 print:hidden">
+          <h2 className="mb-2 text-sm font-semibold text-gray-500">Evidencia de confirmación del cliente</h2>
+          <p className="text-xs text-gray-400">
+            Datos capturados cuando el cliente aceptó las condiciones y confirmó desde el enlace público, como
+            respaldo ante un posible contracargo/disputa.
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-gray-700 sm:grid-cols-2">
+            <p>
+              <span className="font-medium">Fecha:</span>{" "}
+              {cotizacion.condicionesAceptadasEn ? formatFechaHora(cotizacion.condicionesAceptadasEn) : "-"}
+            </p>
+            <p>
+              <span className="font-medium">IP:</span> {cotizacion.ipConfirmacion ?? "-"}
+            </p>
+            <p>
+              <span className="font-medium">Dispositivo:</span> {cotizacion.dispositivoConfirmacion ?? "-"}
+            </p>
+          </div>
         </div>
       )}
 

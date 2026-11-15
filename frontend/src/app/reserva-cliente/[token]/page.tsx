@@ -307,7 +307,7 @@ export default function ReservaClientePublicaPage() {
                       {formatMonto(link.monto)} {link.moneda.codigo}
                     </p>
                     <a
-                      href={link.urlPago}
+                      href={`${API_URL}/pago-cliente/publico/${link.id}/ir`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-block rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700"

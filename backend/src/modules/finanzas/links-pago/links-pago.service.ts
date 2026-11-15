@@ -269,6 +269,26 @@ export class LinksPagoService {
     };
   }
 
+  /**
+   * Registra IP y dispositivo del cliente justo antes de redirigirlo al checkout real de la
+   * pasarela (ver PagoClienteController.irAPagar), como evidencia ante un posible
+   * contracargo/disputa, y devuelve la urlPago a la que debe redirigirse. Se sobrescribe en
+   * cada click: el más relevante es el más cercano al pago real. No filtra por agenciaId (igual
+   * que obtenerPublico): el id es un cuid no adivinable y el cliente nunca tiene sesión.
+   */
+  async registrarClickYObtenerUrl(id: string, ip: string | undefined, userAgent: string | undefined): Promise<string> {
+    const linkPago = await this.prisma.linkPago.findUnique({ where: { id } });
+    if (!linkPago) throw new NotFoundException('Link de pago no encontrado');
+    if (linkPago.estado !== 'PENDIENTE' || !linkPago.urlPago) {
+      throw new BadRequestException('Este link de pago ya no está disponible');
+    }
+    await this.prisma.linkPago.update({
+      where: { id },
+      data: { ipCliente: ip, dispositivoCliente: userAgent },
+    });
+    return linkPago.urlPago;
+  }
+
   /** Si la agencia solo tiene una pasarela activa, se usa por defecto sin tener que elegirla. */
   private async buscarPasarelaUnica(agenciaId: string) {
     const activas = await this.prisma.pasarelaPago.findMany({ where: { agenciaId, activo: true } });
